@@ -6,8 +6,9 @@ import { Badge } from "@/components/badge/badge";
 /**
  * Compact label for status, category or count, placed next to the thing it describes. Use `default`
  * for a single highlighted tag, `secondary` or `outline` for neutral metadata, `destructive` for errors
- * and blocked states, `ghost` inside dense tables, and `link` when the badge navigates (render with
- * `asChild` and an anchor). Do not use a Badge as a button; it has no pressed state.
+ * and blocked states, `success` / `warning` / `info` for status, `ghost` inside dense tables, and `link`
+ * when the badge navigates (render with `asChild` and an anchor). Do not use a Badge as a button; it has
+ * no pressed state.
  */
 const meta = {
   title: "Components/Data display/Badge",
@@ -21,7 +22,7 @@ const meta = {
     variant: {
       description: "Visual emphasis. Reserve `destructive` for errors and blocked states.",
       control: "select",
-      options: ["default", "secondary", "destructive", "outline", "ghost", "link"],
+      options: ["default", "secondary", "destructive", "success", "warning", "info", "outline", "ghost", "link"],
     },
     asChild: {
       description: "Render the child element (e.g. an anchor) with badge styling instead of a `<span>`.",
@@ -45,6 +46,21 @@ export const Secondary: Story = {
 /** Error or blocked state. */
 export const Destructive: Story = {
   args: { variant: "destructive", children: "Failed" },
+};
+
+/** Completed or healthy state. */
+export const Success: Story = {
+  args: { variant: "success", children: "Paid" },
+};
+
+/** Needs attention, not yet an error. */
+export const Warning: Story = {
+  args: { variant: "warning", children: "Expires soon" },
+};
+
+/** Informational status. */
+export const Info: Story = {
+  args: { variant: "info", children: "Scheduled" },
 };
 
 /** Neutral metadata on plain surfaces. */
@@ -86,6 +102,8 @@ export const StatusSet: Story = {
         <Clock3 data-icon="inline-start" />
         Pending
       </Badge>
+      <Badge variant="success">Paid</Badge>
+      <Badge variant="warning">Expires soon</Badge>
       <Badge variant="destructive">Failed</Badge>
       <Badge variant="outline">Archived</Badge>
     </div>

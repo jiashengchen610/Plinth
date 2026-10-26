@@ -10,9 +10,8 @@
 
 - 使用者：不需要懂設計或程式的人，例如 PM、個人開發者、小團隊。
 - 唯一驅動方式是 Claude Code。產品本身不帶模型，也不接 API 金鑰或本機模型；思考由使用者的 Claude 負責，用量算在使用者自己的 Claude 方案。
-- 不用終端機的使用者，可以用 Claude 桌面應用程式或 VS Code 擴充功能裡的 Claude Code。
-- 產品以 Claude Code plugin 形式發佈，內容包括 skills、一個本機 MCP server，以及由 MCP server 啟動的本機網頁介面。
-- 使用者可以在終端機或網頁介面的對話框與 Claude 對話。網頁訊息透過 Claude Code 的 channels（研究預覽）送進正在執行的 session，Claude 以 reply 工具回到網頁；權限請求也在網頁上以 Allow / Deny 回覆。限制：Claude Code session 必須開著；預覽期間自製 channel 需以 `--dangerously-load-development-channels` 啟動；Team / Enterprise 需管理員開啟 channels。
+- 主要入口是本機網頁介面：在空資料夾執行一個指令（`npx -y github:jiashengchen610/Plinth`）就打開，整個流程（描述、審核、套用、檢查、發佈）都在裡面完成。網頁的對話框每送一則訊息，就由本機 server 以 headless 模式執行一次 Claude Code（`claude -p`），載入 Plinth plugin、只允許 Plinth 工具與唯讀檔案工具；同一個對話以 session id 續接，關掉重開也接得上。使用者只需要安裝並登入 Claude Code，不需要開著終端機 session。
+- 同一套東西也以 Claude Code plugin 形式發佈（skills、本機 MCP server、由 MCP server 啟動的同一個網頁介面），給想在終端機對話、用網頁審核的人；兩種方式可以對同一個資料夾混用。
 - 介面只提供英文。
 
 ## 輸入
@@ -44,6 +43,7 @@ my-design-system/
 ├── design-system.json            應用情境、命名慣例、元件底層、品牌清單
 ├── src/
 │   ├── styles/tokens.css         由 token 產生，不手改
+│   ├── styles/fonts.css          由字體 token 產生（Google Fonts 載入），不手改
 │   └── components/<name>/
 │       ├── <name>.tsx
 │       ├── <name>.stories.tsx
@@ -85,7 +85,7 @@ Token 名稱預設跟隨使用者要做的產品類型，使用者可以覆寫�
 
 | 編號 | 需求 | 驗收標準 | 第一版 |
 |---|---|---|---|
-| F1 | 本機網頁介面 | 由 MCP server 啟動；英文；手機寬度到桌面都能使用；三個分頁：Tokens、Components、Guidelines | 是 |
+| F1 | 本機網頁介面 | 一個指令啟動（或由 plugin 的 MCP server 啟動）；英文；手機寬度到桌面都能使用；分頁：Tokens、Components、Guidelines、Changes、Checks、History，加上對話框與 Publish；依賴安裝、Storybook、測試、發佈的進度都在介面上 | 是 |
 | F2 | 生成 token | 合法 DTCG；含顏色、字體、間距、圓角、陰影、動態；light 與 dark；所有前景與背景對比達 WCAG AA，不達標時由程式自動修正 | 是 |
 | F3 | 多品牌 | 一個 repo 可有多個品牌；所有元件在每個品牌、每種模式下都通過檢查；Storybook 可切換品牌與模式 | 是 |
 | F4 | 設計準則 | 每個品牌有 DESIGN.md，含風格說明與 Do's and Don'ts；負面清單預設包含常見的 AI 生成特徵，並盡量對應到自動檢查 | 是 |
@@ -94,10 +94,11 @@ Token 名稱預設跟隨使用者要做的產品類型，使用者可以覆寫�
 | F7 | 瀏覽 | Tokens 分頁為樹狀檢視，含值、預覽、對比結果、被哪些元件使用；Components 分頁以真實元件渲染，可切換變體、狀態、品牌、模式；Guidelines 分頁顯示 DESIGN.md 與 WRITING.md | 是 |
 | F8 | 用 AI 修改 | 支援改值、新增、改名、重組群組、修改準則；變更先以待套用形式呈現；改名時自動更新引用它的元件 | 是 |
 | F9 | 用 AI 生成元件 | 分四級：現成、組合、標準行為模式、全新；一律先出規格並存成 spec.md，確認後才生成；做不到時說明缺什麼 | 第 1 到 3 級是，第 4 級第二版 |
-| F10 | 品質門檻 | 型別檢查、無寫死數值、互動與無障礙測試、對比檢查，在每個品牌與模式下都通過；任一不通過就不能發佈 | 是 |
+| F10 | 品質門檻 | 擋發佈的三項（客觀可驗）：token 一致性、WCAG 對比、元件無寫死數值；每次變更都檢查，提案時先預覽變更後的結果。發佈前本機再跑型別檢查與每個 story 的互動與無障礙測試；GitHub Actions 部署前再跑一次，不過不部署。「兩個語意色看起來一樣」只是提醒，不擋；使用者可標記為刻意 | 是 |
 | F11 | 發佈 | 一個動作完成：推到 GitHub（PR 或直接推送）、透過 GitHub Actions 部署到 GitHub Pages、回傳 Storybook 與 GitHub 兩個網址 | 是 |
 | F12 | 版本與復原 | 每次套用變更，都在本機 repo 產生一個 commit；介面可回到任一先前版本；發佈即推送這些 commit | 是 |
-| F13 | MCP 工具 | 工具涵蓋讀取、提出變更、套用、生成元件、執行檢查、截圖預覽、發佈；Claude 只拿到工具回傳的資料 | 是 |
+| F13 | MCP 工具 | 工具涵蓋讀取、提出變更、套用、生成元件、執行檢查、執行測試、截圖預覽、發佈；Claude 只拿到工具回傳的資料 | 是（截圖預覽第二版） |
+| F14 | 資料連動 | 改 token 時：CSS 與字體載入自動重生；改名自動改寫 token alias 與元件 class；提案預覽列出 DESIGN.md 中仍描述舊色相的句子，讓同一次變更一併改寫 | 是 |
 
 ## 失敗情境
 
@@ -105,10 +106,12 @@ Token 名稱預設跟隨使用者要做的產品類型，使用者可以覆寫�
 |---|---|---|
 | 生成到一半失敗 | 介面顯示停在哪一步與原因 | 已完成的部分保留在最後一個 commit；可從該步重試 |
 | 檢查沒通過 | Publish 按鈕停用，列出沒過的項目與所在品牌、模式 | 能由程式修的（例如對比）提供 Fix 按鈕；其餘交給 Claude 修 |
+| 推上去了但 Actions 的測試沒過 | 顯示 GitHub 網址與失敗的測試 | Storybook 維持上一個成功版本；修好再發佈 |
 | 改壞了 | 版本紀錄列出每一次變更 | 一個動作回到任一先前版本 |
 | GitHub 授權過期 | 發佈時跳出 "Reconnect GitHub" | 在瀏覽器重新授權；本機的工作不受影響，授權後繼續發佈 |
 | 只發佈成功一半（推上去了但 Pages 部署失敗） | 顯示 GitHub 網址與部署失敗的原因 | 提供 Retry deploy，不重複推送 |
-| Claude 提出的變更違反準則 | 變更旁標示違反哪一條 | 使用者可以退回，或明確選擇接受並記錄例外 |
+| Claude 提出的變更違反準則 | 變更旁標示違反哪一條 | 使用者可以退回，或明確選擇接受並記錄例外（存在 design-system.json，發佈時列出） |
+| 沒安裝或沒登入 Claude Code | 對話框顯示安裝與登入步驟 | 介面其他功能（瀏覽、Apply、Checks、Publish）照常 |
 
 ## 資料邊界
 
@@ -159,6 +162,9 @@ Token 名稱預設跟隨使用者要做的產品類型，使用者可以覆寫�
 1. **DESIGN.md 分兩層撰寫、合併輸出。** 根目錄的 `DESIGN.md` 寫所有品牌共用的部分（版面、元件、共用的 Do's and Don'ts）；`brands/<brand>/DESIGN.md` 只寫該品牌的風格與差異。發佈時由程式把兩者與 token 合併，為每個品牌輸出一份完整、符合 Google 格式的 `DESIGN.md`，供其他 AI 工具使用。撰寫時不重複，輸出時又完整。
 2. **元件底層一律先用 Radix。** 和 shadcn 預設相同，第一版最省事。Mobile app 情境要不要換 React Aria，等實際生成過行動 App 的元件再決定。
 3. **預設負面清單分兩種。** 能自動檢查的（寫死的數值、對比不足、觸控目標太小、所有元件同一種圓角與陰影）做成檢查程式；不能自動檢查的（標題只強調一個字、每段都加大寫小標、沒有意義的編號）寫進 DESIGN.md 的 Don'ts，並限制在 10 條以內。
+4. **字體走 Google Fonts。** 字體 token 寫家族名稱，引擎生成 `src/styles/fonts.css` 的 `@import`；零安裝，代價是執行時連 Google。自託管（fontsource）等有人需要離線再做。
+5. **狀態色進 template。** `success`、`warning`、`info`（各含 `-foreground`）跟 shadcn 原有的角色一起出貨，Badge 有對應 variant，避免第一個元件就撞到 token gap。
+6. **對話用 headless Claude Code，不用 channels。** channels 是研究預覽、要旗標、沒驗證過；`claude -p` 是穩定介面，可以在這裡端到端測。代價：網頁對話和終端機對話是兩個 session。
 
 ## 非功能需求
 

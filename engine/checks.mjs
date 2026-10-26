@@ -1,8 +1,10 @@
-// Quality checks over a workspace: color contrast for every brand × mode, token consistency across
-// brands, and hardcoded values in component code. Also turns contrast failures into token fixes.
+// Quality checks over a workspace: color contrast for every brand × mode, role colors that cannot be told
+// apart, token consistency across brands, and hardcoded values in component code. Also turns contrast
+// failures into token fixes. Exceptions the user accepted (design-system.json → exceptions) are reported
+// but do not block the gate.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { contrastRatio, fixContrast } from "./color.mjs";
+import { contrastRatio, fixContrast, deltaE, hueDifference } from "./color.mjs";
 import { loadConfig, listBrands, resolveBrand, buildCss } from "./tokens.mjs";
 import { scan } from "./check-hardcoded.mjs";
 
@@ -56,6 +58,48 @@ export function checkContrast(root, config = loadConfig(root)) {
 }
 
 /**
+ * Role colors that carry meaning on their own (an action, an error, a success) usually need to be told apart.
+ * Neutral surfaces (muted, secondary, accent, card …) are allowed to coincide, as they do in shadcn.
+ *   shadcn   primary, destructive, success, warning, info (+ design-system.json → distinctRoles)
+ *   material primary, secondary, tertiary, error
+ * Two roles are flagged when they are closer than distinctMin (ΔE_OK, default 0.08: about four just-noticeable
+ * differences, clearly apart side by side) or share a hue (< 20°, e.g. two reds at different lightness).
+ * This is advisory: it is shown, never blocks the gate. Sharing a color on purpose is a valid design decision;
+ * marking the pair as intended (an exception) hides the notice.
+ */
+const ROLE_NAMES = ["primary", "destructive", "success", "warning", "info", "error", "tertiary"];
+export function checkDistinct(root, config = loadConfig(root)) {
+  const minDelta = config.distinctMin ?? 0.08;
+  const minHue = config.distinctHue ?? 20;
+  const results = [];
+  for (const brand of listBrands(root, config)) {
+    const r = resolveBrand(root, brand, config);
+    const names = new Set([...ROLE_NAMES, ...(config.distinctRoles ?? [])]);
+    if (config.naming === "material") names.add("secondary");
+    const roles = r.tokens.filter((t) => t.type === "color" && names.has(t.name));
+    for (let i = 0; i < roles.length; i++) {
+      for (let j = i + 1; j < roles.length; j++) {
+        for (const mode of r.modes) {
+          const a = (roles[i].values[mode] ?? roles[i].values.default)?.resolved;
+          const b = (roles[j].values[mode] ?? roles[j].values.default)?.resolved;
+          const dE = deltaE(a, b);
+          const dH = hueDifference(a, b);
+          if (dE === null) continue;
+          const sameHue = dH !== null && dH < minHue;
+          results.push({
+            brand, mode, a: roles[i].name, b: roles[j].name,
+            deltaE: Number(dE.toFixed(3)), hueDiff: dH === null ? null : Math.round(dH),
+            pass: dE >= minDelta && !sameHue,
+            reason: dE < minDelta ? "too similar" : sameHue ? "same hue" : null,
+          });
+        }
+      }
+    }
+  }
+  return results;
+}
+
+/**
  * Turn failing contrast results into token edits: move the foreground's lightness until it passes.
  * Aliased foregrounds are reported, not edited (fix the alias target instead).
  */
@@ -70,7 +114,7 @@ export function contrastFixes(results) {
     groups.set(k, [...(groups.get(k) ?? []), r]);
   }
   for (const pairs of groups.values()) {
-    const failing = pairs.filter((p) => !p.pass);
+    const failing = pairs.filter((p) => !p.pass && !p.accepted);
     if (!failing.length) continue;
     const r = failing[0];
     if (typeof r.fgRaw === "string" && /^\{.+\}$/.test(r.fgRaw)) { skipped.push(...failing.map((f) => ({ ...f, reason: "foreground is an alias; fix the token it points to" }))); continue; }
@@ -98,18 +142,46 @@ export function contrastFixes(results) {
   return { ops, skipped };
 }
 
+// ---------------- exceptions ----------------
+/**
+ * Stable key of a check result, used to match accepted exceptions. A segment of an exception's key may be "*":
+ * "*|*|muted|muted-foreground" accepts that pair in every brand and mode (a decorative text role, for instance).
+ */
+export const exceptionKey = {
+  contrast: (r) => `${r.brand}|${r.mode}|${r.bg}|${r.fg}`,
+  distinct: (r) => `${r.brand}|${r.mode}|${r.a}|${r.b}`,
+  hardcoded: (f) => `${f.file}|${f.rule}|${f.match}`,
+};
+const keyMatches = (pattern, key) => {
+  const p = pattern.split("|"), k = key.split("|");
+  return p.length === k.length && p.every((seg, i) => seg === "*" || seg === k[i]);
+};
+/** The exception that accepts a result, or undefined. */
+export function acceptedBy(exceptions, check, result) {
+  const key = exceptionKey[check](result);
+  return exceptions.find((e) => e.check === check && keyMatches(e.key, key));
+}
+function markAccepted(list, check, exceptions) {
+  return list.map((r) => { const e = acceptedBy(exceptions, check, r); return e ? { ...r, accepted: true, exceptionReason: e.reason } : r; });
+}
+
 /** Run every check. `gate` is true when the workspace may be published. */
 export function runChecks(root) {
   const config = loadConfig(root);
+  const exceptions = Array.isArray(config.exceptions) ? config.exceptions : [];
   const css = buildCss(root, config);
-  const contrast = checkContrast(root, config);
+  const contrast = markAccepted(checkContrast(root, config), "contrast", exceptions);
+  const distinct = markAccepted(checkDistinct(root, config), "distinct", exceptions);
   const componentsDir = join(root, "src", "components");
-  const hardcoded = existsSync(componentsDir) ? scan(["src/components"], root) : [];
-  const failing = contrast.filter((c) => !c.pass);
+  const hardcoded = markAccepted(existsSync(componentsDir) ? scan(["src/components"], root) : [], "hardcoded", exceptions);
+  const blocking = (list) => list.filter((c) => !c.pass && !c.accepted);
   const summary = {
     tokens: { ok: css.issues.length === 0, issues: css.issues },
-    contrast: { ok: failing.length === 0, failing: failing.length, total: contrast.length },
-    hardcoded: { ok: hardcoded.length === 0, count: hardcoded.length },
+    contrast: { ok: blocking(contrast).length === 0, failing: blocking(contrast).length, accepted: contrast.filter((c) => !c.pass && c.accepted).length, total: contrast.length },
+    hardcoded: { ok: hardcoded.every((f) => f.accepted), count: hardcoded.filter((f) => !f.accepted).length, accepted: hardcoded.filter((f) => f.accepted).length },
+    // Advisory: reported, never part of the gate.
+    distinct: { ok: blocking(distinct).length === 0, advisory: true, failing: blocking(distinct).length, accepted: distinct.filter((c) => !c.pass && c.accepted).length, total: distinct.length },
   };
-  return { gate: Object.values(summary).every((s) => s.ok), summary, contrast, hardcoded, tokenIssues: css.issues };
+  const gate = Object.values(summary).every((s) => s.ok || s.advisory);
+  return { gate, summary, contrast, distinct, hardcoded, tokenIssues: css.issues, exceptions };
 }

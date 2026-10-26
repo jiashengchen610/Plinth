@@ -44,9 +44,9 @@ function workspace(files) {
 const brandTokens = (primary, primaryDark, fg = "oklch(0.98 0 0)") => ({
   color: {
     $type: "color",
-    background: { $value: "oklch(1 0 0)", $extensions: { "ds-skills": { modes: { dark: "oklch(0.15 0 0)" } } } },
-    foreground: { $value: "oklch(0.15 0 0)", $extensions: { "ds-skills": { modes: { dark: "oklch(0.98 0 0)" } } } },
-    primary: { $value: primary, $extensions: { "ds-skills": { modes: { dark: primaryDark } } } },
+    background: { $value: "oklch(1 0 0)", $extensions: { plinth: { modes: { dark: "oklch(0.15 0 0)" } } } },
+    foreground: { $value: "oklch(0.15 0 0)", $extensions: { plinth: { modes: { dark: "oklch(0.98 0 0)" } } } },
+    primary: { $value: primary, $extensions: { plinth: { modes: { dark: primaryDark } } } },
     "primary-foreground": { $value: fg },
     ring: { $value: "{color.primary}" },
   },

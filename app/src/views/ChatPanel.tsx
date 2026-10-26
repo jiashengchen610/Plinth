@@ -6,9 +6,6 @@ import { timeAgo } from "@/lib/format";
 
 type Props = { chat: ChatState | null; onError: (message: string) => void; className?: string };
 
-const START_COMMAND = "claude --dangerously-load-development-channels plugin:plinth@plinth";
-const QUIET_MS = 25000;
-
 function readImage(file: File): Promise<ChatImage> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -18,12 +15,13 @@ function readImage(file: File): Promise<ChatImage> {
   });
 }
 
-/** "mcp__plugin_plinth_plinth__install_dependencies" → "install dependencies"; "Bash" → "run a command". */
-function friendlyTool(name: string): string {
-  const builtIn: Record<string, string> = { Bash: "run a command", Write: "write a file", Edit: "edit a file", Read: "read a file", WebFetch: "open a web page" };
-  if (builtIn[name]) return builtIn[name];
-  return name.replace(/^mcp__(?:plugin_)?plinth(?:_plinth)?__/, "").replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "").replace(/_/g, " ");
-}
+/** "propose change" → "Proposing a change"; keeps the UI's language plain. */
+const ACTIVITY: Record<string, string> = {
+  status: "Looking at the design system", "get tokens": "Reading the tokens", "get guidelines": "Reading the guidelines", "list components": "Listing the components",
+  "propose change": "Writing a proposal", "apply change": "Applying a change", "run checks": "Running the checks", "run tests": "Running the tests",
+  "propose contrast fixes": "Computing contrast fixes", "create design system": "Creating the design system", "install dependencies": "Installing dependencies (a few minutes)",
+  "start storybook": "Starting Storybook", publish: "Publishing", "export design md": "Composing DESIGN.md", Read: "Looking at your image", Glob: "Looking through files", Grep: "Searching the files",
+};
 
 function Reply({ text }: { text: string }) {
   // Claude's replies are rendered as Markdown with raw HTML escaped.
@@ -35,18 +33,14 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
   const [sending, setSending] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  const [copied, setCopied] = useState(false);
+  const [, setTick] = useState(0);
   const listRef = useRef<HTMLOListElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const messages = chat?.messages ?? [];
-  const permissions = chat?.permissions ?? [];
+  const working = Boolean(chat?.working);
 
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 2000); return () => clearInterval(t); }, []);
-  useEffect(() => { listRef.current?.lastElementChild?.scrollIntoView({ block: "end" }); }, [messages.length, permissions.length]);
-
-  // No sign of Claude a while after a message: the session is probably not running with the channel enabled.
-  const quiet = Boolean(chat?.waitingSince && !chat.working && now - chat.waitingSince > QUIET_MS);
+  useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 2000); return () => clearInterval(t); }, []);
+  useEffect(() => { listRef.current?.lastElementChild?.scrollIntoView({ block: "end" }); }, [messages.length, working, chat?.activity?.tool]);
 
   const addFiles = async (files: FileList | File[]) => {
     const list = [...files].filter((f) => f.type.startsWith("image/")).slice(0, 4 - images.length);
@@ -67,15 +61,20 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
     }
   };
 
-  const copyCommand = async () => {
-    try { await navigator.clipboard.writeText(START_COMMAND); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* selectable text remains */ }
-  };
+  const elapsed = chat?.activity ? Math.round((Date.now() - chat.activity.since) / 1000) : 0;
+  const activity = chat?.activity?.tool ? ACTIVITY[chat.activity.tool] ?? `Working: ${chat.activity.tool}` : "Thinking";
+  const cannotStart = chat?.error && /Could not start Claude Code/.test(chat.error);
 
   return (
     <section aria-label="Chat with Claude" className={`flex min-h-0 flex-col rounded-xl border bg-card ${className}`}>
-      <header className="border-b px-4 py-3">
-        <h2 className="text-sm font-medium">Chat</h2>
-        <p className="text-xs text-muted-foreground">Describe what you want. Claude proposes changes; you review them in Changes.</p>
+      <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
+        <div>
+          <h2 className="text-sm font-medium">Chat</h2>
+          <p className="text-xs text-muted-foreground">Describe what you want. Claude proposes; you review in Changes.</p>
+        </div>
+        {messages.length > 0 && !working && (
+          <Button size="sm" variant="ghost" onClick={() => api.resetChat().catch((e) => onError(e.message))} title="Start a new conversation. Earlier messages stay visible.">New thread</Button>
+        )}
       </header>
 
       <ol ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite">
@@ -85,38 +84,30 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
           </li>
         )}
         {messages.map((m) => (
-          <li key={m.id} className={m.role === "user" ? "ml-8 self-end rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground" : "mr-4 rounded-xl bg-muted px-3 py-2"}>
+          <li key={m.id} className={m.role === "user" ? "ml-8 self-end rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground" : `mr-4 rounded-xl px-3 py-2 ${m.error ? "border border-destructive/40 bg-destructive/5" : "bg-muted"}`}>
             {m.role === "user" ? <p className="whitespace-pre-wrap">{m.text}</p> : <Reply text={m.text} />}
             {m.images && m.images.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {m.images.map((img) => <img key={img} src={inboxUrl(img)} alt="Attached image" className="h-20 rounded-md border object-cover" />)}
               </div>
             )}
-            <span className={`mt-1 block text-[11px] ${m.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{timeAgo(m.at)}</span>
+            <span className={`mt-1 block text-[11px] ${m.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+              {timeAgo(m.at)}{m.tools && m.tools.length > 0 ? ` · used ${m.tools.join(", ")}` : ""}
+            </span>
           </li>
         ))}
-        {permissions.map((p) => (
-          <li key={p.request_id} className="rounded-xl border border-ring p-3 text-sm">
-            <p className="font-medium">Claude wants to {friendlyTool(p.tool_name)}</p>
-            <p className="mt-1 text-muted-foreground">{p.description}</p>
-            {p.input_preview && <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs">{p.input_preview}</pre>}
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={() => api.decide(p.request_id, "allow").catch((e) => onError(e.message))}>Allow</Button>
-              <Button size="sm" variant="outline" onClick={() => api.decide(p.request_id, "deny").catch((e) => onError(e.message))}>Deny</Button>
-            </div>
+        {working && (
+          <li className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-2"><span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-primary" />{activity}…{elapsed > 5 ? ` ${elapsed}s` : ""}</span>
+            <Button size="sm" variant="ghost" onClick={() => api.stopChat().catch((e) => onError(e.message))}>Stop</Button>
           </li>
-        ))}
-        {chat?.working && <li className="text-xs text-muted-foreground">Claude is working…</li>}
+        )}
       </ol>
 
-      {quiet && (
+      {cannotStart && (
         <div className="mx-4 mb-3 rounded-lg border border-dashed p-3 text-xs">
-          <p className="font-medium">No response from Claude yet.</p>
-          <p className="mt-1 text-muted-foreground">Messages reach Claude only when Claude Code runs with the Plinth channel. Start it in this folder with:</p>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 select-all break-all rounded bg-muted px-2 py-1">{START_COMMAND}</code>
-            <Button size="sm" variant="outline" onClick={copyCommand}>{copied ? "Copied" : "Copy"}</Button>
-          </div>
+          <p className="font-medium">Claude Code is not available.</p>
+          <p className="mt-1 text-muted-foreground">The chat runs Claude Code on this computer. Install it from <code>https://claude.com/claude-code</code>, sign in once with <code>claude</code>, then send your message again.</p>
         </div>
       )}
 
@@ -144,13 +135,13 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
-          placeholder="Ask for a change, or paste a screenshot"
+          placeholder={working ? "Claude is working; you can type the next message" : "Ask for a change, or paste a screenshot"}
           className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <div className="flex items-center justify-between gap-2">
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
           <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Attach image</Button>
-          <Button type="submit" size="sm" disabled={sending || (!text.trim() && !images.length)}>{sending ? "Sending…" : "Send"}</Button>
+          <Button type="submit" size="sm" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
         </div>
       </form>
     </section>

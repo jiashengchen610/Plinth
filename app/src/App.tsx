@@ -7,10 +7,12 @@ import { TokensView } from "@/views/TokensView";
 import { ComponentsView } from "@/views/ComponentsView";
 import { GuidelinesView } from "@/views/GuidelinesView";
 import { ChangesView } from "@/views/ChangesView";
+import { ChecksView } from "@/views/ChecksView";
 import { HistoryView } from "@/views/HistoryView";
 import { ChatPanel } from "@/views/ChatPanel";
+import { PublishDialog } from "@/views/PublishDialog";
 
-const TABS = ["chat", "tokens", "components", "guidelines", "changes", "history"] as const;
+const TABS = ["chat", "tokens", "components", "guidelines", "changes", "checks", "history"] as const;
 type Tab = (typeof TABS)[number];
 const initialTab = (): Tab => (TABS as readonly string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : "tokens";
 
@@ -22,6 +24,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [brand, setBrand] = useState<string>("");
   const [mode, setMode] = useState<"light" | "dark">("light");
+  const [publishing, setPublishing] = useState(false);
   const rev = useRef(0);
   // On wide screens the chat is a side panel, so the Chat tab does not exist there.
   const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
@@ -52,7 +55,7 @@ export default function App() {
         const { rev: r } = await api.rev();
         if (r !== rev.current) load();
       } catch { /* server restarting */ }
-    }, 1500);
+    }, 1000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -75,6 +78,7 @@ export default function App() {
       setBusy(false);
     }
   };
+  const onError = useCallback((m: string) => setError(m), []);
 
   if (!state) {
     return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
@@ -87,18 +91,20 @@ export default function App() {
           <h1 className="text-xl font-semibold">Plinth</h1>
           <p className="text-sm text-muted-foreground">
             Describe the product and how it should feel. Paste screenshots, mood boards or an existing site you like.
-            Claude creates the design system in <code className="text-xs">{state.workspace}</code>.
+            Claude creates the design system in <code className="text-xs">{state.workspace}</code>; you review every change here before it is written.
           </p>
         </div>
         {error && <p role="status" className="text-sm text-destructive">{error}</p>}
-        <ChatPanel chat={state.chat} onError={setError} className="min-h-0 flex-1" />
+        <ChatPanel chat={state.chat} onError={onError} className="min-h-0 flex-1" />
       </main>
     );
   }
 
-  const pendingPermissions = state.chat?.permissions.length ?? 0;
   const gate = state.checks.gate;
-  const failing = state.checks.contrast.filter((c) => !c.pass).length;
+  // Blocking findings only; look-alike roles are advisory and shown inside Checks.
+  const failing = (state.checks.summary.contrast?.failing ?? 0) + (state.checks.summary.hardcoded?.count ?? 0) + state.checks.tokenIssues.length;
+  const advisories = state.checks.summary.distinct?.failing ?? 0;
+  const deps = state.deps;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -119,10 +125,22 @@ export default function App() {
           </div>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Badge variant={gate ? "secondary" : "destructive"}>{gate ? "Ready to publish" : `Not ready${failing ? ` · ${failing} contrast` : ""}`}</Badge>
-          <Badge variant="outline">{state.storybook ? "Storybook running" : "Storybook stopped"}</Badge>
+          <button type="button" onClick={() => setTab("checks")} className="rounded-full">
+            <Badge variant={gate ? "secondary" : "destructive"}>{gate ? "Checks pass" : `${failing} check${failing === 1 ? "" : "s"} failing`}</Badge>
+          </button>
+          {state.publish.running && <Badge variant="outline">Publishing…</Badge>}
+          <Button size="sm" onClick={() => setPublishing(true)} disabled={state.publish.running}>Publish</Button>
         </div>
       </header>
+
+      {!deps.installed && (
+        <div role="status" className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-4 py-2 text-sm sm:mx-6">
+          <span className="min-w-0">
+            {deps.installing ? "Installing dependencies (Storybook, the test browser)… a few minutes." : deps.error ? `Dependency install failed: ${deps.error}` : "Dependencies are not installed yet. Component previews and tests need them."}
+          </span>
+          {!deps.installing && <Button size="sm" variant="outline" onClick={() => act(() => api.install(), "Installing dependencies.")} disabled={busy}>{deps.error ? "Retry install" : "Install dependencies"}</Button>}
+        </div>
+      )}
 
       {(error || notice) && (
         <div role="status" className={`mx-4 mt-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-2 text-sm sm:mx-6 ${error ? "border-destructive/40 text-destructive" : ""}`}>
@@ -134,21 +152,22 @@ export default function App() {
       <main className="grid gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <Tabs value={tab === "chat" && wide ? "tokens" : tab} onValueChange={(v) => setTab(v as Tab)} className="min-w-0 gap-4">
           <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="chat" className="lg:hidden">Chat{pendingPermissions ? ` (${pendingPermissions})` : ""}</TabsTrigger>
+            <TabsTrigger value="chat" className="lg:hidden">Chat{state.chat?.working ? " · working" : ""}</TabsTrigger>
             <TabsTrigger value="tokens">Tokens</TabsTrigger>
             <TabsTrigger value="components">Components</TabsTrigger>
             <TabsTrigger value="guidelines">Guidelines</TabsTrigger>
             <TabsTrigger value="changes">Changes{state.pending.length ? ` (${state.pending.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="checks">Checks{failing ? ` (${failing})` : advisories ? ` (${advisories} to look at)` : ""}</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <TabsContent value="chat" className="lg:hidden">
-            <ChatPanel chat={state.chat} onError={setError} className="h-[75vh]" />
+            <ChatPanel chat={state.chat} onError={onError} className="h-[75vh]" />
           </TabsContent>
           <TabsContent value="tokens">
             <TokensView state={state} brand={brand} busy={busy} onFixContrast={() => act(async () => { await api.fixContrast(); setTab("changes"); }, "Contrast fixes proposed. Review them in Changes.")} />
           </TabsContent>
           <TabsContent value="components">
-            <ComponentsView state={state} brand={brand} mode={mode} busy={busy} onStartStorybook={() => act(async () => { const r = await api.startStorybook(); if (r.error) throw new Error(`${r.error} ${r.next ?? ""}`); }, "Storybook started.")} />
+            <ComponentsView state={state} brand={brand} mode={mode} busy={busy} onStartStorybook={() => act(async () => { const r = await api.startStorybook(); if (r.error) throw new Error(`${r.error} ${r.next ?? ""}`); }, "Storybook started.")} onInstall={() => act(() => api.install(), "Installing dependencies.")} />
           </TabsContent>
           <TabsContent value="guidelines">
             <GuidelinesView state={state} brand={brand} />
@@ -156,13 +175,23 @@ export default function App() {
           <TabsContent value="changes">
             <ChangesView state={state} brand={brand} busy={busy} onApply={(id) => act(() => api.apply(id), "Change applied and saved as a new version.")} onDiscard={(id) => act(() => api.discard(id), "Change discarded.")} />
           </TabsContent>
+          <TabsContent value="checks">
+            <ChecksView
+              state={state} busy={busy} onError={onError} onChanged={load}
+              onFixContrast={() => act(async () => { await api.fixContrast(); setTab("changes"); }, "Contrast fixes proposed. Review them in Changes.")}
+              onRunTests={() => act(() => api.runTests(), "Tests started. Results appear here in about a minute.")}
+              onInstall={() => act(() => api.install(), "Installing dependencies.")}
+            />
+          </TabsContent>
           <TabsContent value="history">
             <HistoryView state={state} busy={busy} onRestore={(sha) => act(() => api.restore(sha), "Version restored as a new version.")} />
           </TabsContent>
         </Tabs>
         {/* Wide screens: the chat stays beside whatever tab is open. */}
-        <ChatPanel chat={state.chat} onError={setError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />
+        <ChatPanel chat={state.chat} onError={onError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />
       </main>
+
+      {publishing && <PublishDialog state={state} onClose={() => setPublishing(false)} onError={onError} />}
     </div>
   );
 }

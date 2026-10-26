@@ -14,44 +14,81 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 
 export type ModeValue = { raw: unknown; css: string | null; resolved: string | null };
 export type TokenRow = { name: string; path: string; type: string; source: string; description: string; derived: boolean; values: Record<string, ModeValue> };
-export type ContrastResult = { brand: string; mode: string; bg: string; fg: string; min: number; ratio: number | null; pass: boolean };
+export type ContrastResult = { brand: string; mode: string; bg: string; fg: string; min: number; ratio: number | null; pass: boolean; accepted?: boolean; exceptionReason?: string };
+export type DistinctResult = { brand: string; mode: string; a: string; b: string; deltaE: number; hueDiff: number | null; pass: boolean; reason: string | null; accepted?: boolean; exceptionReason?: string };
+export type Hardcoded = { file: string; line: number; rule: string; match: string; hint?: string; snippet?: string; accepted?: boolean; exceptionReason?: string };
+export type CheckName = "contrast" | "distinct" | "hardcoded";
+export type Exception = { check: CheckName; key: string; reason?: string; at?: string };
 export type Op = { op: "set" | "delete" | "rename" | "write"; file: string; path?: string; to?: string; mode?: string; value?: unknown; content?: string };
 export type Change = {
   id: string; title: string; rationale: string; by: string; createdAt: string; ops: Op[];
-  preview: { files: string[]; failingAfter: number; issues: string[]; contrastChanges: (ContrastResult & { before: number | null })[] };
+  preview: { files: string[]; failingAfter: number; issues: string[]; notes?: string[]; distinctFailures?: DistinctResult[]; contrastChanges: (ContrastResult & { before: number | null })[] };
 };
 export type Version = { short: string; sha: string; date: string; subject: string };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null };
+export type TestResult = {
+  ok: boolean; at?: string; error?: string; next?: string;
+  typecheck?: { ok: boolean; tail?: string };
+  tests?: { ok: boolean; passed: number | null; failed: number | null; total: number | null; failures: string[]; tail?: string };
+};
+export type PublishStep = { name: string; ok: boolean; detail: unknown };
+export type PublishResult = {
+  published: boolean; dryRun?: boolean; stoppedAt?: string; error?: string; next?: string; note?: string; version?: string; at?: string;
+  github?: string; actions?: string; storybook?: string | null; steps: PublishStep[]; tests?: TestResult;
+};
+export type PublishState = { running: boolean; steps: PublishStep[]; result: PublishResult | null; startedAt: string | null };
+export type PublishDefaults = { ghInstalled: boolean; ghAuthed: boolean; user: string | null; remote: string | null; repo: string | null; suggestedRepo: string };
+export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
+export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
+export type ChatImage = { type: string; data: string; name: string };
 export type State = {
   rev: number; exists: boolean; workspace: string;
-  config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[] };
+  chat: ChatState | null;
+  deps: { installed: boolean; installing: boolean; error: string | null };
+  tests: { running: boolean; last: TestResult | null };
+  publish: PublishState;
+  // Present when exists is true.
+  config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[]; exceptions?: Exception[] };
   brands: string[];
   tokens: Record<string, { modes: string[]; issues: string[]; rows: TokenRow[] }>;
-  checks: { gate: boolean; summary: Record<string, { ok: boolean } & Record<string, unknown>>; contrast: ContrastResult[]; hardcoded: { file: string; line: number; rule: string; match: string }[]; tokenIssues: string[] };
+  checks: {
+    gate: boolean;
+    summary: Record<string, { ok: boolean; failing?: number; count?: number; accepted?: number; issues?: string[] }>;
+    contrast: ContrastResult[]; distinct: DistinctResult[]; hardcoded: Hardcoded[]; tokenIssues: string[]; exceptions: Exception[];
+  };
   components: Component[];
   guidelines: { shared: string | null; writing: string | null; brands: Record<string, string | null> };
   pending: Change[];
   versions: Version[];
   storybook: string | null;
-  chat: ChatState | null;
 };
-export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string };
-export type PermissionRequest = { request_id: string; tool_name: string; description: string; input_preview: string; at: string };
-export type ChatState = { messages: ChatMessage[]; permissions: PermissionRequest[]; working: boolean; waitingSince: number | null; lastActivity: number | null };
-export type ChatImage = { type: string; data: string; name: string };
 export const inboxUrl = (path: string) => `/inbox/${path.split("/").pop()}?t=${encodeURIComponent(token)}`;
 
-export type StoryEntry ={ id: string; title: string; name: string; type: "story" | "docs"; importPath: string };
+export type StoryEntry = { id: string; title: string; name: string; type: "story" | "docs"; importPath: string };
 
 export const api = {
   rev: () => call<{ rev: number }>("GET", "/api/rev"),
-  sendChat: (text: string, images: ChatImage[]) => call<{ id: string }>("POST", "/api/chat", { text, images: images.map(({ type, data }) => ({ type, data })) }),
-  decide: (requestId: string, behavior: "allow" | "deny") => call<unknown>("POST", `/api/permissions/${requestId}`, { behavior }),
   state: () => call<State>("GET", "/api/state"),
+  sendChat: (text: string, images: ChatImage[]) => call<{ id: string }>("POST", "/api/chat", { text, images: images.map(({ type, data }) => ({ type, data })) }),
+  stopChat: () => call<{ stopped: boolean }>("POST", "/api/chat/stop"),
+  resetChat: () => call<{ reset: boolean }>("POST", "/api/chat/reset"),
+  install: () => call<{ started: boolean }>("POST", "/api/install"),
+  runTests: () => call<{ started: boolean }>("POST", "/api/tests"),
   apply: (id: string) => call<{ version: string }>("POST", `/api/changes/${id}/apply`),
   discard: (id: string) => call<unknown>("POST", `/api/changes/${id}/discard`),
   restore: (sha: string) => call<{ version: string }>("POST", `/api/versions/${sha}/restore`),
   fixContrast: () => call<{ id?: string; message?: string }>("POST", "/api/contrast-fixes"),
+  acceptException: (check: CheckName, key: string, reason: string) => call<{ version: string }>("POST", "/api/exceptions", { check, key, reason }),
+  removeException: (check: CheckName, key: string) => call<{ version: string }>("POST", "/api/exceptions/remove", { check, key }),
   startStorybook: () => call<{ url?: string; error?: string; next?: string }>("POST", "/api/storybook/start"),
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
+  publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
+  publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
+};
+
+/** Key of a check result, matching the server's exceptionKey. */
+export const exceptionKey = {
+  contrast: (r: ContrastResult) => `${r.brand}|${r.mode}|${r.bg}|${r.fg}`,
+  distinct: (r: DistinctResult) => `${r.brand}|${r.mode}|${r.a}|${r.b}`,
+  hardcoded: (f: Hardcoded) => `${f.file}|${f.rule}|${f.match}`,
 };

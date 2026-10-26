@@ -7,8 +7,10 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { buildCss, loadConfig, listBrands } from "./tokens.mjs";
-import { checkContrast } from "./checks.mjs";
+import { buildCss, loadConfig, listBrands, resolveBrand, cssName } from "./tokens.mjs";
+import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
+import { fontsToLoad, fontsCss } from "./fonts.mjs";
+import { hueFamily, staleMentions } from "./prose.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const TEMPLATE_DIR = resolve(here, "..", "template");
@@ -76,12 +78,14 @@ export function initWorkspace(root, { name = "my-design-system", brand = "defaul
   return gitCommit(root, `Create design system "${name}"`);
 }
 
-/** Regenerate derived files (the token stylesheet). Returns build issues. */
+/** Regenerate derived files: the token stylesheet and the font loader. Returns build issues. */
 export function regenerate(root) {
-  const { css, issues } = buildCss(root);
-  const out = join(root, "src", "styles", "tokens.css");
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, css);
+  const config = loadConfig(root);
+  const { css, issues } = buildCss(root, config);
+  const styles = join(root, "src", "styles");
+  mkdirSync(styles, { recursive: true });
+  writeFileSync(join(styles, "tokens.css"), css);
+  writeFileSync(join(styles, "fonts.css"), fontsCss(fontsToLoad(root, config)));
   return issues;
 }
 
@@ -119,9 +123,9 @@ function applyOp(root, op, files) {
       if (!op.mode || op.mode === "default" || op.mode === "light") node.$value = op.value;
       else {
         node.$extensions ??= {};
-        node.$extensions["ds-skills"] ??= {};
-        node.$extensions["ds-skills"].modes ??= {};
-        node.$extensions["ds-skills"].modes[op.mode] = op.value;
+        node.$extensions.plinth ??= {};
+        node.$extensions.plinth.modes ??= {};
+        node.$extensions.plinth.modes[op.mode] = op.value;
       }
       files.set(rel, tree);
       break;
@@ -145,6 +149,7 @@ function applyOp(root, op, files) {
         const t = files.get(f) ?? JSON.parse(readFileSync(join(root, f), "utf8"));
         files.set(f, JSON.parse(JSON.stringify(t).replace(from, to)));
       }
+      renameInComponents(root, op.path, op.to, node.$type, files);
       break;
     }
     case "write": { // replace a whole text file (DESIGN.md, WRITING.md, component files)
@@ -154,6 +159,35 @@ function applyOp(root, op, files) {
     }
     default:
       throw new Error(`unknown op ${op.op}`);
+  }
+}
+
+/**
+ * A renamed token changes its CSS variable and every utility built on it (bg-primary, text-primary/80,
+ * rounded-card, shadow-overlay …). Rewrite them in component files so the rename is one reviewed change.
+ */
+function renameInComponents(root, fromPath, toPath, type, files) {
+  const config = loadConfig(root);
+  const mk = (key) => ({ key, path: key.split("/"), type: type ?? "color" });
+  const oldName = cssName(mk(fromPath), config);
+  const newName = cssName(mk(toPath), config);
+  if (oldName === newName) return;
+  const esc = oldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // "<utility>-NAME" at a token boundary (not NAME-foreground), plus var(--NAME).
+  const utility = new RegExp(`(?<=[a-z0-9]-)${esc}(?![\\w-])`, "g");
+  const variable = new RegExp(`var\\(--${esc}\\)`, "g");
+  const dir = join(root, "src", "components");
+  if (!existsSync(dir)) return;
+  for (const comp of readdirSync(dir)) {
+    const folder = join(dir, comp);
+    if (!statSync(folder).isDirectory()) continue;
+    for (const file of readdirSync(folder)) {
+      if (!/\.(tsx|ts|jsx|js|css|mdx)$/.test(file)) continue;
+      const rel = `src/components/${comp}/${file}`;
+      const text = files.get(rel) ?? readFileSync(join(root, rel), "utf8");
+      const next = text.replace(utility, newName).replace(variable, `var(--${newName})`);
+      if (next !== text) files.set(rel, next);
+    }
   }
 }
 
@@ -182,7 +216,11 @@ function savePending(root, list) {
   writeFileSync(pendingPath(root), JSON.stringify(list, null, 2) + "\n");
 }
 
-/** Dry-run ops in a scratch copy and report before/after contrast. Throws on invalid ops. */
+/**
+ * Dry-run ops in a scratch copy and report what the change does to the checks: contrast before → after,
+ * role colors that would stop being distinguishable, and guideline prose that still names the old hue.
+ * Throws on invalid ops.
+ */
 export function previewOps(root, ops) {
   const files = new Map();
   for (const op of ops) applyOp(root, op, files);
@@ -190,18 +228,55 @@ export function previewOps(root, ops) {
   try {
     for (const f of ["design-system.json", "tokens", "brands"]) if (existsSync(join(root, f))) cpSync(join(root, f), join(scratch, f), { recursive: true });
     writeFiles(scratch, files);
+    const exceptions = loadConfig(root).exceptions ?? [];
     const before = checkContrast(root);
     const after = checkContrast(scratch);
-    const key = (r) => `${r.brand}|${r.mode}|${r.bg}|${r.fg}`;
-    const prev = new Map(before.map((r) => [key(r), r]));
+    const prev = new Map(before.map((r) => [exceptionKey.contrast(r), r]));
     const contrastChanges = after
-      .filter((r) => { const p = prev.get(key(r)); return !p || p.ratio !== r.ratio; })
-      .map((r) => ({ ...r, before: prev.get(key(r))?.ratio ?? null }));
+      .filter((r) => { const p = prev.get(exceptionKey.contrast(r)); return !p || p.ratio !== r.ratio; })
+      .map((r) => ({ ...r, before: prev.get(exceptionKey.contrast(r))?.ratio ?? null, accepted: Boolean(acceptedBy(exceptions, "contrast", r)) }));
+    const distinctFailures = checkDistinct(scratch).filter((r) => !r.pass && !acceptedBy(exceptions, "distinct", r));
     const { issues } = buildCss(scratch);
-    return { files: [...files.keys()], contrastChanges, failingAfter: after.filter((r) => !r.pass).length, issues };
+    return {
+      files: [...files.keys()],
+      contrastChanges,
+      failingAfter: after.filter((r) => !r.pass && !acceptedBy(exceptions, "contrast", r)).length,
+      distinctFailures,
+      notes: proseNotes(root, ops, files),
+      issues,
+    };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+/**
+ * A color token that moved to another hue family while a DESIGN.md still describes the old one, and this
+ * change does not rewrite that file. Claude is expected to add the rewrite to the same change.
+ */
+function proseNotes(root, ops, files) {
+  const notes = [];
+  const config = loadConfig(root);
+  for (const op of ops) {
+    if (op.op !== "set" || typeof op.value !== "string") continue;
+    const brandOf = op.file.match(/^brands\/([^/]+)\//)?.[1];
+    const brands = brandOf ? [brandOf] : listBrands(root, config);
+    for (const brand of brands) {
+      const was = resolveBrand(root, brand, config).tokens.find((t) => t.key === op.path);
+      if (!was || was.type !== "color") continue;
+      const mode = !op.mode || op.mode === "light" ? "default" : op.mode;
+      const oldFamily = hueFamily(was.values[mode]?.resolved ?? was.values.default?.resolved);
+      const newFamily = hueFamily(op.value);
+      if (!oldFamily || !newFamily || oldFamily === newFamily) continue;
+      for (const doc of [`brands/${brand}/DESIGN.md`, "DESIGN.md"]) {
+        if (files.has(doc)) continue;
+        for (const m of staleMentions(readText(root, doc), oldFamily, newFamily).slice(0, 3)) {
+          notes.push(`${doc}${m.section ? ` (${m.section})` : ""} still says "${m.word}" but ${was.name} is now ${newFamily}: "${m.line}". Update the prose in this change.`);
+        }
+      }
+    }
+  }
+  return [...new Set(notes)];
 }
 
 /** Queue a change for the user to review. */
@@ -231,6 +306,29 @@ export function apply(root, idOrChange) {
   const sha = gitCommit(root, change.title);
   if (typeof idOrChange === "string") savePending(root, list.filter((c) => c.id !== change.id));
   return { version: sha, issues };
+}
+
+// ---------------- exceptions ----------------
+/**
+ * The user accepts a failing check on purpose (PRD: "退回，或明確選擇接受並記錄例外"). Recorded in
+ * design-system.json so publish shows it; one commit, no review step since the user is the reviewer.
+ */
+export function acceptException(root, { check, key, reason = "" }) {
+  if (!exceptionKey[check]) throw new Error(`unknown check ${check}`);
+  if (!key || !/^[^|]+(\|[^|]+)+$/.test(key)) throw new Error("exception needs a key like brand|mode|bg|fg (segments may be *)");
+  const cfgPath = join(root, "design-system.json");
+  const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+  cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
+  cfg.exceptions.push({ check, key, reason, at: new Date().toISOString() });
+  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
+  return gitCommit(root, `Accept exception: ${check} ${key}${reason ? ` (${reason})` : ""}`);
+}
+export function removeException(root, { check, key }) {
+  const cfgPath = join(root, "design-system.json");
+  const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+  cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
+  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
+  return gitCommit(root, `Remove exception: ${check} ${key}`);
 }
 
 // ---------------- reading ----------------

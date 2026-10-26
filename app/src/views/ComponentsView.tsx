@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api, type State, type StoryEntry } from "@/lib/api";
 
-type Props = { state: State; brand: string; mode: "light" | "dark"; onStartStorybook: () => void; busy: boolean };
+type Props = { state: State; brand: string; mode: "light" | "dark"; onStartStorybook: () => void; onInstall: () => void; busy: boolean };
 
-export function ComponentsView({ state, brand, mode, onStartStorybook, busy }: Props) {
+export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall, busy }: Props) {
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const [selected, setSelected] = useState<string | null>(state.components[0]?.id ?? null);
   const [view, setView] = useState<"preview" | "spec">("preview");
@@ -22,6 +22,7 @@ export function ComponentsView({ state, brand, mode, onStartStorybook, busy }: P
   const src = state.storybook && target
     ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}`
     : null;
+  const deps = state.deps;
 
   return (
     <div className="flex flex-wrap items-start gap-4">
@@ -38,6 +39,7 @@ export function ComponentsView({ state, brand, mode, onStartStorybook, busy }: P
             {!c.spec && <span className="text-xs text-muted-foreground">no spec</span>}
           </button>
         ))}
+        <p className="mt-2 px-3 text-xs text-muted-foreground">Want another one? Ask in the chat: "make a pricing card from this screenshot".</p>
       </nav>
       <section aria-label="Component preview" className="flex min-w-0 flex-[999_1_480px] flex-col gap-3">
         <div className="flex flex-wrap gap-1" role="tablist" aria-label="Preview or spec">
@@ -53,11 +55,12 @@ export function ComponentsView({ state, brand, mode, onStartStorybook, busy }: P
           <iframe title={`${component?.id} in Storybook`} src={src} className="h-[70vh] w-full rounded-xl border bg-white" />
         ) : (
           <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-8">
-            <h2 className="font-medium">{state.storybook ? "No stories for this component yet" : "Storybook is not running"}</h2>
+            <h2 className="font-medium">{state.storybook ? "No stories for this component yet" : deps.installed ? "Storybook is not running" : "Dependencies are not installed"}</h2>
             <p className="text-sm text-muted-foreground">
-              {state.storybook ? "Ask Claude to write stories for it." : "Components are previewed in your design system's Storybook, in an isolated frame."}
+              {state.storybook ? "Ask Claude to write stories for it." : deps.installed ? "Components are previewed in your design system's Storybook, in an isolated frame." : deps.installing ? "Installing now; this takes a few minutes. The preview starts after that." : "Previews and tests need the design system's dependencies (Storybook, the test browser)."}
             </p>
-            {!state.storybook && <Button onClick={onStartStorybook} disabled={busy}>Start Storybook</Button>}
+            {!state.storybook && deps.installed && <Button onClick={onStartStorybook} disabled={busy}>Start Storybook</Button>}
+            {!deps.installed && !deps.installing && <Button onClick={onInstall} disabled={busy}>Install dependencies</Button>}
           </div>
         )}
       </section>

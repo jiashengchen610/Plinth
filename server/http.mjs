@@ -1,5 +1,5 @@
-// Local review UI: serves app/dist and a small JSON API over the workspace. Bound to 127.0.0.1; every
-// API call must carry the per-session token, and the Host header must be local (blocks DNS rebinding).
+// Local Plinth UI: serves app/dist and a JSON API over the workspace. Bound to 127.0.0.1; every API call
+// must carry the per-session token, and the Host header must be local (blocks DNS rebinding).
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, watch } from "node:fs";
 import { join, extname, normalize, dirname } from "node:path";
@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
+import { publishDefaults } from "./publish.mjs";
 import { freePort } from "./storybook.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
@@ -18,11 +19,11 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
   let rev = 1;
   const bump = () => { rev++; };
 
-  // Watch the workspace for edits made outside the tools (Claude editing files, git, the user).
+  // Watch the workspace for edits made outside the tools (git, the user, an editor).
   let timer = null;
   try {
     watch(ctx.root, { recursive: true }, (_e, file) => {
-      if (!file || /node_modules|[\\/]\.git[\\/]|^\.git[\\/]|storybook-static/.test(file)) return;
+      if (!file || /node_modules|[\\/]\.git[\\/]|^\.git[\\/]|storybook-static|^\.ds[\\/]/.test(file)) return;
       clearTimeout(timer);
       timer = setTimeout(bump, 150);
     });
@@ -30,7 +31,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
 
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
-    if (!exists) return { rev, exists: false, workspace: ctx.root, chat: ctx.chat?.state() ?? null };
+    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state() };
+    if (!exists) return common;
     const config = loadConfig(ctx.root);
     const brands = listBrands(ctx.root, config);
     const tokens = {};
@@ -40,14 +42,13 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     }
     const checks = runChecks(ctx.root);
     return {
-      rev, exists: true, workspace: ctx.root, config, brands, tokens,
-      checks: { gate: checks.gate, summary: checks.summary, contrast: checks.contrast, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues },
+      ...common, config, brands, tokens,
+      checks: { gate: checks.gate, summary: checks.summary, contrast: checks.contrast, distinct: checks.distinct, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues, exceptions: checks.exceptions },
       components: ws.listComponents(ctx.root),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },
       pending: ws.listPending(ctx.root),
       versions: ws.versions(ctx.root, 40),
       storybook: ctx.storybook.url,
-      chat: ctx.chat?.state() ?? null,
     };
   };
 
@@ -68,18 +69,31 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     req.on("end", () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}); } catch { reject(new Error("Invalid JSON body.")); } });
     req.on("error", reject);
   });
+  const needsWorkspace = () => { if (!existsSync(join(ctx.root, "design-system.json"))) throw new Error("No design system yet. Describe one in the chat first."); };
+
+  // Long operations return at once and report through state; ?wait=1 (used by the nested session's tools) waits.
+  const longOp = async (url, start) => (url.searchParams.get("wait") ? start() : (start(), { started: true }));
 
   const routes = {
     "GET /api/rev": () => ({ rev }),
     "GET /api/state": () => state(),
+    "POST /api/chat": async (req) => { const { id } = await ctx.chat.send(await readJson(req)); return { id }; },
+    "POST /api/chat/stop": () => ctx.chat.stop(),
+    "POST /api/chat/reset": () => ctx.chat.reset(),
+    "POST /api/install": (_req, url) => { needsWorkspace(); return longOp(url, () => ctx.deps.install()); },
+    "POST /api/tests": (_req, url) => { needsWorkspace(); return longOp(url, () => ctx.tests.run()); },
+    "POST /api/storybook/start": () => { needsWorkspace(); return ctx.storybook.start(); },
+    "GET /api/publish/defaults": () => { needsWorkspace(); return publishDefaults(ctx.root); },
+    "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts)); },
     "POST /api/contrast-fixes": () => {
+      needsWorkspace();
       const { ops, skipped } = contrastFixes(runChecks(ctx.root).contrast);
       if (!ops.length) return { message: "Nothing to fix.", skipped };
       const c = ws.propose(ctx.root, { title: `Fix contrast (${ops.length} pair${ops.length > 1 ? "s" : ""})`, rationale: ops.map((o) => o.why).join("; "), ops: ops.map(({ why, ...o }) => o), by: "engine" });
       return { id: c.id };
     },
-    "POST /api/storybook/start": () => ctx.storybook.start(),
-    "POST /api/chat": async (req) => ctx.chat.send(await readJson(req)),
+    "POST /api/exceptions": async (req) => { needsWorkspace(); return { version: ws.acceptException(ctx.root, await readJson(req)) }; },
+    "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return { version: ws.removeException(ctx.root, await readJson(req)) }; },
     // Storybook's index, proxied so the UI needs no cross-origin access. Lists story ids per component.
     "GET /api/storybook/index": async () => {
       if (!ctx.storybook.url) return { running: false, entries: [] };
@@ -98,10 +112,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
         const key = `${req.method} ${url.pathname}`;
         let m;
         let result;
-        if (routes[key]) result = await routes[key](req);
-        else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/permissions\/([a-z]{5})$/))) {
-          result = await ctx.chat.decide(m[1], (await readJson(req)).behavior);
-        }
+        if (routes[key]) result = await routes[key](req, url);
         else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/changes\/([\w-]+)\/(apply|discard)$/))) {
           result = m[2] === "apply" ? ws.apply(ctx.root, m[1]) : (ws.discard(ctx.root, m[1]), { discarded: m[1] });
         } else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/versions\/([0-9a-f]{4,40})\/restore$/))) {
@@ -135,5 +146,5 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
 
   const port = await freePort(wanted);
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
-  return { url: `http://localhost:${port}/`, port, bump, close: () => server.close() };
+  return { url: `http://localhost:${port}/`, port, token, bump, close: () => server.close() };
 }

@@ -59,10 +59,13 @@ function ChangeCard({ change, state, onApply, onDiscard, busy }: { change: Chang
           <h2 className="font-medium">{change.title}</h2>
           <p className="text-xs text-muted-foreground">Proposed by {change.by} · {timeAgo(change.createdAt)}</p>
         </div>
-        {change.preview.failingAfter > 0 ? (
-          <Badge variant="destructive">{change.preview.failingAfter} contrast failure{change.preview.failingAfter > 1 ? "s" : ""} after</Badge>
+        {change.preview.failingAfter > 0 || (change.preview.distinctFailures?.length ?? 0) > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {change.preview.failingAfter > 0 && <Badge variant="destructive">{change.preview.failingAfter} contrast failure{change.preview.failingAfter > 1 ? "s" : ""} after</Badge>}
+            {(change.preview.distinctFailures?.length ?? 0) > 0 && <Badge variant="warning">{change.preview.distinctFailures!.length} look-alike role pair{change.preview.distinctFailures!.length > 1 ? "s" : ""} (advisory)</Badge>}
+          </div>
         ) : (
-          <Badge variant="secondary">All checks pass after</Badge>
+          <Badge variant="secondary">Checks pass after</Badge>
         )}
       </header>
       {change.rationale && <p className="text-sm text-muted-foreground">{change.rationale}</p>}
@@ -79,6 +82,20 @@ function ChangeCard({ change, state, onApply, onDiscard, busy }: { change: Chang
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {(change.preview.distinctFailures?.length ?? 0) > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {change.preview.distinctFailures!.map((d) => (
+            <li key={`${d.brand}-${d.mode}-${d.a}-${d.b}`}><Badge variant="warning" className="h-auto whitespace-normal text-left">{d.a} and {d.b} look alike · {d.brand} {d.mode === "default" ? "light" : d.mode} · {d.reason}</Badge></li>
+          ))}
+        </ul>
+      )}
+      {(change.preview.notes?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm">
+          <h3 className="font-medium">Guidelines to update</h3>
+          <ul className="mt-1 list-disc pl-5">{change.preview.notes!.map((n) => <li key={n}>{n}</li>)}</ul>
+          <p className="mt-1 text-muted-foreground">Ask Claude to include the rewrite, or apply and ask afterwards.</p>
         </div>
       )}
       {change.preview.issues.length > 0 && <ul className="list-disc pl-5 text-sm text-destructive">{change.preview.issues.map((i) => <li key={i}>{i}</li>)}</ul>}

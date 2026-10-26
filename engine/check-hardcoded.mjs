@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
- * check-hardcoded.mjs — flag hardcoded design values and leaked Figma tokens.
+ * check-hardcoded.mjs — flag hardcoded design values in component code.
  *
  * Usage:
- *   node scripts/check-hardcoded.mjs <file|dir>... [--json] [--strict] [--config <path>]
- *   node scripts/check-hardcoded.mjs --hook          # Claude Code PostToolUse hook (reads stdin JSON)
+ *   node engine/check-hardcoded.mjs <file|dir>... [--json] [--strict] [--config <path>]
+ *   node engine/check-hardcoded.mjs --hook          # Claude Code PostToolUse hook (reads stdin JSON)
  *
  * Rules:
- *   figma-pat      Figma personal access token (figd_...)  -> error; hook mode exits 2
  *   hex-color      #fff / #ffffff / #ffffffff literals
  *   color-fn       rgb()/rgba()/hsl()/hsla()/oklch() with literal numbers
  *   tw-arbitrary   Tailwind arbitrary values: bg-[#fff], p-[13px], text-[14px]
@@ -16,42 +15,35 @@
  * Config (optional): design-system.json in the workspace root
  *   { "hardcoded": { "allowFiles": ["**\/globals.css"], "allowPx": [0, 1], "scanExtensions": [".tsx"] } }
  *
- * Exit codes (CLI):  0 clean or warnings only; 1 on any error-level finding, or on any finding with --strict.
- * Exit codes (hook): 0 (findings returned as additionalContext); 2 if a Figma PAT is found (stderr fed to agent).
+ * Exit codes (CLI):  0 clean; 1 on any finding with --strict.
+ * Exit codes (hook): 0 (findings returned as additionalContext).
  */
 import { readFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { resolve, relative, extname, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULTS = {
-  scanExtensions: [".tsx", ".ts", ".jsx", ".js", ".css", ".scss", ".mdx", ".json", ".md", ".env", ".yml", ".yaml"],
+  scanExtensions: [".tsx", ".ts", ".jsx", ".js", ".css", ".scss", ".mdx"],
   // Files where raw values are legitimate: token sources and generated theme output.
   allowFiles: [
     "**/globals.css",
     "**/index.css",
     "**/tokens.css",
+    "**/fonts.css",
     "**/tokens/**",
     "**/brands/**",
     "**/*.tokens.json",
-    "**/.design-system/**",
-    "**/tailwind.config.*",
-    "**/style-dictionary.config.*",
     "**/node_modules/**",
     "**/dist/**",
     "**/storybook-static/**",
     "**/.storybook/**",
   ],
   allowPx: [0, 1],
-  // Design-value rules only apply to code/style files. The PAT rule applies everywhere.
+  // Design-value rules only apply to code/style files.
   designValueExtensions: [".tsx", ".ts", ".jsx", ".js", ".css", ".scss", ".mdx"],
 };
 
 const RULES = [
-  {
-    id: "figma-pat", level: "error", everywhere: true,
-    re: /\bfigd_[A-Za-z0-9_-]{20,}/g,
-    hint: "Figma personal access token in source. Move it to .env.local (FIGMA_ACCESS_TOKEN) and rotate it.",
-  },
   {
     id: "hex-color", level: "warn",
     re: /(?<![\w&])#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g,
@@ -132,7 +124,7 @@ function stripComments(src, ext) {
 export function scanFile(absPath, cwd, cfg) {
   const rel = relative(cwd, absPath) || absPath;
   const ext = extname(absPath).toLowerCase();
-  if (!cfg.scanExtensions.includes(ext) && !absPath.endsWith(".env.local")) return [];
+  if (!cfg.scanExtensions.includes(ext)) return [];
   let src;
   try {
     src = readFileSync(absPath, "utf8");
@@ -146,9 +138,8 @@ export function scanFile(absPath, cwd, cfg) {
   const findings = [];
 
   for (const rule of RULES) {
-    if (!rule.everywhere && (allowed || !designExt)) continue;
-    const source = rule.everywhere ? lines : stripped;
-    source.forEach((line, i) => {
+    if (allowed || !designExt) continue;
+    stripped.forEach((line, i) => {
       rule.re.lastIndex = 0;
       let m;
       while ((m = rule.re.exec(line)) !== null) {
@@ -258,7 +249,7 @@ function main() {
           additionalContext:
             "design-system guardrail: the file just written contains hardcoded design values. " +
             "Replace them with design tokens (CSS variables / theme utilities) unless the user explicitly accepted an exception.\n" +
-            text,
+            format(findings),
         },
       }),
     );
@@ -274,8 +265,7 @@ function main() {
   for (const t of targets) walk(resolve(cwd, t), cwd, cfg, findings);
   if (json) process.stdout.write(JSON.stringify({ count: findings.length, findings }, null, 2) + "\n");
   else process.stdout.write(format(findings) + "\n");
-  const hasError = findings.some((f) => f.level === "error");
-  return void process.exit(hasError || (strict && findings.length > 0) ? 1 : 0);
+  return void process.exit(strict && findings.length > 0 ? 1 : 0);
 
 }
 

@@ -115,6 +115,25 @@ export function formatHex({ r, g, b }) {
   return "#" + [r, g, b].map((x) => Math.round(clamp01(x) * 255).toString(16).padStart(2, "0")).join("");
 }
 
+// ---------- distance ----------
+/** Perceptual distance in OKLab (ΔE_OK). Roughly: 0.02 just noticeable, 0.1 clearly different. null if unparseable. */
+export function deltaE(aValue, bValue) {
+  const a = parseColor(aValue), b = parseColor(bValue);
+  if (!a || !b) return null;
+  const [l1, a1, b1] = linearSrgbToOklab([a.r, a.g, a.b].map(toLinear));
+  const [l2, a2, b2] = linearSrgbToOklab([b.r, b.g, b.b].map(toLinear));
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+/** Shortest hue difference in degrees, or null when either color is (near) achromatic. */
+export function hueDifference(aValue, bValue, minChroma = 0.05) {
+  const a = parseColor(aValue), b = parseColor(bValue);
+  if (!a || !b) return null;
+  const la = rgbToOklch(a), lb = rgbToOklch(b);
+  if (la.c < minChroma || lb.c < minChroma) return null;
+  const d = Math.abs(la.h - lb.h) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
 // ---------- contrast ----------
 export function relativeLuminance({ r, g, b }) {
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);

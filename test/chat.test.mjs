@@ -1,0 +1,87 @@
+// The UI chat end to end with a stand-in for the claude binary: a message with an image becomes a headless
+// Claude Code run with the right flags, the reply shows up in state, the session is resumed, a vanished
+// session is replaced, and a crash is reported instead of hanging.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const SERVER = join(here, "..", "server", "index.mjs");
+const FAKE = join(here, "fake-claude.mjs");
+// 1×1 transparent PNG
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+test("chat: UI message → headless Claude Code → reply, resume, recovery", async (t) => {
+  const ws = mkdtempSync(join(tmpdir(), "plinth-chat-"));
+  const log = join(ws, "fake-claude.json");
+  const env = { ...process.env, PLINTH_WORKSPACE: ws, PLINTH_TOKEN: "tok", PLINTH_PORT: "4396", PLINTH_CLAUDE_BIN: FAKE, FAKE_CLAUDE_LOG: log, CLAUDECODE: "1" };
+  const child = spawn(process.execPath, [SERVER], { env, stdio: ["pipe", "pipe", "pipe"] });
+  t.after(() => { child.stdin.end(); rmSync(ws, { recursive: true, force: true }); });
+
+  const responses = new Map();
+  let nextId = 1;
+  createInterface({ input: child.stdout }).on("line", (line) => { const m = JSON.parse(line); if (m.id !== undefined) responses.get(m.id)?.(m); });
+  const request = (method, params) => new Promise((resolve) => { const id = nextId++; responses.set(id, resolve); child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n"); });
+  await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+  const ui = JSON.parse((await request("tools/call", { name: "open_ui", arguments: {} })).result.content[0].text).url;
+  const api = (path, body) => fetch(new URL(path, ui), { method: body ? "POST" : "GET", headers: { "X-Plinth-Token": "tok", "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const turn = async (text, images = []) => {
+    const r = await api("api/chat", { text, images });
+    assert.equal(r.status, 200, await r.text());
+    for (let i = 0; i < 400; i++) {
+      const s = await (await api("api/state")).json();
+      if (!s.chat.working && s.chat.messages.at(-1)?.role === "assistant") return s;
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    throw new Error("turn did not finish");
+  };
+  const lastCall = () => JSON.parse(readFileSync(log, "utf8"));
+
+  // 1. A message with an image, before any design system exists.
+  let s = await turn("Create a design system for a budgeting app", [{ type: "image/png", data: PNG }]);
+  assert.deepEqual(s.chat.messages.map((m) => m.role), ["user", "assistant"]);
+  assert.match(s.chat.messages[1].text, /^I read .*inbox[\\/].*\.png\.$/, "the reply saw the image path");
+  assert.equal(s.chat.session, "sess-0001");
+  assert.deepEqual(s.chat.messages[1].tools, ["status"]);
+  const call = lastCall();
+  assert.equal(call.env.PLINTH_CHILD, "1");
+  assert.equal(call.env.CLAUDECODE, null, "nested-session guard is cleared");
+  assert.equal(call.cwd.replace(/\\/g, "/").toLowerCase(), ws.replace(/\\/g, "/").toLowerCase());
+  assert.ok(call.args.includes("--plugin-dir") && call.args.includes("--allowedTools"));
+  assert.ok(call.args.indexOf("Write") > call.args.indexOf("--disallowedTools"), "Write is disallowed");
+  assert.ok(!call.args.includes("--resume"), "first turn starts a session");
+  assert.ok(existsSync(join(ws, ".ds", "claude-session.json")));
+
+  // 2. The next message resumes the session.
+  s = await turn("Make it warmer vanish-next");
+  assert.equal(s.chat.messages.at(-1).text, "Echo: Make it warmer vanish-next");
+  assert.equal(lastCall().args[lastCall().args.indexOf("--resume") + 1], "sess-0001");
+  assert.equal(s.chat.session, "gone-session");
+
+  // 3. A session Claude Code no longer has is replaced by a fresh one, transparently.
+  s = await turn("Still there?");
+  assert.equal(s.chat.messages.at(-1).text, "Echo: Still there?");
+  assert.ok(!lastCall().args.includes("--resume"), "retried without --resume");
+  assert.equal(s.chat.session, "sess-0001");
+
+  // 4. Reset forgets the thread.
+  await api("api/chat/reset", {});
+  s = await turn("New thread");
+  assert.ok(!lastCall().args.includes("--resume"));
+
+  // 5. A crash is reported, not swallowed.
+  s = await turn("please crash");
+  assert.match(s.chat.messages.at(-1).text, /exited \(3\)/);
+  assert.equal(s.chat.working, false);
+
+  // 6. Bad input is refused before anything runs.
+  assert.equal((await api("api/chat", { text: "", images: [] })).status, 400);
+  assert.equal((await api("api/chat", { text: "x", images: [{ type: "image/svg+xml", data: "PHN2Zz4=" }] })).status, 400);
+  assert.equal((await fetch(new URL("api/chat", ui), { method: "POST", body: "{}" })).status, 401);
+  assert.ok(existsSync(join(ws, ".ds", "chat.jsonl")));
+});

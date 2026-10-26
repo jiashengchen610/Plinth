@@ -7,7 +7,7 @@
 //   tokens/base.tokens.json        shared tokens (scales, motion, shadows, fonts …)
 //   brands/<brand>/tokens.json     per-brand semantic tokens; brand values override base on the same path
 // Modes: a token's $value is the default (light) mode; other modes live in
-//   $extensions["ds-skills"].modes.<mode>   (or $extensions["figma-console-mcp"].modes for imported files)
+//   $extensions.plinth.modes.<mode>
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -43,13 +43,12 @@ function flatten(tree, source, out, path = [], inheritedType) {
   const groupType = tree.$type ?? inheritedType;
   if ("$value" in tree) {
     const key = path.join("/");
-    const ds = tree.$extensions?.["ds-skills"] ?? {};
-    const fx = tree.$extensions?.["figma-console-mcp"] ?? {};
+    const ds = tree.$extensions?.plinth ?? {};
     const t = {
       path, key, source,
       type: tree.$type ?? groupType ?? inferType(path, tree.$value),
       description: tree.$description ?? "",
-      values: { default: tree.$value, ...(fx.modes ?? {}), ...(ds.modes ?? {}) },
+      values: { default: tree.$value, ...(ds.modes ?? {}) },
       deprecated: Boolean(tree.$deprecated),
     };
     out.set(key, t);

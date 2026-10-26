@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Create a component
@@ -25,9 +25,10 @@ The spec is written and approved before any code.
 `propose_change` with one `write` op for `src/components/<name>/<name>.spec.md`, sections:
 `## Parts`, `## States`, `## Props` (each with allowed values), `## Tokens` (every token it uses),
 `## Accessibility` (roles, keyboard, what is announced). Add `## Token gaps` when the design needs a value no token
-covers: name the value and the closest token. Do not invent tokens inside a component proposal.
+covers: name the value and the closest token. Do not invent tokens inside a component proposal; propose them first
+with the change-design-system skill (in every brand) if the user agrees.
 
-Ask the user to approve the spec in the UI. Apply it.
+Ask the user to approve the spec in the UI. Apply it only when they do.
 
 ## 3. Component and stories (one proposal)
 
@@ -35,8 +36,8 @@ Ask the user to approve the spec in the UI. Apply it.
 
 Component rules:
 - Imports: `@/components/<x>/<x>`, `@/lib/utils` (`cn`), `radix-ui`, `class-variance-authority`, `lucide-react`.
-- Styling: theme utilities from token names only (`bg-primary`, `text-muted-foreground`, `rounded-lg`, `shadow-card`,
-  `text-display`). No hex, `oklch()`, arbitrary values (`p-[13px]`), inline styles or magic pixel values.
+- Styling: theme utilities from token names only (`bg-primary`, `text-muted-foreground`, `bg-success`, `rounded-lg`,
+  `shadow-card`, `text-display`). No hex, `oklch()`, arbitrary values (`p-[13px]`), inline styles or magic pixel values.
 - Variants with `cva`; `data-slot` on the root; forward `className`; type props explicitly.
 - Copy follows WRITING.md (verbs on buttons, sentence case, specific errors).
 
@@ -48,8 +49,9 @@ Story rules:
 
 ## 4. Verify
 
-1. `run_checks`: hardcoded values must be zero.
-2. Ask the user to run `npm test` in the design system folder, or run it yourself if you have a shell: every story
-   passes interaction and accessibility checks in Storybook's test runner.
-3. `start_storybook`; in the UI (Components tab) the user switches brand and mode and checks it.
-Fix and propose again until all pass. Report what was reused, what was new, and any token gaps.
+1. `run_checks`: hardcoded values must be zero (the proposal is refused otherwise; fix and propose again).
+2. `run_tests`: TypeScript plus every story's interaction and accessibility tests. Fix failures and propose again
+   until green. If dependencies are not installed, call `install_dependencies` first.
+3. `start_storybook` if it is not running; the user checks the component in every brand and mode in the
+   Components tab.
+Report what was reused, what was new, and any token gaps.

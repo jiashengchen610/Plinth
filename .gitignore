@@ -7,6 +7,3 @@ storybook-static/
 Thumbs.db
 .claude/settings.local.json
 # app/dist is committed on purpose: the plugin serves it without a build step.
-
-# Caches from the legacy prototype
-**/.design-system/.cache/

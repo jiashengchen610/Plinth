@@ -1,16 +1,16 @@
 ---
 name: create-design-system
 description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools, with every step reviewed by the user before it is written."
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Create a design system
 
-Turn a description (and any images the user pasted) into a working design system: tokens for light and dark,
-design guidelines, writing guidelines and five base components, browsable in the local UI and Storybook.
+Turn a description (and any images the user attached) into a working design system: tokens for light and dark,
+design guidelines, writing guidelines and five base components, browsable in the Plinth UI and Storybook.
 
 Everything goes through the Plinth MCP tools. Never edit token, guideline or component files directly, and never
-write `src/styles/tokens.css` (generated).
+write `src/styles/tokens.css` or `src/styles/fonts.css` (generated).
 
 ## 1. Understand the brief
 
@@ -28,10 +28,10 @@ State the brief back in 4–6 lines and continue unless the user corrects it.
 ## 2. Scaffold
 
 1. `status` — if a design system already exists, switch to the change-design-system skill instead.
-2. `create_design_system` with `name`, `brand` (lowercase kebab-case id), `context`. Naming stays `shadcn` for now:
-   the base components use shadcn token names.
-3. `install_dependencies` (takes a few minutes; continue while it runs only if your client allows parallel calls).
-4. `open_ui` and give the user the URL: this is where they review every change.
+2. `create_design_system` with `name`, `brand` (lowercase kebab-case id), `context`.
+3. `install_dependencies` (a few minutes; the UI shows progress). Continue with step 3 while it runs if your
+   client allows parallel calls; otherwise call it after the first proposal.
+4. `open_ui` and give the user the URL if they are not already in the UI.
 
 ## 3. Propose the brand tokens (one change)
 
@@ -44,38 +44,47 @@ How to choose values:
   text L 0.15–0.25; dark-mode surfaces L 0.13–0.22, text L 0.93–0.98.
 - Start from one brand hue for `primary`. Derive `accent`, `secondary`, `muted` from it (same hue, low chroma) unless
   the brief asks for a second hue. `destructive` stays red (H 25–30) in every brand.
+- Status colors exist in the template: `success` (green), `warning` (amber), `info` (blue), each with a `-foreground`.
+  Tune their chroma and lightness to the brand; keep their hue families so they stay distinguishable from `primary`
+  and from each other (the engine checks this: see `distinctFailures` in the preview).
 - Every `X` has an `X-foreground` that reads on it. Aim for ≥ 4.5:1; the engine checks and can repair it.
 - Set a `dark` value for every color (`mode: "dark"`). Dark mode is not inverted light mode: lower chroma, lighter
   primaries, never pure black surfaces.
 - Radius from personality: crisp 0.25–0.375rem, balanced 0.5–0.625rem, friendly 0.75–1rem.
-- Fonts: one family, two at most. Pick for the subject, not the default; only fonts available via Fontsource /
-  Google Fonts. If you change the font, the template's `@fontsource-variable/geist` import must change too: say so.
+- Fonts: one family, two at most, chosen for the subject. Any Google Fonts family works: set `font/sans` and the
+  `fontFamily` of `typography/*` to its name (e.g. `["Inter", "sans-serif"]`); the engine generates the loader.
+  Families not on Google Fonts (system fonts) are fine too; anything else will not load.
 - Avoid the generated-design defaults: warm cream background with terracotta accent; near-black with one acid
   accent; every surface the same radius and the same grey shadow. Use one only if the brief asks for it.
 
-Tell the user to review it in the UI (Changes tab) and call `apply_change` only after they approve. If the preview
-shows contrast failures, `propose_contrast_fixes` after applying, or adjust values and propose again.
+Read the proposal's preview: `failingAfter` (contrast), `distinctFailures` (look-alike roles) and `notes` (guideline
+prose that still names an old hue). Fix them in the same proposal (discard and re-propose) or in the next one.
+Then tell the user it is waiting in the Changes tab. Call `apply_change` only after they approve; in the UI they
+can press Apply themselves.
 
 ## 4. Propose the guidelines (one change)
 
 `write` ops for:
 
 - `brands/<brand>/DESIGN.md`: sections in this order, only those with real content — `## Overview` (personality, the
-  one thing that makes this brand recognisable), `## Colors` (role of each color, when to use primary),
-  `## Typography`, `## Shapes`, `## Do's and Don'ts` (brand-specific, at most 6 items).
+  one thing that makes this brand recognisable), `## Colors` (role of each color, when to use primary, what the
+  status colors mean here), `## Typography`, `## Shapes`, `## Do's and Don'ts` (brand-specific, at most 6 items).
 - `DESIGN.md` (shared): keep the template's sections; adjust `## Layout` to the context (mobile: 44px touch targets,
   bottom navigation, one column).
 - `WRITING.md`: replace the voice and tone table with the brand's voice; keep the interface copy rules; add
   terminology from the brief (the product's own nouns).
 
-Don'ts must be short, specific and checkable. Ten generic "don'ts" get ignored; three precise ones get followed.
+Name hues the way the tokens have them (a blue primary is "blue", not "ocean"): the engine compares prose with
+token hues when colors change later. Don'ts must be short, specific and checkable.
 
 ## 5. Verify and hand over
 
-1. `run_checks` → the gate must pass. Fix contrast with `propose_contrast_fixes`.
-2. `start_storybook` → components render in every brand × mode via the toolbar.
-3. Summarise for the user: the brand in two sentences, the UI link, the Storybook link, and what to do next
-   ("ask for a component", "add a second brand", "publish").
+1. `run_checks` → the gate must pass. Fix contrast with `propose_contrast_fixes`; fix look-alike roles by moving one
+   of them; the user can also accept an exception in the Checks tab.
+2. Once dependencies are installed: `run_tests` (types, interaction and accessibility for every story) and
+   `start_storybook` (components render in every brand × mode via the toolbar and the Components tab).
+3. Summarise for the user: the brand in two sentences, where to look in the UI, and what to do next
+   ("ask for a component", "add a second brand", "press Publish").
 
 ## Rules
 
