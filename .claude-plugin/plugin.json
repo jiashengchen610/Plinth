@@ -2,6 +2,20 @@
   "name": "plinth",
   "version": "0.1.0",
   "description": "Create and maintain a multi-brand design system from natural language and images in Claude Code: DTCG tokens, DESIGN.md and WRITING.md guidelines, shadcn/ui components, a local review UI, Storybook on GitHub Pages.",
+  "author": {
+    "name": "jiashengchen610",
+    "url": "https://github.com/jiashengchen610"
+  },
+  "homepage": "https://github.com/jiashengchen610/Plinth",
+  "repository": "https://github.com/jiashengchen610/Plinth",
   "license": "MIT",
-  "keywords": ["design-system", "design-tokens", "dtcg", "storybook", "shadcn", "design-md", "mcp"]
+  "keywords": [
+    "design-system",
+    "design-tokens",
+    "dtcg",
+    "storybook",
+    "shadcn",
+    "design-md",
+    "mcp"
+  ]
 }

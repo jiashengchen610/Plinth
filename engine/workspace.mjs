@@ -55,7 +55,8 @@ export function restore(root, sha) {
 export function initWorkspace(root, { name = "my-design-system", brand = "default", context = "saas-dashboard", naming = "shadcn" } = {}) {
   if (existsSync(join(root, "design-system.json"))) throw new Error(`${root} already contains a design system`);
   mkdirSync(root, { recursive: true });
-  const nonEmpty = readdirSync(root).filter((f) => f !== ".git").length > 0;
+  // Hidden entries (.git, .claude, .mcp.json, .vscode …) are editor or tool settings, not content.
+  const nonEmpty = readdirSync(root).filter((f) => !f.startsWith(".")).length > 0;
   if (nonEmpty) throw new Error(`${root} is not empty`);
   cpSync(TEMPLATE_DIR, root, { recursive: true, filter: (src) => !/node_modules|storybook-static|[\\/]dist([\\/]|$)/.test(src) });
   if (brand !== "default") {

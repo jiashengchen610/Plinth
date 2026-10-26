@@ -1,6 +1,6 @@
 ---
 name: create-design-system
-description: This skill should be used when the user asks to "create a design system", "make a design system for my app", "generate design tokens from this description", "start a brand", "turn this screenshot / mood board into a design system", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools, with every step reviewed by the user before it is written.
+description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools, with every step reviewed by the user before it is written."
 version: 0.1.0
 ---
 
