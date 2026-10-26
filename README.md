@@ -6,6 +6,10 @@ local UI and published as Storybook on GitHub Pages.
 
 See [PRD.md](PRD.md) for the product definition.
 
+> **Status: early.** The engine, MCP server, review UI and template are tested (`npm test`, plus 39 Storybook tests
+> in a generated workspace). Using it end to end inside a real Claude Code session and publishing to GitHub have not
+> been exercised by many people yet. Expect rough edges; issues and pull requests are welcome.
+
 ## How it works
 
 ```
@@ -59,3 +63,21 @@ npm test              # engine + MCP end-to-end (no install needed)
 npm run build:app     # rebuild app/dist after UI changes
 npm run dev:app       # UI with hot reload; proxies /api to a running server on :4319
 ```
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a pull request:
+
+- Read [PRD.md](PRD.md); changes outside its scope (Figma sync, non-React frameworks, other model providers) belong
+  in a separate project.
+- Keep `engine/` and `server/` free of dependencies; the plugin must run without `npm install`.
+- Run `npm test`. If you change `app/src`, run `npm run build:app` and commit `app/dist`.
+- If you change `template/`, create a workspace from it and run its Storybook tests (`npm ci && npm test`).
+
+## License
+
+[MIT](LICENSE).
+
+The components in `template/` and `app/` start from [shadcn/ui](https://ui.shadcn.com) (MIT). The token format
+follows the [W3C Design Tokens Community Group](https://www.designtokens.org) specification, and exported guidelines
+follow Google's [DESIGN.md](https://github.com/google-labs-code/design.md) format.
