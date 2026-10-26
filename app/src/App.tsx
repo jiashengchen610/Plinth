@@ -68,7 +68,7 @@ export default function App() {
   };
 
   if (!state) {
-    return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the brandloom server: ${error}` : "Loading…"}</main>;
+    return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
   }
   if (!state.exists) {
     return (
@@ -87,7 +87,7 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="font-semibold">brandloom</span>
+          <span className="font-semibold">Plinth</span>
           <span className="truncate text-sm text-muted-foreground">{state.config.name}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,5 @@
 {
-  "name": "brandloom",
+  "name": "plinth",
   "version": "0.1.0",
   "private": true,
   "description": "Claude Code plugin: natural-language design system generator (tokens, guidelines, components, Storybook).",

@@ -34,7 +34,7 @@ test("color: fixContrast keeps hue and reaches the target", () => {
 });
 
 function workspace(files) {
-  const root = mkdtempSync(join(tmpdir(), "brandloom-engine-"));
+  const root = mkdtempSync(join(tmpdir(), "plinth-engine-"));
   for (const [rel, content] of Object.entries(files)) {
     mkdirSync(join(root, rel, ".."), { recursive: true });
     writeFileSync(join(root, rel), typeof content === "string" ? content : JSON.stringify(content));

@@ -13,7 +13,7 @@ const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..", "server", "in
 
 function startServer(workspace) {
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, BRANDLOOM_WORKSPACE: workspace, BRANDLOOM_TOKEN: "test-token", BRANDLOOM_PORT: "4390" },
+    env: { ...process.env, PLINTH_WORKSPACE: workspace, PLINTH_TOKEN: "test-token", PLINTH_PORT: "4390" },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const pending = new Map();
@@ -40,12 +40,12 @@ function startServer(workspace) {
 }
 
 test("MCP server: create, propose, apply, restore, fix contrast, export, publish dry run", async (t) => {
-  const ws = mkdtempSync(join(tmpdir(), "brandloom-ws-"));
+  const ws = mkdtempSync(join(tmpdir(), "plinth-ws-"));
   const s = startServer(ws);
   t.after(() => { s.stop(); rmSync(ws, { recursive: true, force: true }); });
 
   const init = await s.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
-  assert.equal(init.result.serverInfo.name, "brandloom");
+  assert.equal(init.result.serverInfo.name, "plinth");
   const list = await s.request("tools/list", {});
   const names = list.result.tools.map((x) => x.name);
   for (const n of ["status", "create_design_system", "propose_change", "apply_change", "run_checks", "publish"]) assert.ok(names.includes(n), `missing tool ${n}`);
@@ -140,7 +140,7 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   const ui = (await s.call("open_ui")).url;
   assert.match(ui, /^http:\/\/localhost:\d+\/$/);
   assert.equal((await fetch(new URL("api/state", ui))).status, 401);
-  const st = await (await fetch(new URL("api/state", ui), { headers: { "X-Brandloom-Token": "test-token" } })).json();
+  const st = await (await fetch(new URL("api/state", ui), { headers: { "X-Plinth-Token": "test-token" } })).json();
   assert.deepEqual(st.brands, ["acme", "kids"]);
   assert.equal(st.checks.gate, true);
   assert.ok(st.tokens.kids.rows.length > 10);

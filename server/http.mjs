@@ -13,8 +13,8 @@ import { freePort } from "./storybook.mjs";
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json" };
 
-export async function startUi(ctx, { port: wanted = Number(process.env.BRANDLOOM_PORT) || 4319 } = {}) {
-  const token = process.env.BRANDLOOM_TOKEN || randomBytes(16).toString("hex");
+export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PORT) || 4319 } = {}) {
+  const token = process.env.PLINTH_TOKEN || randomBytes(16).toString("hex");
   let rev = 1;
   const bump = () => { rev++; };
 
@@ -79,7 +79,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.BRANDLOOM
       if (!["127.0.0.1", "localhost"].includes(host)) return send(res, 403, { error: "forbidden host" });
       const url = new URL(req.url, "http://localhost");
       if (url.pathname.startsWith("/api/")) {
-        if (req.headers["x-brandloom-token"] !== token) return send(res, 401, { error: "missing or wrong session token" });
+        if (req.headers["x-plinth-token"] !== token) return send(res, 401, { error: "missing or wrong session token" });
         const key = `${req.method} ${url.pathname}`;
         let m;
         let result;
@@ -99,7 +99,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.BRANDLOOM
       if (!file.startsWith(DIST) || !existsSync(file) || statSync(file).isDirectory()) file = join(DIST, "index.html");
       if (!existsSync(file)) return send(res, 503, "The UI is not built. Run: npm run build:app", "text/plain; charset=utf-8");
       let body = readFileSync(file);
-      if (file.endsWith("index.html")) body = String(body).replace("</head>", `<meta name="brandloom-token" content="${token}"></head>`);
+      if (file.endsWith("index.html")) body = String(body).replace("</head>", `<meta name="plinth-token" content="${token}"></head>`);
       return send(res, 200, body, TYPES[extname(file)] ?? "application/octet-stream");
     } catch (e) {
       return send(res, 400, { error: e.message });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// brandloom MCP server (stdio, newline-delimited JSON-RPC 2.0) + local review UI.
-// Workspace: BRANDLOOM_WORKSPACE, else CLAUDE_PROJECT_DIR (Claude Code sets it for MCP servers; the spawn cwd is
+// Plinth MCP server (stdio, newline-delimited JSON-RPC 2.0) + local review UI.
+// Workspace: PLINTH_WORKSPACE, else CLAUDE_PROJECT_DIR (Claude Code sets it for MCP servers; the spawn cwd is
 // not guaranteed to be the project), else the current directory.
 // stdout carries protocol messages only; logs go to stderr.
 import { createInterface } from "node:readline";
@@ -10,13 +10,13 @@ import { startUi } from "./http.mjs";
 import { createStorybook } from "./storybook.mjs";
 
 const VERSION = "0.1.0";
-const root = resolve(process.env.BRANDLOOM_WORKSPACE || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-const log = (...a) => process.stderr.write(`[brandloom] ${a.join(" ")}\n`);
+const root = resolve(process.env.PLINTH_WORKSPACE || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+const log = (...a) => process.stderr.write(`[plinth] ${a.join(" ")}\n`);
 
 const storybook = createStorybook(root, () => {});
 const ctx = { root, storybook, ui: { url: null }, notify: () => {} };
 
-const INSTRUCTIONS = `brandloom maintains a design system (tokens, guidelines, components) in ${root}.
+const INSTRUCTIONS = `Plinth maintains a design system (tokens, guidelines, components) in ${root}.
 Workflow: call status first. Change anything through propose_change; the user reviews it in the local UI (open_ui) and you call apply_change only after they approve.
 Tokens are DTCG; components may only use semantic tokens. Run run_checks before publish; use propose_contrast_fixes for contrast failures.`;
 
@@ -31,7 +31,7 @@ async function handle(msg) {
       return reply(id, {
         protocolVersion: params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "brandloom", version: VERSION },
+        serverInfo: { name: "plinth", version: VERSION },
         instructions: INSTRUCTIONS,
       });
     case "ping":

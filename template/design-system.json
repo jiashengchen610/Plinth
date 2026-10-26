@@ -1,5 +1,4 @@
 {
-  "$schema": "https://brandloom.dev/schemas/design-system.json",
   "name": "my-design-system",
   "context": "saas-dashboard",
   "naming": "shadcn",

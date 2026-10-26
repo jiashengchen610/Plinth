@@ -1,5 +1,5 @@
 {
-  "description": "brandloom guardrail: in a design-system workspace, flag hardcoded colors and pixel values in files Claude writes.",
+  "description": "Plinth guardrail: in a design-system workspace, flag hardcoded colors and pixel values in files Claude writes.",
   "hooks": {
     "PostToolUse": [
       {

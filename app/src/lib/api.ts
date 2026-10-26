@@ -1,8 +1,8 @@
-// Client for the brandloom local API. The session token is injected into index.html by the server.
-const token = document.querySelector<HTMLMetaElement>('meta[name="brandloom-token"]')?.content ?? import.meta.env.VITE_BRANDLOOM_TOKEN ?? "";
+// Client for the Plinth local API. The session token is injected into index.html by the server.
+const token = document.querySelector<HTMLMetaElement>('meta[name="plinth-token"]')?.content ?? import.meta.env.VITE_PLINTH_TOKEN ?? "";
 
 async function call<T>(method: "GET" | "POST", path: string): Promise<T> {
-  const res = await fetch(path, { method, headers: { "X-Brandloom-Token": token } });
+  const res = await fetch(path, { method, headers: { "X-Plinth-Token": token } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`);
   return body as T;

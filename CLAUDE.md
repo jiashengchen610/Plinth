@@ -1,4 +1,4 @@
-# brandloom (product repo)
+# Plinth (product repo)
 
 Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `README.md` has the layout.
 

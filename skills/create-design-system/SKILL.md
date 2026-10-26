@@ -1,6 +1,6 @@
 ---
 name: create-design-system
-description: This skill should be used when the user asks to "create a design system", "make a design system for my app", "generate design tokens from this description", "start a brand", "turn this screenshot / mood board into a design system", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the brandloom MCP tools, with every step reviewed by the user before it is written.
+description: This skill should be used when the user asks to "create a design system", "make a design system for my app", "generate design tokens from this description", "start a brand", "turn this screenshot / mood board into a design system", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools, with every step reviewed by the user before it is written.
 version: 0.1.0
 ---
 
@@ -9,7 +9,7 @@ version: 0.1.0
 Turn a description (and any images the user pasted) into a working design system: tokens for light and dark,
 design guidelines, writing guidelines and five base components, browsable in the local UI and Storybook.
 
-Everything goes through the brandloom MCP tools. Never edit token, guideline or component files directly, and never
+Everything goes through the Plinth MCP tools. Never edit token, guideline or component files directly, and never
 write `src/styles/tokens.css` (generated).
 
 ## 1. Understand the brief

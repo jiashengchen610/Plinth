@@ -1,6 +1,6 @@
 ---
 name: create-component
-description: This skill should be used when the user asks to "make a component", "add a pricing card", "build this from the screenshot", "create a date picker", "turn this design into a component", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the brandloom MCP tools.
+description: This skill should be used when the user asks to "make a component", "add a pricing card", "build this from the screenshot", "create a date picker", "turn this design into a component", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools.
 version: 0.1.0
 ---
 

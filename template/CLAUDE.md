@@ -1,8 +1,8 @@
 # Design system workspace
 
-This repository is a design system maintained through the brandloom tools. Follow these rules.
+This repository is a design system maintained through the Plinth tools. Follow these rules.
 
-- Change tokens, guidelines and components through the brandloom MCP tools (propose, then apply). Do not edit
+- Change tokens, guidelines and components through the Plinth MCP tools (propose, then apply). Do not edit
   `src/styles/tokens.css`; it is generated.
 - Components use semantic tokens only: theme utilities such as `bg-primary` and `text-muted-foreground`.
   No hex values, color functions, arbitrary Tailwind values or magic pixel values.

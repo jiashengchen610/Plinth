@@ -1,15 +1,15 @@
-# brandloom
+# Plinth
 
 Create and maintain a multi-brand design system by talking to Claude Code. Describe the product, paste a screenshot,
 and get design tokens, design and writing guidelines, and shadcn/ui components, reviewed change by change in a
 local UI and published as Storybook on GitHub Pages.
 
-Working name; see [PRD.md](PRD.md) for the product definition.
+See [PRD.md](PRD.md) for the product definition.
 
 ## How it works
 
 ```
-Claude Code ──MCP──▶ brandloom server ──▶ your design-system repo (git)
+Claude Code ──MCP──▶ Plinth server ──▶ your design-system repo (git)
                          │                    tokens/, brands/<id>/, DESIGN.md, WRITING.md,
                          │                    src/components/<name>/, .storybook/
                          └──▶ local review UI (http://localhost:4319)
@@ -29,7 +29,7 @@ Claude Code ──MCP──▶ brandloom server ──▶ your design-system rep
 Requirements: Node 20+, git, Claude Code. For publishing: the GitHub CLI (`gh auth login --web`).
 
 ```bash
-claude --plugin-dir "/path/to/brandloom"     # until it is published to a marketplace
+claude --plugin-dir "/path/to/plinth"     # until it is published to a marketplace
 ```
 
 Then, in an empty folder:

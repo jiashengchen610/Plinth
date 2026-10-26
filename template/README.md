@@ -1,6 +1,6 @@
 # my-design-system
 
-Design tokens, guidelines and components, generated and maintained with brandloom.
+Design tokens, guidelines and components, generated and maintained with Plinth.
 
 | Path | What it is |
 |---|---|

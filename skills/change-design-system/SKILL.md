@@ -1,6 +1,6 @@
 ---
 name: change-design-system
-description: This skill should be used when the user asks to change an existing design system: "make the primary warmer", "rounder corners", "rename this token", "add a dark mode tweak", "add a second brand", "update our writing guidelines", "fix the contrast", "undo the last change", "go back to yesterday's version". Applies every change as a reviewed proposal and a new version through the brandloom MCP tools.
+description: This skill should be used when the user asks to change an existing design system: "make the primary warmer", "rounder corners", "rename this token", "add a dark mode tweak", "add a second brand", "update our writing guidelines", "fix the contrast", "undo the last change", "go back to yesterday's version". Applies every change as a reviewed proposal and a new version through the Plinth MCP tools.
 version: 0.1.0
 ---
 

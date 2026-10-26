@@ -1,6 +1,6 @@
 ---
 name: publish-design-system
-description: This skill should be used when the user asks to "publish", "deploy Storybook", "push to GitHub", "share the design system", "put it online". Runs the quality gate, writes a complete DESIGN.md per brand, pushes to GitHub and deploys Storybook to GitHub Pages through the brandloom MCP tools.
+description: This skill should be used when the user asks to "publish", "deploy Storybook", "push to GitHub", "share the design system", "put it online". Runs the quality gate, writes a complete DESIGN.md per brand, pushes to GitHub and deploys Storybook to GitHub Pages through the Plinth MCP tools.
 version: 0.1.0
 ---
 
