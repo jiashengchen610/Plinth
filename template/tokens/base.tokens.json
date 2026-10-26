@@ -1,0 +1,145 @@
+{
+  "radius": {
+    "$type": "dimension",
+    "base": {
+      "$value": {
+        "value": 0.625,
+        "unit": "rem"
+      },
+      "$description": "Base corner radius; sm–4xl derive from it."
+    }
+  },
+  "font": {
+    "$type": "fontFamily",
+    "sans": {
+      "$value": [
+        "Geist Variable",
+        "sans-serif"
+      ]
+    }
+  },
+  "typography": {
+    "$type": "typography",
+    "display": {
+      "$value": {
+        "fontFamily": [
+          "Geist Variable",
+          "sans-serif"
+        ],
+        "fontSize": {
+          "value": 2,
+          "unit": "rem"
+        },
+        "fontWeight": 600,
+        "lineHeight": 1.15,
+        "letterSpacing": {
+          "value": -0.02,
+          "unit": "em"
+        }
+      }
+    },
+    "body": {
+      "$value": {
+        "fontFamily": [
+          "Geist Variable",
+          "sans-serif"
+        ],
+        "fontSize": {
+          "value": 0.875,
+          "unit": "rem"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "card": {
+      "$value": {
+        "color": "#0000001a",
+        "offsetX": {
+          "value": 0,
+          "unit": "px"
+        },
+        "offsetY": {
+          "value": 1,
+          "unit": "px"
+        },
+        "blur": {
+          "value": 2,
+          "unit": "px"
+        },
+        "spread": {
+          "value": 0,
+          "unit": "px"
+        }
+      }
+    },
+    "overlay": {
+      "$value": [
+        {
+          "color": "#0000001f",
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 8,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 24,
+            "unit": "px"
+          },
+          "spread": {
+            "value": -4,
+            "unit": "px"
+          }
+        },
+        {
+          "color": "#0000000f",
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 2,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 6,
+            "unit": "px"
+          },
+          "spread": {
+            "value": 0,
+            "unit": "px"
+          }
+        }
+      ]
+    }
+  },
+  "ease": {
+    "$type": "cubicBezier",
+    "standard": {
+      "$value": [
+        0.2,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "motion": {
+    "$type": "transition",
+    "fast": {
+      "$value": {
+        "duration": {
+          "value": 150,
+          "unit": "ms"
+        },
+        "timingFunction": "{ease.standard}"
+      }
+    }
+  }
+}

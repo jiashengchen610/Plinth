@@ -1,11 +1,12 @@
 node_modules/
-dist/
 storybook-static/
 .env
 .env.local
-.claude/settings.local.json
 *.log
 .DS_Store
 Thumbs.db
-# visual-diff output
+.claude/settings.local.json
+# app/dist is committed on purpose: the plugin serves it without a build step.
+
+# Caches from the legacy prototype
 **/.design-system/.cache/

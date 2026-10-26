@@ -1,18 +1,14 @@
 {
-  "name": "design-system-skills",
+  "name": "brandloom",
   "version": "0.1.0",
   "private": true,
-  "description": "Claude Code plugin: build Storybook components from Figma or design specs on top of an existing design system.",
+  "description": "Claude Code plugin: natural-language design system generator (tokens, guidelines, components, Storybook).",
   "type": "module",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node scripts/selftest.mjs",
-    "test:live": "node scripts/selftest.mjs --live",
-    "test:all": "node scripts/selftest.mjs --live --vitest",
-    "demo:install": "cd examples/demo-react && npm install",
-    "demo:storybook": "cd examples/demo-react && npm run storybook -- --no-open --ci",
-    "demo:vitest": "cd examples/demo-react && npx vitest run --project storybook",
-    "demo:audit": "cd examples/demo-react && node ../../scripts/ds-audit.mjs"
+    "test": "node --test test/engine.test.mjs test/mcp.test.mjs",
+    "build:app": "cd app && npm install && npm run build",
+    "dev:app": "cd app && npm run dev"
   },
-  "engines": { "node": ">=18" },
   "license": "MIT"
 }

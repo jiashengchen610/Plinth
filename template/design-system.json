@@ -1,0 +1,29 @@
+{
+  "$schema": "https://brandloom.dev/schemas/design-system.json",
+  "name": "my-design-system",
+  "context": "saas-dashboard",
+  "naming": "shadcn",
+  "componentBase": "radix",
+  "defaultBrand": "default",
+  "brands": [
+    {
+      "id": "default",
+      "name": "Default"
+    }
+  ],
+  "tokens": {
+    "rename": {
+      "radius/base": "radius"
+    }
+  },
+  "hardcoded": {
+    "allowFiles": [
+      "src/components/button/button.tsx",
+      "src/components/badge/badge.tsx",
+      "src/components/card/card.tsx",
+      "src/components/input/input.tsx",
+      "src/components/label/label.tsx"
+    ],
+    "allowFilesNote": "Vendored shadcn/ui sources are accepted as-is; generated components are checked."
+  }
+}

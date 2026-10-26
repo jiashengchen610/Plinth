@@ -1,0 +1,109 @@
+/* Generated from tokens/ and brands/ by the design-system engine. Do not edit. */
+
+:root,
+[data-brand="default"] {
+  --accent-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.97 0 0);
+  --background: oklch(1 0 0);
+  --body-font-family: 'Geist Variable', sans-serif;
+  --body-font-size: 0.875rem;
+  --body-font-weight: 400;
+  --body-font: 400 0.875rem/1.5 'Geist Variable', sans-serif;
+  --body-line-height: 1.5;
+  --border: oklch(0.922 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --card-shadow: 0px 1px 2px 0px #0000001a;
+  --card: oklch(1 0 0);
+  --destructive: oklch(0.5 0.22 27);
+  --display-font-family: 'Geist Variable', sans-serif;
+  --display-font-size: 2rem;
+  --display-font-weight: 600;
+  --display-font: 600 2rem/1.15 'Geist Variable', sans-serif;
+  --display-letter-spacing: -0.02em;
+  --display-line-height: 1.15;
+  --foreground: oklch(0.145 0 0);
+  --input: oklch(0.922 0 0);
+  --motion-fast: 150ms var(--standard-ease);
+  --muted-foreground: oklch(0.52 0 0);
+  --muted: oklch(0.97 0 0);
+  --overlay-shadow: 0px 8px 24px -4px #0000001f, 0px 2px 6px 0px #0000000f;
+  --popover-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.205 0 0);
+  --radius: 0.625rem;
+  --ring: oklch(0.708 0 0);
+  --sans-font: 'Geist Variable', sans-serif;
+  --secondary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.97 0 0);
+  --standard-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.dark,
+[data-brand="default"].dark {
+  --accent-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.269 0 0);
+  --background: oklch(0.145 0 0);
+  --body-font-family: 'Geist Variable', sans-serif;
+  --body-font-size: 0.875rem;
+  --body-font-weight: 400;
+  --body-font: 400 0.875rem/1.5 'Geist Variable', sans-serif;
+  --body-line-height: 1.5;
+  --border: oklch(1 0 0 / 10%);
+  --card-foreground: oklch(0.985 0 0);
+  --card-shadow: 0px 1px 2px 0px #0000001a;
+  --card: oklch(0.205 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --display-font-family: 'Geist Variable', sans-serif;
+  --display-font-size: 2rem;
+  --display-font-weight: 600;
+  --display-font: 600 2rem/1.15 'Geist Variable', sans-serif;
+  --display-letter-spacing: -0.02em;
+  --display-line-height: 1.15;
+  --foreground: oklch(0.985 0 0);
+  --input: oklch(1 0 0 / 15%);
+  --motion-fast: 150ms var(--standard-ease);
+  --muted-foreground: oklch(0.708 0 0);
+  --muted: oklch(0.269 0 0);
+  --overlay-shadow: 0px 8px 24px -4px #0000001f, 0px 2px 6px 0px #0000000f;
+  --popover-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.922 0 0);
+  --radius: 0.625rem;
+  --ring: oklch(0.556 0 0);
+  --sans-font: 'Geist Variable', sans-serif;
+  --secondary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --standard-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@theme inline {
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-background: var(--background);
+  --color-border: var(--border);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-destructive: var(--destructive);
+  --color-foreground: var(--foreground);
+  --color-input: var(--input);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-ring: var(--ring);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --ease-standard: var(--standard-ease);
+  --font-sans: var(--sans-font);
+  --shadow-card: var(--card-shadow);
+  --shadow-overlay: var(--overlay-shadow);
+  --text-body--line-height: var(--body-line-height);
+  --text-body: var(--body-font-size);
+  --text-display--line-height: var(--display-line-height);
+  --text-display: var(--display-font-size);
+  --tracking-display: var(--display-letter-spacing);
+}

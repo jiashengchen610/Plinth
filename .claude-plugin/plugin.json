@@ -1,7 +1,7 @@
 {
-  "name": "design-system-skills",
+  "name": "brandloom",
   "version": "0.1.0",
-  "description": "Skills that let an AI agent build Storybook components from Figma or external design specs on top of an existing design system (shadcn/ui first): token pipeline (DTCG), Figma-to-component mapping, verification loop, drift audit.",
+  "description": "Create and maintain a multi-brand design system from natural language and images in Claude Code: DTCG tokens, DESIGN.md and WRITING.md guidelines, shadcn/ui components, a local review UI, Storybook on GitHub Pages.",
   "license": "MIT",
-  "keywords": ["design-system", "storybook", "figma", "design-tokens", "dtcg", "shadcn", "mcp"]
+  "keywords": ["design-system", "design-tokens", "dtcg", "storybook", "shadcn", "design-md", "mcp"]
 }

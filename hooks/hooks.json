@@ -1,15 +1,11 @@
 {
-  "description": "Design-system guardrails: flag hardcoded colors / magic px values and leaked Figma tokens in generated component code.",
+  "description": "brandloom guardrail: in a design-system workspace, flag hardcoded colors and pixel values in files Claude writes.",
   "hooks": {
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/check-hardcoded.mjs\" --hook",
-            "timeout": 15
-          }
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/engine/check-hardcoded.mjs\" --hook", "timeout": 15 }
         ]
       }
     ]
