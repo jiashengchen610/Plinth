@@ -1,0 +1,7 @@
+{
+  "name": "design-system-skills",
+  "version": "0.1.0",
+  "description": "Skills that let an AI agent build Storybook components from Figma or external design specs on top of an existing design system (shadcn/ui first): token pipeline (DTCG), Figma-to-component mapping, verification loop, drift audit.",
+  "license": "MIT",
+  "keywords": ["design-system", "storybook", "figma", "design-tokens", "dtcg", "shadcn", "mcp"]
+}

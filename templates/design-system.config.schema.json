@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-system-skills/schemas/design-system.config.json",
+  "title": "design-system-skills project config (.design-system/config.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "adapter": {
+      "description": "Design-system adapter in use. Determines component locations, token naming and story templates.",
+      "type": "string",
+      "enum": ["shadcn", "vanilla"]
+    },
+    "aliases": {
+      "description": "Path alias → source dir, used to derive import statements from story paths.",
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": { "@/": "src/" }
+    },
+    "storybook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "default": "http://localhost:6006" },
+        "configDir": { "type": "string", "default": ".storybook" },
+        "staticDir": { "type": "string", "description": "Built Storybook directory, used when the dev server is not running." }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dtcg": { "type": "string", "default": ".design-system/tokens.json", "description": "Canonical DTCG token file (source of truth on the code side)." },
+        "cssOutput": { "type": "string", "description": "CSS file that receives the generated managed region (shadcn: src/index.css)." },
+        "stripGroups": { "type": "array", "items": { "type": "string" }, "default": ["color", "colors", "semantic", "tokens", "shadcn", "sds"], "description": "Leading path groups dropped when deriving CSS variable names (color/primary → --primary)." },
+        "prefix": { "type": "string", "default": "", "description": "Prefix added to every generated CSS variable name." },
+        "rename": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Full token path → CSS variable name overrides, e.g. {\"radius/base\": \"radius\"}." },
+        "modeSelectors": { "type": "object", "additionalProperties": { "type": "string" }, "default": { "light": ":root", "dark": ".dark" }, "description": "Mode name → CSS selector. Unlisted modes become [data-theme=\"<mode>\"]." },
+        "managedRegion": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "default": "/* design-system-skills:tokens:start */" },
+            "end": { "type": "string", "default": "/* design-system-skills:tokens:end */" }
+          }
+        }
+      }
+    },
+    "figmaMap": { "type": "string", "default": ".design-system/figma-map.json" },
+    "figma": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fileKey": { "type": "string", "description": "Default Figma file key for the design-system library." },
+        "codeConnect": { "type": "string", "enum": ["auto", "on", "off"], "default": "auto", "description": "auto = detect plan with whoami; on = always publish; off = local figma-map only." }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visualDiffThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.05, "description": "Max fraction of differing pixels between story and Figma screenshots." },
+        "maxFixIterations": { "type": "integer", "minimum": 0, "default": 3 }
+      }
+    },
+    "hardcoded": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowFiles": { "type": "array", "items": { "type": "string" }, "description": "Globs where raw values are acceptable (vendored sources, token outputs)." },
+        "allowFilesNote": { "type": "string" },
+        "allowPx": { "type": "array", "items": { "type": "number" }, "default": [0, 1] },
+        "scanExtensions": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

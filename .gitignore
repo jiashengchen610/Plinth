@@ -1,0 +1,11 @@
+node_modules/
+dist/
+storybook-static/
+.env
+.env.local
+.claude/settings.local.json
+*.log
+.DS_Store
+Thumbs.db
+# visual-diff output
+**/.design-system/.cache/

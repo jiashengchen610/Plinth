@@ -1,0 +1,541 @@
+{
+  "meta": {
+    "generatedAt": "2026-10-02T05:02:21.868Z",
+    "source": {
+      "type": "dev-server",
+      "url": "http://localhost:6006"
+    },
+    "componentCount": 5,
+    "docsCount": 0,
+    "readinessIssues": 5
+  },
+  "components": {
+    "v": 0,
+    "components": {
+      "components-actions-button": {
+        "id": "components-actions-button",
+        "name": "Button",
+        "path": "./src/components/ui/button.stories.tsx",
+        "jsDocTags": {},
+        "description": "Triggers an action or navigation. Use `default` for the single primary action on a view,\n`outline` or `secondary` for supporting actions, `ghost` inside toolbars and dense lists,\n`destructive` for irreversible actions, and `link` when the action should read as inline text.\nDo not use a Button for page navigation when a plain link is enough.\n\nFigma: Button (shadcn/ui kit). Figma `Variant` ↔ `variant`, `Size` ↔ `size`, `Icon` boolean ↔ child icon.",
+        "reactDocgenTypescript": {
+          "tags": {},
+          "filePath": "D:/design system skills/examples/demo-react/src/components/ui/button.tsx",
+          "description": "",
+          "displayName": "Button",
+          "methods": [],
+          "props": {
+            "variant": {
+              "defaultValue": {
+                "value": "default"
+              },
+              "description": "",
+              "name": "variant",
+              "declarations": [],
+              "required": false,
+              "type": {
+                "name": "\"default\" | \"secondary\" | \"destructive\" | \"outline\" | \"ghost\" | \"link\" | null"
+              }
+            },
+            "size": {
+              "defaultValue": {
+                "value": "default"
+              },
+              "description": "",
+              "name": "size",
+              "declarations": [],
+              "required": false,
+              "type": {
+                "name": "\"default\" | \"sm\" | \"xs\" | \"lg\" | \"icon\" | \"icon-xs\" | \"icon-sm\" | \"icon-lg\" | null"
+              }
+            },
+            "asChild": {
+              "defaultValue": {
+                "value": "false"
+              },
+              "description": "",
+              "name": "asChild",
+              "declarations": [
+                {
+                  "fileName": "demo-react/src/components/ui/button.tsx",
+                  "name": "TypeLiteral"
+                }
+              ],
+              "required": false,
+              "type": {
+                "name": "boolean"
+              }
+            }
+          },
+          "exportName": "Button"
+        },
+        "stories": [
+          {
+            "id": "components-actions-button--default",
+            "name": "Default",
+            "snippet": "const Default = () => <Button variant=\"default\" size=\"default\" disabled={false} onClick={fn()}>Save changes</Button>;",
+            "description": "The canonical primary action."
+          },
+          {
+            "id": "components-actions-button--outline",
+            "name": "Outline",
+            "snippet": "const Outline = () => <Button variant=\"outline\" size=\"default\" disabled={false} onClick={fn()}>Cancel</Button>;",
+            "description": "Supporting action placed next to a primary button."
+          },
+          {
+            "id": "components-actions-button--secondary",
+            "name": "Secondary",
+            "snippet": "const Secondary = () => <Button variant=\"secondary\" size=\"default\" disabled={false} onClick={fn()}>Duplicate</Button>;",
+            "description": "Lower-emphasis alternative to `outline` on tinted surfaces."
+          },
+          {
+            "id": "components-actions-button--ghost",
+            "name": "Ghost",
+            "snippet": "const Ghost = () => <Button variant=\"ghost\" size=\"default\" disabled={false} onClick={fn()}>Dismiss</Button>;",
+            "description": "Toolbar and dense-list action with no border until hovered."
+          },
+          {
+            "id": "components-actions-button--destructive",
+            "name": "Destructive",
+            "snippet": "const Destructive = () => <Button variant=\"destructive\" size=\"default\" disabled={false} onClick={fn()}>Delete project</Button>;",
+            "description": "Irreversible action. Pair with a confirmation dialog."
+          },
+          {
+            "id": "components-actions-button--link",
+            "name": "Link",
+            "snippet": "const Link = () => <Button variant=\"link\" size=\"default\" disabled={false} onClick={fn()}>Learn more</Button>;",
+            "description": "Reads as inline text; use inside sentences or footers."
+          },
+          {
+            "id": "components-actions-button--extra-small",
+            "name": "Extra Small",
+            "snippet": "const ExtraSmall = () => <Button variant=\"default\" size=\"xs\" disabled={false} onClick={fn()}>Tag</Button>;"
+          },
+          {
+            "id": "components-actions-button--small",
+            "name": "Small",
+            "snippet": "const Small = () => <Button variant=\"default\" size=\"sm\" disabled={false} onClick={fn()}>Add filter</Button>;"
+          },
+          {
+            "id": "components-actions-button--large",
+            "name": "Large",
+            "snippet": "const Large = () => <Button variant=\"default\" size=\"lg\" disabled={false} onClick={fn()}>Get started</Button>;"
+          },
+          {
+            "id": "components-actions-button--icon",
+            "name": "Icon",
+            "snippet": "const Icon = () => <Button\r\n    variant=\"default\"\r\n    size=\"icon\"\r\n    disabled={false}\r\n    onClick={fn()}\r\n    aria-label=\"Add item\"><Plus /></Button>;",
+            "description": "Icon-only button. Always provide an accessible name via `aria-label`."
+          },
+          {
+            "id": "components-actions-button--with-icon",
+            "name": "With Icon",
+            "snippet": "const WithIcon = () => <Button variant=\"default\" size=\"default\" disabled={false} onClick={fn()}>(<>Continue\r\n              <ArrowRight data-icon=\"inline-end\" />\r\n    </>)</Button>;",
+            "description": "Leading or trailing icon with text. Icons inherit the size scale automatically."
+          },
+          {
+            "id": "components-actions-button--loading",
+            "name": "Loading",
+            "snippet": "const Loading = () => <Button variant=\"default\" size=\"default\" disabled onClick={fn()} aria-busy>(<>\r\n      <Loader2 className=\"animate-spin\" data-icon=\"inline-start\" />Saving\r\n            </>)</Button>;",
+            "description": "Loading state: disable the button and swap in a spinner so the width does not jump."
+          },
+          {
+            "id": "components-actions-button--disabled",
+            "name": "Disabled",
+            "snippet": "const Disabled = () => <Button variant=\"default\" size=\"default\" disabled onClick={fn()}>Save changes</Button>;"
+          },
+          {
+            "id": "components-actions-button--as-link",
+            "name": "As Link",
+            "snippet": "const AsLink = () => <Button variant=\"default\" size=\"default\" disabled={false} onClick={fn()} asChild><a href=\"#docs\">Open documentation</a></Button>;",
+            "description": "Renders an anchor with button styling."
+          }
+        ],
+        "import": "import { ArrowRight, Loader2, Plus } from 'lucide-react';\nimport { Button } from 'demo-react';\nimport { fn } from 'storybook/test';"
+      },
+      "components-data-display-badge": {
+        "id": "components-data-display-badge",
+        "name": "Badge",
+        "path": "./src/components/ui/badge.stories.tsx",
+        "jsDocTags": {},
+        "description": "Compact label for status, category or count, placed next to the thing it describes. Use `default`\nfor a single highlighted tag, `secondary` or `outline` for neutral metadata, `destructive` for errors\nand blocked states, `ghost` inside dense tables, and `link` when the badge navigates (render with\n`asChild` and an anchor). Do not use a Badge as a button; it has no pressed state.\n\nFigma: Badge (shadcn/ui kit). Figma `Variant` ↔ `variant`; the `Icon` boolean ↔ a leading icon child.",
+        "reactDocgenTypescript": {
+          "tags": {},
+          "filePath": "D:/design system skills/examples/demo-react/src/components/ui/badge.tsx",
+          "description": "",
+          "displayName": "Badge",
+          "methods": [],
+          "props": {
+            "variant": {
+              "defaultValue": {
+                "value": "default"
+              },
+              "description": "",
+              "name": "variant",
+              "declarations": [],
+              "required": false,
+              "type": {
+                "name": "\"default\" | \"secondary\" | \"destructive\" | \"outline\" | \"ghost\" | \"link\" | null"
+              }
+            },
+            "asChild": {
+              "defaultValue": {
+                "value": "false"
+              },
+              "description": "",
+              "name": "asChild",
+              "declarations": [
+                {
+                  "fileName": "demo-react/src/components/ui/badge.tsx",
+                  "name": "TypeLiteral"
+                }
+              ],
+              "required": false,
+              "type": {
+                "name": "boolean"
+              }
+            }
+          },
+          "exportName": "Badge"
+        },
+        "stories": [
+          {
+            "id": "components-data-display-badge--default",
+            "name": "Default",
+            "snippet": "const Default = () => <Badge variant=\"default\">Active</Badge>;",
+            "description": "Single highlighted tag."
+          },
+          {
+            "id": "components-data-display-badge--secondary",
+            "name": "Secondary",
+            "snippet": "const Secondary = () => <Badge variant=\"secondary\">Draft</Badge>;",
+            "description": "Neutral metadata on tinted surfaces."
+          },
+          {
+            "id": "components-data-display-badge--destructive",
+            "name": "Destructive",
+            "snippet": "const Destructive = () => <Badge variant=\"destructive\">Failed</Badge>;",
+            "description": "Error or blocked state."
+          },
+          {
+            "id": "components-data-display-badge--outline",
+            "name": "Outline",
+            "snippet": "const Outline = () => <Badge variant=\"outline\">v2.4.0</Badge>;",
+            "description": "Neutral metadata on plain surfaces."
+          },
+          {
+            "id": "components-data-display-badge--ghost",
+            "name": "Ghost",
+            "snippet": "const Ghost = () => <Badge variant=\"ghost\">Archived</Badge>;",
+            "description": "Lowest emphasis, for dense tables."
+          },
+          {
+            "id": "components-data-display-badge--link",
+            "name": "Link",
+            "snippet": "const Link = () => <Badge variant=\"link\" asChild><a href=\"#releases\">12 releases</a></Badge>;",
+            "description": "Badge that navigates. Pair with `asChild` and an anchor."
+          },
+          {
+            "id": "components-data-display-badge--with-icon",
+            "name": "With Icon",
+            "snippet": "const WithIcon = () => <Badge variant=\"default\">(<>\r\n      <CheckCircle2 data-icon=\"inline-start\" />Verified\r\n            </>)</Badge>;",
+            "description": "Leading icon reinforces the status. Icons are sized by the badge automatically."
+          },
+          {
+            "id": "components-data-display-badge--status-set",
+            "name": "Status Set",
+            "snippet": "const StatusSet = () => (\r\n  <div className=\"flex flex-wrap gap-2\">\r\n    <Badge>\r\n      <CheckCircle2 data-icon=\"inline-start\" />\r\n      Active\r\n    </Badge>\r\n    <Badge variant=\"secondary\">\r\n      <Clock3 data-icon=\"inline-start\" />\r\n      Pending\r\n    </Badge>\r\n    <Badge variant=\"destructive\">Failed</Badge>\r\n    <Badge variant=\"outline\">Archived</Badge>\r\n  </div>\r\n);",
+            "description": "Status badges side by side, as they appear in a list header."
+          }
+        ],
+        "import": "import { Badge } from 'demo-react';\nimport { CheckCircle2, Clock3 } from 'lucide-react';"
+      },
+      "components-layout-card": {
+        "id": "components-layout-card",
+        "name": "Card",
+        "path": "./src/components/ui/card.stories.tsx",
+        "jsDocTags": {},
+        "description": "Surface that groups related content and actions into a single unit. Compose it from `CardHeader`\n(with `CardTitle`, `CardDescription`, optional `CardAction`), `CardContent` and `CardFooter`; spacing\nis shared through the `size` prop. Use cards for scannable collections (dashboards, lists of entities)\nand settings sections. Do not nest cards or use a card as the only container on a page.\n\nFigma: Card (shadcn/ui kit). Figma `Size` ↔ `size`; header / footer booleans ↔ presence of the sub-components.",
+        "reactDocgenTypescript": {
+          "tags": {},
+          "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+          "description": "",
+          "displayName": "Card",
+          "methods": [],
+          "props": {
+            "size": {
+              "defaultValue": {
+                "value": "default"
+              },
+              "description": "",
+              "name": "size",
+              "declarations": [
+                {
+                  "fileName": "demo-react/src/components/ui/card.tsx",
+                  "name": "TypeLiteral"
+                }
+              ],
+              "required": false,
+              "type": {
+                "name": "enum",
+                "raw": "\"default\" | \"sm\"",
+                "value": [
+                  {
+                    "value": "\"default\""
+                  },
+                  {
+                    "value": "\"sm\""
+                  }
+                ]
+              }
+            }
+          },
+          "exportName": "Card"
+        },
+        "subcomponents": {
+          "CardHeader": {
+            "name": "CardHeader",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardHeader } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardHeader",
+              "methods": [],
+              "props": {},
+              "exportName": "CardHeader"
+            }
+          },
+          "CardTitle": {
+            "name": "CardTitle",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardTitle } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardTitle",
+              "methods": [],
+              "props": {},
+              "exportName": "CardTitle"
+            }
+          },
+          "CardDescription": {
+            "name": "CardDescription",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardDescription } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardDescription",
+              "methods": [],
+              "props": {},
+              "exportName": "CardDescription"
+            }
+          },
+          "CardAction": {
+            "name": "CardAction",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardAction } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardAction",
+              "methods": [],
+              "props": {},
+              "exportName": "CardAction"
+            }
+          },
+          "CardContent": {
+            "name": "CardContent",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardContent } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardContent",
+              "methods": [],
+              "props": {},
+              "exportName": "CardContent"
+            }
+          },
+          "CardFooter": {
+            "name": "CardFooter",
+            "path": "D:\\design system skills\\examples\\demo-react\\src\\components\\ui\\card.tsx",
+            "import": "import { CardFooter } from 'demo-react';",
+            "jsDocTags": {},
+            "reactDocgenTypescript": {
+              "tags": {},
+              "filePath": "D:/design system skills/examples/demo-react/src/components/ui/card.tsx",
+              "description": "",
+              "displayName": "CardFooter",
+              "methods": [],
+              "props": {},
+              "exportName": "CardFooter"
+            }
+          }
+        },
+        "stories": [
+          {
+            "id": "components-layout-card--default",
+            "name": "Default",
+            "snippet": "const Default = () => <Card size=\"default\" className=\"w-80\">\r\n    <CardHeader>\r\n        <CardTitle>Team plan</CardTitle>\r\n        <CardDescription>Billed yearly. Renews on 14 March.</CardDescription>\r\n    </CardHeader>\r\n    <CardContent>\r\n        <p>12 seats in use out of 20. Add seats at any time; unused seats are prorated.</p>\r\n    </CardContent>\r\n</Card>;",
+            "description": "Header, description and content with default spacing."
+          },
+          {
+            "id": "components-layout-card--small",
+            "name": "Small",
+            "snippet": "const Small = () => <Card size=\"sm\" className=\"w-80\">\r\n    <CardHeader>\r\n        <CardTitle>Team plan</CardTitle>\r\n        <CardDescription>Billed yearly. Renews on 14 March.</CardDescription>\r\n    </CardHeader>\r\n    <CardContent>\r\n        <p>12 seats in use out of 20. Add seats at any time; unused seats are prorated.</p>\r\n    </CardContent>\r\n</Card>;",
+            "description": "Dense variant for grids and sidebars."
+          },
+          {
+            "id": "components-layout-card--with-footer",
+            "name": "With Footer",
+            "snippet": "const WithFooter = () => <Card size=\"default\" className=\"w-80\">\r\n    <CardHeader>\r\n        <CardTitle>Invite teammates</CardTitle>\r\n        <CardDescription>They will get an email with a link to join this workspace.</CardDescription>\r\n    </CardHeader>\r\n    <CardContent>\r\n        <p>Members can view and comment. Admins can also manage billing.</p>\r\n    </CardContent>\r\n    <CardFooter className=\"justify-end gap-2\">\r\n        <Button variant=\"outline\">Cancel</Button>\r\n        <Button>Send invites</Button>\r\n    </CardFooter>\r\n</Card>;",
+            "description": "Footer holds the card's actions; it gets a muted background and a top border automatically."
+          },
+          {
+            "id": "components-layout-card--with-action",
+            "name": "With Action",
+            "snippet": "const WithAction = () => <Card size=\"default\" className=\"w-80\">\r\n    <CardHeader>\r\n        <CardTitle>Production API key</CardTitle>\r\n        <CardDescription>Created 3 weeks ago · last used today</CardDescription>\r\n        <CardAction>\r\n            <Button variant=\"ghost\" size=\"icon-sm\" aria-label=\"More options\">\r\n                <MoreHorizontal />\r\n            </Button>\r\n        </CardAction>\r\n    </CardHeader>\r\n    <CardContent className=\"flex items-center gap-2\">\r\n        <Badge variant=\"outline\">sk-live-••••-4f2a</Badge>\r\n        <Badge>Active</Badge>\r\n    </CardContent>\r\n</Card>;",
+            "description": "`CardAction` pins a control to the top-right of the header."
+          },
+          {
+            "id": "components-layout-card--with-image",
+            "name": "With Image",
+            "snippet": "const WithImage = () => <Card size=\"default\" className=\"w-80\">\r\n    <img\r\n        src=\"https://picsum.photos/seed/design-system/640/320\"\r\n        alt=\"Abstract gradient cover\"\r\n        className=\"aspect-video w-full object-cover\" />\r\n    <CardHeader>\r\n        <CardTitle>Quarterly design review</CardTitle>\r\n        <CardDescription>Recording and notes from 28 September</CardDescription>\r\n    </CardHeader>\r\n</Card>;",
+            "description": "A leading image bleeds to the card edges and rounds its top corners."
+          },
+          {
+            "id": "components-layout-card--content-only",
+            "name": "Content Only",
+            "snippet": "const ContentOnly = () => <Card size=\"default\" className=\"w-56\">\r\n    <CardContent>\r\n        <p className=\"text-sm text-muted-foreground\">Active users</p>\r\n        <p className=\"font-heading text-2xl font-medium\">4,812</p>\r\n    </CardContent>\r\n</Card>;",
+            "description": "Content only, for simple stat tiles."
+          }
+        ],
+        "import": "import {\n  Badge,\n  Button,\n  Card,\n  CardAction,\n  CardContent,\n  CardDescription,\n  CardFooter,\n  CardHeader,\n  CardTitle,\n} from 'demo-react';\nimport { MoreHorizontal } from 'lucide-react';"
+      },
+      "components-forms-input": {
+        "id": "components-forms-input",
+        "name": "Input",
+        "path": "./src/components/ui/input.stories.tsx",
+        "jsDocTags": {},
+        "description": "Single-line text field. Accepts every native `<input>` attribute; type, placeholder and validation\nstate come from attributes, not variants (`aria-invalid` turns on the error styling). Always pair it\nwith a `Label` or an `aria-label`. Use a Textarea for multi-line text and a Select for closed choices.\n\nFigma: Input (shadcn/ui kit). Figma `State` (Default / Focus / Error / Disabled) ↔ native state + `aria-invalid`.",
+        "reactDocgenTypescript": {
+          "tags": {},
+          "filePath": "D:/design system skills/examples/demo-react/src/components/ui/input.tsx",
+          "description": "",
+          "displayName": "Input",
+          "methods": [],
+          "props": {},
+          "exportName": "Input"
+        },
+        "stories": [
+          {
+            "id": "components-forms-input--default",
+            "name": "Default",
+            "snippet": "const Default = () => <Input\r\n    type=\"text\"\r\n    placeholder=\"name@company.com\"\r\n    aria-label=\"Email\"\r\n    disabled={false} />;",
+            "description": "Empty field with placeholder."
+          },
+          {
+            "id": "components-forms-input--with-label",
+            "name": "With Label",
+            "snippet": "const WithLabel = () => <div className=\"grid w-72 gap-2\">\r\n    <Label htmlFor=\"email\">Work email</Label>\r\n    <Input\r\n        type=\"text\"\r\n        placeholder=\"name@company.com\"\r\n        aria-label={undefined}\r\n        disabled={false}\r\n        id=\"email\" />\r\n</div>;",
+            "description": "Field with a visible label. Prefer this over `aria-label` whenever there is room."
+          },
+          {
+            "id": "components-forms-input--invalid",
+            "name": "Invalid",
+            "snippet": "const Invalid = () => <div className=\"grid w-72 gap-2\">\r\n    <Input\r\n        type=\"text\"\r\n        placeholder=\"name@company.com\"\r\n        aria-label=\"Email\"\r\n        disabled={false}\r\n        aria-invalid\r\n        defaultValue=\"name@company\"\r\n        aria-describedby=\"email-error\" />\r\n    <p id=\"email-error\" className=\"text-sm text-destructive\">Enter a complete email address.\r\n              </p>\r\n</div>;",
+            "description": "Invalid state. Pair with an error message referenced by `aria-describedby`."
+          },
+          {
+            "id": "components-forms-input--disabled",
+            "name": "Disabled",
+            "snippet": "const Disabled = () => <Input\r\n    type=\"text\"\r\n    placeholder=\"name@company.com\"\r\n    aria-label=\"Email\"\r\n    disabled\r\n    defaultValue=\"ops@company.com\" />;"
+          },
+          {
+            "id": "components-forms-input--password",
+            "name": "Password",
+            "snippet": "const Password = () => <Input\r\n    type=\"password\"\r\n    placeholder=\"At least 12 characters\"\r\n    aria-label=\"Password\"\r\n    disabled={false} />;",
+            "description": "Password fields hide their value; browsers add their own reveal control."
+          },
+          {
+            "id": "components-forms-input--file",
+            "name": "File",
+            "snippet": "const File = () => <Input\r\n    type=\"file\"\r\n    placeholder={undefined}\r\n    aria-label=\"Attachment\"\r\n    disabled={false} />;",
+            "description": "File inputs style the native button to match the text scale."
+          }
+        ],
+        "import": "import { Input, Label } from 'demo-react';"
+      },
+      "components-forms-label": {
+        "id": "components-forms-label",
+        "name": "Label",
+        "path": "./src/components/ui/label.stories.tsx",
+        "jsDocTags": {},
+        "description": "Accessible caption for a form control, built on Radix Label. Associate it with `htmlFor` (or wrap the\ncontrol) so clicking the text focuses the field and screen readers announce it. It dims automatically\nwhen a sibling `peer` control is disabled. Use it for every Input, Select, Checkbox and Switch; do not\nuse it for headings or helper text.\n\nFigma: Label (shadcn/ui kit). Figma `Required` boolean ↔ a trailing marker child.",
+        "reactDocgenTypescript": {
+          "tags": {},
+          "filePath": "D:/design system skills/examples/demo-react/src/components/ui/label.tsx",
+          "description": "",
+          "displayName": "Label",
+          "methods": [],
+          "props": {
+            "asChild": {
+              "defaultValue": null,
+              "description": "",
+              "name": "asChild",
+              "declarations": [
+                {
+                  "fileName": "demo-react/node_modules/@radix-ui/react-primitive/dist/index.d.mts",
+                  "name": "TypeLiteral"
+                }
+              ],
+              "required": false,
+              "type": {
+                "name": "boolean"
+              }
+            }
+          },
+          "exportName": "Label"
+        },
+        "stories": [
+          {
+            "id": "components-forms-label--default",
+            "name": "Default",
+            "snippet": "const Default = () => <div className=\"grid w-72 gap-2\">\r\n    <Label htmlFor=\"display-name\">Display name</Label>\r\n    <Input id=\"display-name\" placeholder=\"Ada Lovelace\" />\r\n</div>;",
+            "description": "Label above its field."
+          },
+          {
+            "id": "components-forms-label--required",
+            "name": "Required",
+            "snippet": "const Required = () => <div className=\"grid w-72 gap-2\">\r\n    <Label htmlFor=\"display-name\"><>Display name\r\n                    <span aria-hidden=\"true\" className=\"text-destructive\">*\r\n                        </span>\r\n        </></Label>\r\n    <Input id=\"display-name\" placeholder=\"Ada Lovelace\" required />\r\n</div>;",
+            "description": "Required marker as a child; announce the requirement on the control with `required` or `aria-required`."
+          },
+          {
+            "id": "components-forms-label--disabled-peer",
+            "name": "Disabled Peer",
+            "snippet": "const DisabledPeer = () => <div className=\"flex w-72 flex-col-reverse gap-2\">\r\n    <Input id=\"api-key\" className=\"peer\" disabled defaultValue=\"sk-live-••••-4f2a\" />\r\n    <Label htmlFor=\"api-key\">API key (managed by your admin)</Label>\r\n</div>;",
+            "description": "The label dims when its `peer` control is disabled. Put the control before the label for the `peer-*` classes to apply."
+          }
+        ],
+        "import": "import { Input, Label } from 'demo-react';"
+      }
+    },
+    "meta": {
+      "docgen": "react-docgen-typescript",
+      "durationMs": 1560
+    }
+  },
+  "docs": null
+}

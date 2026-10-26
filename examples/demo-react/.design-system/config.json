@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../templates/design-system.config.schema.json",
+  "adapter": "shadcn",
+  "storybook": {
+    "url": "http://localhost:6006",
+    "configDir": ".storybook"
+  },
+  "tokens": {
+    "dtcg": ".design-system/tokens.json",
+    "cssOutput": "src/index.css",
+    "rename": {
+      "radius/base": "radius"
+    },
+    "stripGroups": [
+      "color",
+      "colors",
+      "semantic",
+      "tokens",
+      "shadcn",
+      "sds"
+    ]
+  },
+  "figmaMap": ".design-system/figma-map.json",
+  "hardcoded": {
+    "allowFiles": [
+      "src/components/ui/button.tsx",
+      "src/components/ui/badge.tsx",
+      "src/components/ui/card.tsx",
+      "src/components/ui/input.tsx",
+      "src/components/ui/label.tsx"
+    ],
+    "allowFilesNote": "Vendored shadcn/ui sources are accepted as-is; new or edited components are still checked."
+  }
+}
