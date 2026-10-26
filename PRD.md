@@ -12,6 +12,7 @@
 - 唯一驅動方式是 Claude Code。產品本身不帶模型，也不接 API 金鑰或本機模型；思考由使用者的 Claude 負責，用量算在使用者自己的 Claude 方案。
 - 不用終端機的使用者，可以用 Claude 桌面應用程式或 VS Code 擴充功能裡的 Claude Code。
 - 產品以 Claude Code plugin 形式發佈，內容包括 skills、一個本機 MCP server，以及由 MCP server 啟動的本機網頁介面。
+- 使用者可以在終端機或網頁介面的對話框與 Claude 對話。網頁訊息透過 Claude Code 的 channels（研究預覽）送進正在執行的 session，Claude 以 reply 工具回到網頁；權限請求也在網頁上以 Allow / Deny 回覆。限制：Claude Code session 必須開著；預覽期間自製 channel 需以 `--dangerously-load-development-channels` 啟動；Team / Enterprise 需管理員開啟 channels。
 - 介面只提供英文。
 
 ## 輸入

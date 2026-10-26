@@ -11,7 +11,7 @@ import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { freePort } from "./storybook.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".woff2": "font/woff2", ".json": "application/json" };
 
 export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PORT) || 4319 } = {}) {
   const token = process.env.PLINTH_TOKEN || randomBytes(16).toString("hex");
@@ -30,7 +30,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
 
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
-    if (!exists) return { rev, exists: false, workspace: ctx.root };
+    if (!exists) return { rev, exists: false, workspace: ctx.root, chat: ctx.chat?.state() ?? null };
     const config = loadConfig(ctx.root);
     const brands = listBrands(ctx.root, config);
     const tokens = {};
@@ -47,6 +47,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       pending: ws.listPending(ctx.root),
       versions: ws.versions(ctx.root, 40),
       storybook: ctx.storybook.url,
+      chat: ctx.chat?.state() ?? null,
     };
   };
 
@@ -54,6 +55,19 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
     res.end(type === "application/json" ? JSON.stringify(body) : body);
   };
+
+  // JSON request bodies (chat messages may carry images as base64), capped at 40 MB.
+  const readJson = (req) => new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > 40 * 1024 * 1024) { reject(new Error("Request too large.")); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on("end", () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {}); } catch { reject(new Error("Invalid JSON body.")); } });
+    req.on("error", reject);
+  });
 
   const routes = {
     "GET /api/rev": () => ({ rev }),
@@ -65,6 +79,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       return { id: c.id };
     },
     "POST /api/storybook/start": () => ctx.storybook.start(),
+    "POST /api/chat": async (req) => ctx.chat.send(await readJson(req)),
     // Storybook's index, proxied so the UI needs no cross-origin access. Lists story ids per component.
     "GET /api/storybook/index": async () => {
       if (!ctx.storybook.url) return { running: false, entries: [] };
@@ -83,7 +98,10 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
         const key = `${req.method} ${url.pathname}`;
         let m;
         let result;
-        if (routes[key]) result = await routes[key]();
+        if (routes[key]) result = await routes[key](req);
+        else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/permissions\/([a-z]{5})$/))) {
+          result = await ctx.chat.decide(m[1], (await readJson(req)).behavior);
+        }
         else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/changes\/([\w-]+)\/(apply|discard)$/))) {
           result = m[2] === "apply" ? ws.apply(ctx.root, m[1]) : (ws.discard(ctx.root, m[1]), { discarded: m[1] });
         } else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/versions\/([0-9a-f]{4,40})\/restore$/))) {
@@ -91,6 +109,15 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
         } else return send(res, 404, { error: "not found" });
         if (req.method === "POST") bump();
         return send(res, 200, result);
+      }
+      // Images the user attached in chat (token in the query string: <img> cannot send headers).
+      if (url.pathname.startsWith("/inbox/")) {
+        if (url.searchParams.get("t") !== token) return send(res, 401, { error: "missing or wrong session token" });
+        const name = url.pathname.slice("/inbox/".length);
+        if (!/^[\w-]+\.(png|jpg|webp|gif)$/.test(name)) return send(res, 404, { error: "not found" });
+        const file = join(ctx.root, ".ds", "inbox", name);
+        if (!existsSync(file)) return send(res, 404, { error: "not found" });
+        return send(res, 200, readFileSync(file), TYPES[extname(file)] ?? "application/octet-stream");
       }
       // static app
       let rel = normalize(decodeURIComponent(url.pathname)).replace(/^([\\/])+/, "");

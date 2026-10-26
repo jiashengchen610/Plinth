@@ -8,8 +8,9 @@ import { ComponentsView } from "@/views/ComponentsView";
 import { GuidelinesView } from "@/views/GuidelinesView";
 import { ChangesView } from "@/views/ChangesView";
 import { HistoryView } from "@/views/HistoryView";
+import { ChatPanel } from "@/views/ChatPanel";
 
-const TABS = ["tokens", "components", "guidelines", "changes", "history"] as const;
+const TABS = ["chat", "tokens", "components", "guidelines", "changes", "history"] as const;
 type Tab = (typeof TABS)[number];
 const initialTab = (): Tab => (TABS as readonly string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : "tokens";
 
@@ -22,6 +23,14 @@ export default function App() {
   const [brand, setBrand] = useState<string>("");
   const [mode, setMode] = useState<"light" | "dark">("light");
   const rev = useRef(0);
+  // On wide screens the chat is a side panel, so the Chat tab does not exist there.
+  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -71,15 +80,23 @@ export default function App() {
     return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
   }
   if (!state.exists) {
+    // First run: the chat is the whole page, because the first message is the brief.
     return (
-      <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-3 p-6">
-        <h1 className="text-xl font-semibold">No design system here yet</h1>
-        <p className="text-sm text-muted-foreground">Ask Claude to create one, for example: "Create a design system for a budgeting app for young professionals, warm and trustworthy."</p>
-        <code className="text-xs text-muted-foreground">{state.workspace}</code>
+      <main className="mx-auto flex h-screen max-w-2xl flex-col gap-4 p-4 sm:p-6">
+        <div>
+          <h1 className="text-xl font-semibold">Plinth</h1>
+          <p className="text-sm text-muted-foreground">
+            Describe the product and how it should feel. Paste screenshots, mood boards or an existing site you like.
+            Claude creates the design system in <code className="text-xs">{state.workspace}</code>.
+          </p>
+        </div>
+        {error && <p role="status" className="text-sm text-destructive">{error}</p>}
+        <ChatPanel chat={state.chat} onError={setError} className="min-h-0 flex-1" />
       </main>
     );
   }
 
+  const pendingPermissions = state.chat?.permissions.length ?? 0;
   const gate = state.checks.gate;
   const failing = state.checks.contrast.filter((c) => !c.pass).length;
 
@@ -114,15 +131,19 @@ export default function App() {
         </div>
       )}
 
-      <main className="px-4 py-4 sm:px-6">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-4">
+      <main className="grid gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <Tabs value={tab === "chat" && wide ? "tokens" : tab} onValueChange={(v) => setTab(v as Tab)} className="min-w-0 gap-4">
           <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="chat" className="lg:hidden">Chat{pendingPermissions ? ` (${pendingPermissions})` : ""}</TabsTrigger>
             <TabsTrigger value="tokens">Tokens</TabsTrigger>
             <TabsTrigger value="components">Components</TabsTrigger>
             <TabsTrigger value="guidelines">Guidelines</TabsTrigger>
             <TabsTrigger value="changes">Changes{state.pending.length ? ` (${state.pending.length})` : ""}</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
+          <TabsContent value="chat" className="lg:hidden">
+            <ChatPanel chat={state.chat} onError={setError} className="h-[75vh]" />
+          </TabsContent>
           <TabsContent value="tokens">
             <TokensView state={state} brand={brand} busy={busy} onFixContrast={() => act(async () => { await api.fixContrast(); setTab("changes"); }, "Contrast fixes proposed. Review them in Changes.")} />
           </TabsContent>
@@ -139,6 +160,8 @@ export default function App() {
             <HistoryView state={state} busy={busy} onRestore={(sha) => act(() => api.restore(sha), "Version restored as a new version.")} />
           </TabsContent>
         </Tabs>
+        {/* Wide screens: the chat stays beside whatever tab is open. */}
+        <ChatPanel chat={state.chat} onError={setError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />
       </main>
     </div>
   );

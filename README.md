@@ -13,13 +13,18 @@ See [PRD.md](PRD.md) for the product definition.
 ## How it works
 
 ```
-Claude Code ──MCP──▶ Plinth server ──▶ your design-system repo (git)
-                         │                    tokens/, brands/<id>/, DESIGN.md, WRITING.md,
-                         │                    src/components/<name>/, .storybook/
-                         └──▶ local review UI (http://localhost:4319)
-                                Tokens · Components (Storybook in an iframe) · Guidelines · Changes · History
+ you ──▶ Plinth UI (http://localhost:4319)          chat · Tokens · Components · Guidelines · Changes · History
+           │  ▲
+   channel │  │ reply tool, permission prompts
+           ▼  │
+       Claude Code ──MCP tools──▶ Plinth server ──▶ your design-system repo (git)
+                                                      tokens/, brands/<id>/, DESIGN.md, WRITING.md,
+                                                      src/components/<name>/, .storybook/
 ```
 
+- You can talk to Claude either in the Plinth UI's chat or in the Claude Code terminal. UI messages reach the
+  session through a Claude Code [channel](https://code.claude.com/docs/en/channels); Claude answers in the UI, and
+  permission prompts appear there with Allow / Deny.
 - Claude never writes files directly. It **proposes** a change; you review it in the UI (old → new values, contrast
   before → after) and press **Apply**. Every applied change is a git commit; **History** restores any version.
 - Tokens are DTCG. Each brand has its own semantic values for light and dark; all brands share the same components.
@@ -30,18 +35,35 @@ Claude Code ──MCP──▶ Plinth server ──▶ your design-system repo (
 
 ## Use it
 
-Requirements: Node 20+, git, Claude Code. For publishing: the GitHub CLI (`gh auth login --web`).
+Requirements: Node 20+, git, Claude Code signed in with a claude.ai account or a Console API key. For publishing:
+the GitHub CLI (`gh auth login --web`).
+
+**1. Install** (once):
 
 ```bash
-claude --plugin-dir "/path/to/plinth"     # until it is published to a marketplace
+claude plugin marketplace add jiashengchen610/Plinth
+claude plugin install plinth@plinth
 ```
 
-Then, in an empty folder:
+**2. Start** in an empty folder for your design system, with the chat channel enabled:
+
+```bash
+claude --dangerously-load-development-channels plugin:plinth@plinth
+```
+
+Claude Code shows a warning that you are loading a development channel; choose *I am using this for local
+development*. Channels are a Claude Code research preview, and only Anthropic-approved channels load without this
+flag. On claude.ai Team and Enterprise plans an admin must enable channels first. Without the flag, everything
+still works from the terminal; only the UI chat is off.
+
+**3. Talk**, in the terminal or in the UI chat (ask Claude for the UI link, or open http://localhost:4319):
 
 > Create a design system for a budgeting app for young professionals. Warm and trustworthy, dark mode matters.
 
-Claude scaffolds the repo, opens the UI, and proposes tokens and guidelines for you to review. Then:
+Claude scaffolds the repo and proposes tokens and guidelines for you to review in **Changes**. Then:
 "make a pricing card from this screenshot", "add a kids brand", "publish".
+
+Keep the Claude Code session open while you use the UI: it is the engine behind the chat.
 
 ## Repository layout
 
