@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
-import { runChecks, contrastFixes } from "../engine/checks.mjs";
+import { runChecks } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy } from "./publish.mjs";
 import { toolByName } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
@@ -20,19 +20,27 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
   let rev = 1;
   const bump = () => { rev++; };
 
-  // Watch the workspace for edits made outside the tools (git, the user, an editor).
-  let timer = null;
+  // Watch the workspace. Any edit, from Plinth, an editor, git or another tool, refreshes the UI; an edit to tokens or
+  // the configuration also regenerates the CSS, fonts and Foundations data, so the result is checked the same way
+  // whoever made it. Generated files are not watched for that, or regenerating would trigger itself.
+  let timer = null, regen = false;
+  const SOURCE = /^(tokens[\\/]|brands[\\/][^\\/]+[\\/]tokens\.json$|design-system\.json$)/;
   try {
     watch(ctx.root, { recursive: true }, (_e, file) => {
       if (!file || /node_modules|[\\/]\.git[\\/]|^\.git[\\/]|storybook-static|^\.ds[\\/]/.test(file)) return;
+      if (SOURCE.test(file)) regen = true;
       clearTimeout(timer);
-      timer = setTimeout(bump, 150);
+      timer = setTimeout(() => {
+        if (regen && existsSync(join(ctx.root, "design-system.json"))) { try { ws.regenerate(ctx.root); } catch { /* mid-edit, invalid JSON: the next save regenerates */ } }
+        regen = false;
+        bump();
+      }, 200);
     });
   } catch { /* recursive watch unsupported: tools still bump rev */ }
 
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
-    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state(), github: ctx.github.state() };
+    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, review: ctx.review?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state(), github: ctx.github.state() };
     if (!exists) return common;
     const config = loadConfig(ctx.root);
     const brands = listBrands(ctx.root, config);
@@ -48,8 +56,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       layers: (config.layers ?? null), upgradeAvailable: !Array.isArray(config.layers),
       components: ws.listComponents(ctx.root),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },
-      pending: ws.listPending(ctx.root),
-      outside: ws.outsideChanges(ctx.root),
+      unsaved: ws.unsavedChanges(ctx.root),
+      lastChange: ws.lastChange(ctx.root),
       versions: ws.versions(ctx.root, 40),
       storybook: ctx.storybook.url,
     };
@@ -74,8 +82,9 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
   });
   const needsWorkspace = () => { if (!existsSync(join(ctx.root, "design-system.json"))) throw new Error("No design system yet. Describe one in the chat first."); };
 
-  // Long operations return at once and report through state; ?wait=1 (used by the nested session's tools) waits.
-  const longOp = async (url, start) => (url.searchParams.get("wait") ? start() : (start(), { started: true }));
+  // Long operations return at once and report through state.
+  const longOp = async (_url, start) => (start(), { started: true });
+  const tool = (name, args = {}) => toolByName.get(name).run(args, ctx);
 
   const routes = {
     "GET /api/rev": () => ({ rev }),
@@ -92,29 +101,19 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/github/login": () => ctx.github.start(),
     "POST /api/github/cancel": () => ctx.github.cancel(),
     "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts)); },
-    "POST /api/contrast-fixes": () => {
-      needsWorkspace();
-      const { ops, skipped } = contrastFixes(runChecks(ctx.root).contrast);
-      if (!ops.length) return { message: "Nothing to fix.", skipped };
-      const c = ws.propose(ctx.root, { title: `Fix contrast (${ops.length} pair${ops.length > 1 ? "s" : ""})`, rationale: ops.map((o) => o.why).join("; "), ops: ops.map(({ why, ...o }) => o), by: "engine" });
-      return { id: c.id };
-    },
-    "POST /api/exceptions": async (req) => { needsWorkspace(); return { version: ws.acceptException(ctx.root, await readJson(req)) }; },
-    // The same engine actions the tools offer; the UI calls them directly.
-    // Edits made in the UI: preview a draft without saving it, then queue it like any proposal.
-    "POST /api/preview": async (req) => { needsWorkspace(); const { ops } = await readJson(req); return ws.previewOps(ctx.root, ops ?? [], ws.listPending(ctx.root).flatMap((c) => c.ops)); },
-    "POST /api/changes": async (req) => {
-      needsWorkspace();
-      const { title, rationale, ops } = await readJson(req);
-      const c = ws.propose(ctx.root, { title: title || "Edits from the token graph", rationale: rationale ?? "", ops, by: "you" });
-      return { id: c.id, preview: c.preview };
-    },
-    "POST /api/palette": async (req) => { needsWorkspace(); return toolByName.get("propose_palette_color").run(await readJson(req), ctx); },
-    "POST /api/upgrade": () => { needsWorkspace(); return toolByName.get("propose_upgrade").run({}, ctx); },
-    "POST /api/link-palette": () => { needsWorkspace(); return toolByName.get("propose_link_to_palette").run({}, ctx); },
-    "POST /api/outside/record": async (req) => { needsWorkspace(); return ws.recordOutside(ctx.root, (await readJson(req)).note ?? ""); },
-    "POST /api/outside/discard": () => { needsWorkspace(); return ws.discardOutside(ctx.root); },
-    "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return { version: ws.removeException(ctx.root, await readJson(req)) }; },
+    // Edits made in the UI: written at once, like any change; Undo takes them back, Save version commits them.
+    "POST /api/change": async (req) => { needsWorkspace(); const { title, ops } = await readJson(req); return ws.change(ctx.root, { title: title || "Edit in the token graph", ops, by: "you" }); },
+    "POST /api/undo": () => { needsWorkspace(); return ws.undo(ctx.root); },
+    "POST /api/save": async (req) => { needsWorkspace(); return ws.saveVersion(ctx.root, (await readJson(req)).message); },
+    "POST /api/discard": () => { needsWorkspace(); return ws.discardUnsaved(ctx.root); },
+    "POST /api/contrast-fixes": () => { needsWorkspace(); return tool("fix_contrast"); },
+    "POST /api/exceptions": async (req) => { needsWorkspace(); return ws.acceptException(ctx.root, await readJson(req)); },
+    "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return ws.removeException(ctx.root, await readJson(req)); },
+    "POST /api/palette": async (req) => { needsWorkspace(); return tool("add_palette_color", await readJson(req)); },
+    "POST /api/upgrade": () => { needsWorkspace(); return tool("upgrade_to_layers"); },
+    "POST /api/link-palette": () => { needsWorkspace(); return tool("link_to_palette"); },
+    // The AI review at publish: one short headless run over everything since the last publish.
+    "POST /api/review": () => { needsWorkspace(); if (!ctx.review) throw new Error("Review is not available in this server."); return ctx.review.start(); },
     // Storybook's index, proxied so the UI needs no cross-origin access. Lists story ids per component.
     "GET /api/storybook/index": async () => {
       if (!ctx.storybook.url) return { running: false, entries: [] };
@@ -134,8 +133,11 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
         let m;
         let result;
         if (routes[key]) result = await routes[key](req, url);
-        else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/changes\/([\w-]+)\/(apply|discard)$/))) {
-          result = m[2] === "apply" ? ws.apply(ctx.root, m[1]) : (ws.discard(ctx.root, m[1]), { discarded: m[1] });
+        else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/tools\/([a-z_]+)$/))) {
+          // A tool call forwarded by another Plinth process for this workspace (owner.mjs).
+          const t = toolByName.get(m[1]);
+          if (!t) return send(res, 404, { error: `Unknown tool: ${m[1]}` });
+          result = await t.run(await readJson(req), ctx);
         } else if (req.method === "POST" && (m = url.pathname.match(/^\/api\/versions\/([0-9a-f]{4,40})\/restore$/))) {
           result = { version: ws.restore(ctx.root, m[1]) };
         } else return send(res, 404, { error: "not found" });
@@ -165,6 +167,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     }
   });
 
+  // Forwarded tool calls (install, tests, publish) can take minutes: no request timeout on this local server.
+  server.requestTimeout = 0;
   const port = await freePort(wanted);
   await new Promise((r) => server.listen(port, "127.0.0.1", r));
   return { url: `http://localhost:${port}/`, port, token, bump, close: () => server.close() };

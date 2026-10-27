@@ -1,11 +1,10 @@
-// Workspace operations: scaffold from the template, edit token files, keep a queue of proposed
-// changes, apply them as git commits, list versions and restore any of them. Zero dependencies
-// (shells out to git).
+// Workspace operations: scaffold from the template, change token files and guidelines (written at once, each change
+// undoable), save the working files as versions when the user says so, list versions and restore any of them, and
+// describe everything that changed since the last publish. Zero dependencies (shells out to git).
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync, mkdtempSync, readdirSync, statSync, renameSync } from "node:fs";
 import { join, resolve, relative, dirname, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { buildCss, loadConfig, listBrands, resolveBrand, cssName, TYPOGRAPHY_PARTS } from "./tokens.mjs";
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
@@ -23,13 +22,13 @@ export function git(root, args, opts = {}) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
 }
 /**
- * Commit. With `paths`, only those paths (added, changed or deleted) go into the commit, so edits made outside
- * Plinth stay out of a version they do not belong to. Without, everything in the working tree.
+ * Commit. With `paths`, only those paths (added, changed or deleted) go into the commit. Without, everything in the
+ * working tree.
  */
 export function gitCommit(root, message, paths = null) {
   // Only paths that actually changed: git refuses a pathspec that matches nothing.
   const under = (f, p) => f === p || f.startsWith(p.endsWith("/") ? p : `${p}/`);
-  const sel = paths ? outsideChanges(root).map((c) => c.file).filter((f) => paths.some((p) => under(f, p))) : ["."];
+  const sel = paths ? unsavedChanges(root).map((c) => c.file).filter((f) => paths.some((p) => under(f, p))) : ["."];
   if (!sel.length) return null;
   git(root, ["add", "-A", "--", ...sel]);
   if (!git(root, ["diff", "--cached", "--name-only", "--", ...sel])) return null;
@@ -37,24 +36,41 @@ export function gitCommit(root, message, paths = null) {
   return git(root, ["rev-parse", "--short", "HEAD"]);
 }
 
-/** Paths regenerate writes: committed together with the change that caused them. */
+/** Paths regenerate writes. */
 export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md", "src/index.css"];
 
+/** Saved versions, newest first. `published`: already in the last published version. */
 export function versions(root, limit = 50) {
   if (!existsSync(join(root, ".git"))) return [];
-  const out = git(root, ["log", `-${limit}`, "--pretty=format:%h%x1f%H%x1f%cI%x1f%s"]);
-  return out ? out.split("\n").map((l) => { const [short, sha, date, subject] = l.split("\x1f"); return { short, sha, date, subject, outside: subject.startsWith(OUTSIDE_PREFIX) }; }) : [];
+  let out = "";
+  try { out = git(root, ["log", `-${limit}`, "--pretty=format:%h%x1f%H%x1f%cI%x1f%s"]); } catch { return []; } // no commit yet
+  const ref = publishedRef(root);
+  const published = new Set(ref ? git(root, ["rev-list", `--max-count=${limit + 500}`, ref]).split("\n") : []);
+  return out ? out.split("\n").map((l) => { const [short, sha, date, subject] = l.split("\x1f"); return { short, sha, date, subject, published: published.has(sha) }; }) : [];
 }
 
-// ---------------- edits made outside Plinth ----------------
-const OUTSIDE_PREFIX = "Outside edits";
-
 /**
- * Uncommitted changes in the working tree: edits made by hand, by another tool, or by a Claude Code session with
- * full permissions. Plinth commits every change it makes right away, so anything here came from elsewhere.
+ * The last published version: the remote branch publish pushed to, else the record publish leaves in .ds (a remote
+ * that was removed), else null (never published).
+ */
+export function publishedRef(root) {
+  try {
+    const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    return git(root, ["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`]);
+  } catch { /* no remote branch */ }
+  try {
+    const { sha } = JSON.parse(readFileSync(join(root, ".ds", "published.json"), "utf8"));
+    return git(root, ["rev-parse", "--verify", "-q", `${sha}^{commit}`]);
+  } catch { return null; }
+}
+
+// ---------------- unsaved work ----------------
+/**
+ * Files changed since the last saved version: by Plinth, by hand, by any tool. All of them are checked the same way
+ * (Plinth watches the folder); saving a version commits them.
  * @returns {Array<{ file: string, status: "modified" | "added" | "deleted" }>}
  */
-export function outsideChanges(root) {
+export function unsavedChanges(root) {
   if (!existsSync(join(root, ".git"))) return [];
   // Raw -z output: not git() (it trims, which eats the leading space of " M file"), no quoting of odd names.
   const out = execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -69,40 +85,42 @@ export function outsideChanges(root) {
   }
   return changes;
 }
-const requireNoOutside = (root, action) => {
-  const out = outsideChanges(root);
-  if (out.length) throw new Error(`${out.length} file(s) changed outside Plinth (${out.slice(0, 3).map((o) => o.file).join(", ")}${out.length > 3 ? ", …" : ""}). Record them as a version or discard them before you ${action}.`);
+const requireSaved = (root, action) => {
+  const open = unsavedChanges(root);
+  if (open.length) throw new Error(`${open.length} unsaved change${open.length > 1 ? "s" : ""} (${open.slice(0, 3).map((o) => o.file).join(", ")}${open.length > 3 ? ", …" : ""}). Save them as a version or discard them before you ${action}.`);
 };
 
-/** Keep outside edits: regenerate from them and save them as one version, so History shows where they came from. */
-export function recordOutside(root, note = "") {
-  const out = outsideChanges(root);
-  if (!out.length) return { version: null };
+/** Save the working files as a version: one commit with everything unsaved. The user decides when. */
+export function saveVersion(root, message) {
+  const text = String(message ?? "").trim();
+  if (!text) throw new Error("A version needs a short description of what changed.");
   regenerate(root);
-  const names = out.map((o) => o.file);
-  return { version: gitCommit(root, `${OUTSIDE_PREFIX}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}${note ? ` (${note})` : ""}`), files: names };
+  const version = gitCommit(root, text);
+  return version ? { version } : { version: null, message: "Nothing to save: no changes since the last version." };
 }
 
-/** Throw outside edits away: back to the last version. */
-export function discardOutside(root) {
-  const out = outsideChanges(root);
-  for (const o of out) {
+/** Throw unsaved work away: back to the last saved version. */
+export function discardUnsaved(root) {
+  const open = unsavedChanges(root);
+  for (const o of open) {
     if (o.status === "added") rmSync(join(root, o.file), { force: true });
     else git(root, ["checkout", "HEAD", "--", o.file]);
   }
-  return { discarded: out.map((o) => o.file) };
+  clearUndo(root);
+  return { discarded: open.map((o) => o.file) };
 }
 
 /** Restore the working tree to a previous version as a NEW commit (history is never rewritten). */
 export function restore(root, sha) {
   if (!/^[0-9a-f]{4,40}$/i.test(sha)) throw new Error("invalid version id");
-  requireNoOutside(root, "restore a version");
+  requireSaved(root, "restore a version");
   git(root, ["rev-parse", "--verify", `${sha}^{commit}`]);
   git(root, ["checkout", sha, "--", "."]);
   // Files added after that version still exist: remove those that the target version does not track.
   const tracked = new Set(git(root, ["ls-tree", "-r", "--name-only", sha]).split("\n"));
   for (const f of git(root, ["ls-files"]).split("\n").filter(Boolean)) if (!tracked.has(f)) rmSync(join(root, f), { force: true });
   regenerate(root);
+  clearUndo(root);
   const subject = git(root, ["log", "-1", "--pretty=%s", sha]);
   return gitCommit(root, `Restore: ${subject} (${sha.slice(0, 7)})`);
 }
@@ -173,20 +191,27 @@ export function regenerate(root) {
   return issues;
 }
 
+/** This Plinth's version: the deploy workflow runs `plinth check` from exactly this release. */
+export const PLINTH_VERSION = JSON.parse(readFileSync(resolve(here, "..", "package.json"), "utf8")).version;
+
 /** Files that belong to Plinth, not to the user's design: kept identical to the template. */
-const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations", ".claude/settings.json", "CLAUDE.md"];
+const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations", "CLAUDE.md"];
 // Only for layered workspaces: older ones derive their radius scale in index.css, which the upgrade replaces.
 const MANAGED_LAYERED = ["src/index.css"];
+// Template files with placeholders filled in when copied.
+const FILL = { ".github/workflows/storybook.yml": (text) => text.replaceAll("{{PLINTH_VERSION}}", PLINTH_VERSION) };
 export function syncManaged(root, templateDir = TEMPLATE_DIR) {
   const changed = [];
   const syncFile = (rel) => {
     const src = join(templateDir, rel), dest = join(root, rel);
     if (!existsSync(src)) return;
-    if (existsSync(dest) && readFileSync(dest).equals(readFileSync(src))) return;
+    const want = FILL[rel] ? Buffer.from(FILL[rel](readFileSync(src, "utf8"))) : readFileSync(src);
+    if (existsSync(dest) && readFileSync(dest).equals(want)) return;
     mkdirSync(dirname(dest), { recursive: true });
-    copyFileSync(src, dest);
+    writeFileSync(dest, want);
     changed.push(rel);
   };
+  if (removeOldDenyRules(root)) changed.push(".claude/settings.json");
   const walk = (rel) => {
     const abs = join(templateDir, rel);
     if (!existsSync(abs)) return;
@@ -199,11 +224,45 @@ export function syncManaged(root, templateDir = TEMPLATE_DIR) {
   return changed;
 }
 
+// Until 0.4 Plinth shipped Claude Code deny rules that blocked direct edits to design files. Edits from anywhere
+// are checked instead now (here, and by `plinth check` before every deploy), so the rules come out again. Rules the
+// user added themselves stay.
+const OLD_DENY_RULES = ["Edit(/tokens/**)", "Edit(/brands/**)", "Edit(/DESIGN.md)", "Edit(/WRITING.md)", "Edit(/design-system.json)", "Edit(/src/components/**)", "Edit(/src/styles/**)", "Edit(/src/foundations/**)", "Edit(/exports/**)", "Edit(/.storybook/**)", "Edit(/.github/**)", "Edit(/.claude/**)", "Edit(/.ds/**)"];
+function removeOldDenyRules(root) {
+  const file = join(root, ".claude", "settings.json");
+  if (!existsSync(file)) return false;
+  let settings;
+  try { settings = JSON.parse(readFileSync(file, "utf8")); } catch { return false; }
+  const deny = settings.permissions?.deny;
+  if (!Array.isArray(deny)) return false;
+  const kept = deny.filter((rule) => !OLD_DENY_RULES.includes(rule));
+  if (kept.length === deny.length) return false;
+  if (kept.length) settings.permissions.deny = kept;
+  else delete settings.permissions.deny;
+  if (!Object.keys(settings.permissions).length) delete settings.permissions;
+  if (Object.keys(settings).length) writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
+  else {
+    rmSync(file);
+    if (!readdirSync(join(root, ".claude")).length) rmSync(join(root, ".claude"), { recursive: true });
+  }
+  return true;
+}
+
+/** Path of the data the Foundations pages read. */
+export const FOUNDATIONS_DATA = "src/foundations/tokens.generated.json";
+
 /**
  * Everything the Foundations pages show, computed here so Storybook only renders: tokens per brand and mode,
  * and the contrast results. Read by src/foundations/*.tsx at build time.
  */
 export function writeFoundationsData(root, config = loadConfig(root)) {
+  const out = join(root, FOUNDATIONS_DATA);
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, foundationsData(root, config));
+}
+
+/** The Foundations data as written to src/foundations/tokens.generated.json. */
+export function foundationsData(root, config = loadConfig(root)) {
   const exceptions = config.exceptions ?? [];
   const contrast = checkContrast(root, config);
   const modeName = (m) => (m === "default" ? "light" : m);
@@ -220,10 +279,8 @@ export function writeFoundationsData(root, config = loadConfig(root)) {
       contrast: contrast.filter((c) => c.brand === id).map((c) => ({ mode: modeName(c.mode), bg: c.bg, fg: c.fg, ratio: c.ratio, min: c.min, pass: c.pass, accepted: Boolean(acceptedBy(exceptions, "contrast", c)) })),
     };
   }
-  const out = join(root, "src", "foundations", "tokens.generated.json");
-  mkdirSync(dirname(out), { recursive: true });
   const layers = (config.layers ?? []).map(({ id, name }) => ({ id, name: name ?? id }));
-  writeFileSync(out, JSON.stringify({ name: config.name, context: config.context, defaultBrand: config.defaultBrand ?? listBrands(root, config)[0], layers, brands }, null, 2) + "\n");
+  return JSON.stringify({ name: config.name, context: config.context, defaultBrand: config.defaultBrand ?? listBrands(root, config)[0], layers, brands }, null, 2) + "\n";
 }
 
 // ---------------- token file editing ----------------
@@ -377,22 +434,90 @@ export function tokenFiles(root) {
   return out;
 }
 
+const serialize = (content) => (typeof content === "string" ? content : JSON.stringify(content, null, 2) + "\n");
 function writeFiles(root, files) {
   for (const [rel, content] of files) {
     const abs = join(root, rel);
     mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, typeof content === "string" ? content : JSON.stringify(content, null, 2) + "\n");
+    writeFileSync(abs, serialize(content));
   }
 }
 
-// ---------------- proposed changes ----------------
-const pendingPath = (root) => join(root, ".ds", "pending.json");
-export function listPending(root) {
-  return existsSync(pendingPath(root)) ? JSON.parse(readFileSync(pendingPath(root), "utf8")) : [];
+// ---------------- changes ----------------
+// A change is written at once. What each file held before is kept in .ds/undo.json (never committed), newest last,
+// so changes can be undone one by one until the user saves a version or restores one.
+const undoPath = (root) => join(root, ".ds", "undo.json");
+const UNDO_LIMIT = 50;
+function undoStack(root) {
+  try { return JSON.parse(readFileSync(undoPath(root), "utf8")); } catch { return []; }
 }
-function savePending(root, list) {
+function saveUndo(root, list) {
   mkdirSync(join(root, ".ds"), { recursive: true });
-  writeFileSync(pendingPath(root), JSON.stringify(list, null, 2) + "\n");
+  writeFileSync(undoPath(root), JSON.stringify(list.slice(-UNDO_LIMIT)) + "\n");
+}
+export function clearUndo(root) { rmSync(undoPath(root), { force: true }); }
+/** The change Undo would take back, or null. */
+export function lastChange(root) {
+  const last = undoStack(root).at(-1);
+  return last ? { title: last.title, by: last.by, at: last.at, files: last.files.map((f) => f.file) } : null;
+}
+
+/** Write files as one undoable change. */
+function writeChange(root, { title, by }, files) {
+  const entry = { title, by, at: new Date().toISOString(), files: [] };
+  for (const [rel, content] of files) entry.files.push({ file: rel, before: readText(root, rel), after: serialize(content) });
+  writeFiles(root, files);
+  saveUndo(root, [...undoStack(root), entry]);
+}
+
+/**
+ * Make a change: validate the ops, write them at once, regenerate the CSS and fonts. Writes nothing when an op is
+ * invalid or when the change would break token references (an alias to nothing, a cycle); everything else is a
+ * reminder in the result: contrast before → after, look-alike roles, guideline prose that still names an old hue.
+ */
+export function change(root, { title, ops, by = "claude" }) {
+  if (!title || !Array.isArray(ops) || !ops.length) throw new Error("a change needs a title and at least one op");
+  const files = new Map();
+  for (const op of ops) applyOp(root, op, files);
+  // Picking the value a token already has: nothing to write, nothing to undo.
+  for (const [rel, content] of files) if (readText(root, rel) === serialize(content)) files.delete(rel);
+  if (!files.size) return { title, files: [], unchanged: true, reminders: { contrastFailing: [], contrastFixed: [], lookAlike: [], guidelineNotes: [] } };
+  const preview = previewOps(root, ops);
+  const known = new Set(buildCss(root).issues);
+  const broken = preview.issues.filter((i) => !known.has(i));
+  if (broken.length) throw new Error(`Nothing was written: this change would break token references (${broken.slice(0, 3).join("; ")}${broken.length > 3 ? "; …" : ""}).`);
+  writeChange(root, { title, by }, files);
+  regenerate(root);
+  return { title, files: [...files.keys()], reminders: reminders(preview) };
+}
+
+/** What a preview reports, as reminders: nothing here stops a change. */
+function reminders(p) {
+  return {
+    contrastFailing: p.contrastChanges.filter((x) => !x.pass && !x.accepted).map(({ brand, mode, bg, fg, before, ratio, min }) => ({ brand, mode, fg, bg, before, after: ratio, min })),
+    contrastFixed: p.contrastChanges.filter((x) => x.pass && x.before !== null && x.before < x.min).map(({ brand, mode, bg, fg, before, ratio }) => ({ brand, mode, fg, bg, before, after: ratio })),
+    lookAlike: (p.distinctFailures ?? []).map(({ brand, mode, a, b, reason }) => ({ brand, mode, a, b, reason })),
+    guidelineNotes: p.notes ?? [],
+  };
+}
+
+/**
+ * Take back the newest change. Refuses when one of its files was edited since (by hand or another tool), so an
+ * undo never throws away work it did not make.
+ */
+export function undo(root) {
+  const list = undoStack(root);
+  const last = list.at(-1);
+  if (!last) throw new Error("Nothing to undo.");
+  const touched = last.files.filter((f) => (readText(root, f.file) ?? null) !== f.after);
+  if (touched.length) throw new Error(`${touched.map((f) => f.file).join(", ")} changed after "${last.title}". Undo would overwrite that edit; change it back yourself or restore a version.`);
+  for (const f of last.files) {
+    if (f.before === null) rmSync(join(root, f.file), { force: true });
+    else { mkdirSync(dirname(join(root, f.file)), { recursive: true }); writeFileSync(join(root, f.file), f.before); }
+  }
+  saveUndo(root, list.slice(0, -1));
+  regenerate(root);
+  return { undone: last.title, files: last.files.map((f) => f.file) };
 }
 
 /**
@@ -400,15 +525,10 @@ function savePending(root, list) {
  * role colors that would stop being distinguishable, and guideline prose that still names the old hue.
  * Throws on invalid ops.
  */
-export function previewOps(root, ops, prior = []) {
+export function previewOps(root, ops) {
   const scratch = mkdtempSync(join(tmpdir(), "ds-preview-"));
   try {
     for (const f of ["design-system.json", "tokens", "brands", "src/components", "DESIGN.md"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
-    // Changes still waiting before this one are assumed applied: a proposal that uses a palette color proposed
-    // just before it is previewed against that color, not against a reference to nothing.
-    const priorFiles = new Map();
-    for (const op of prior) { try { applyOp(scratch, op, priorFiles); } catch { /* a stale earlier change: ignore */ } }
-    writeFiles(scratch, priorFiles);
     const files = new Map();
     for (const op of ops) applyOp(scratch, op, files);
     const exceptions = loadConfig(scratch).exceptions ?? [];
@@ -429,49 +549,63 @@ export function previewOps(root, ops, prior = []) {
       distinctFailures,
       notes: proseNotes(scratch, rolesBefore, roleColors(scratch), files),
       issues,
-      ...(prior.length ? { assumes: "earlier pending changes applied" } : {}),
     };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
 
+// Generated or Plinth-managed paths: not what a reviewer needs to read.
+const NOT_REVIEWED = /^(src\/styles\/|src\/foundations\/|exports\/|\.github\/|\.storybook\/|\.claude\/|CLAUDE\.md$|src\/index\.css$|package-lock\.json$)/;
+
 /**
- * What a change does to each token it touches, for a reviewer: per brand and mode, the value before and after,
- * both as written (a reference like {color.red.700} or a fixed value) and as resolved. Files and guidelines are listed.
+ * Everything that changed since `base` (default: the last published version, else the first version), unsaved work
+ * included, for the review at publish: every token whose value differs, per brand and mode, before → after as written
+ * (a reference like {color.red.700} or a fixed value) and as resolved; and the other files that changed.
  */
-export function changeDiff(root, ops) {
-  const scratch = mkdtempSync(join(tmpdir(), "ds-diff-"));
+export function changesSince(root, base = publishedRef(root)) {
+  const ref = base ?? git(root, ["rev-list", "--max-parents=0", "HEAD"]).split("\n")[0];
+  const scratch = mkdtempSync(join(tmpdir(), "ds-since-"));
   try {
-    for (const f of ["design-system.json", "tokens", "brands", "src/components", "DESIGN.md"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
-    const files = new Map();
-    for (const op of ops) applyOp(scratch, op, files);
-    writeFiles(scratch, files);
-    const config = loadConfig(root), configAfter = loadConfig(scratch);
-    const tokenOps = ops.filter((o) => o.path && /\.json$/.test(o.file) && o.file !== "design-system.json");
-    const out = [];
-    for (const op of tokenOps) {
-      const brandOf = op.file.match(/^brands\/([^/]+)\//)?.[1];
-      for (const brand of brandOf ? [brandOf] : listBrands(scratch, configAfter)) {
-        let before = null, after = null;
-        try { before = resolveBrand(root, brand, config).tokens.find((t) => t.key === op.path) ?? null; } catch { /* brand added by this change */ }
-        try { after = resolveBrand(scratch, brand, configAfter).tokens.find((t) => t.key === (op.to ?? op.path)) ?? null; } catch { /* brand removed */ }
-        const modes = op.mode ? [op.mode === "light" ? "default" : op.mode] : Object.keys(after?.values ?? before?.values ?? { default: 1 });
-        for (const mode of modes) {
-          const b = before?.values[mode] ?? before?.values.default, a = after?.values[mode] ?? after?.values.default;
-          out.push({
-            token: after?.name ?? before?.name ?? op.path, path: op.path, op: op.op, file: op.file, brand, mode: mode === "default" ? "light" : mode,
-            layer: after?.layerId ?? before?.layerId ?? null,
-            before: b ? { value: b.raw, resolved: b.resolved, alpha: b.alpha } : null,
-            after: a ? { value: a.raw, resolved: a.resolved, alpha: a.alpha } : null,
-          });
-        }
+    const listed = git(root, ["ls-tree", "-r", "--name-only", ref, "--", "design-system.json", "tokens", "brands"]).split("\n").filter(Boolean);
+    for (const f of listed) {
+      mkdirSync(dirname(join(scratch, f)), { recursive: true });
+      writeFileSync(join(scratch, f), execFileSync("git", ["show", `${ref}:${f}`], { cwd: root, stdio: ["ignore", "pipe", "pipe"] }));
+    }
+    const resolveAll = (dir) => {
+      const out = new Map();
+      let config;
+      try { config = loadConfig(dir); } catch { return out; }
+      for (const brand of listBrands(dir, config)) {
+        try { for (const t of resolveBrand(dir, brand, config).tokens) if (!t.derived) out.set(`${brand}|${t.key}`, { brand, t }); } catch { /* unresolvable brand */ }
+      }
+      return out;
+    };
+    const before = resolveAll(scratch), after = resolveAll(root);
+    const rows = [];
+    const follows = new Set(); // tokens whose own value is unchanged but that point at one that changed
+    const value = (v) => (v ? { value: v.raw, resolved: v.resolved, alpha: v.alpha } : null);
+    for (const key of new Set([...before.keys(), ...after.keys()])) {
+      const b = before.get(key)?.t, a = after.get(key)?.t;
+      const brand = (before.get(key) ?? after.get(key)).brand;
+      for (const mode of new Set([...Object.keys(b?.values ?? {}), ...Object.keys(a?.values ?? {})])) {
+        const vb = value(b?.values[mode]), va = value(a?.values[mode]);
+        if (JSON.stringify(vb) === JSON.stringify(va)) continue;
+        if (vb && va && JSON.stringify(vb.value) === JSON.stringify(va.value) && vb.alpha === va.alpha) { follows.add((a ?? b).name); continue; }
+        rows.push({ token: (a ?? b).name, path: (a ?? b).key, brand, mode: mode === "default" ? "light" : mode, layer: (a ?? b).layerId ?? null, before: vb, after: va });
       }
     }
     // Shared tokens are the same in every brand: one row is enough when nothing differs.
     const seen = new Set();
-    const tokens = out.filter((r) => { const k = `${r.path}|${r.mode}|${JSON.stringify(r.before)}|${JSON.stringify(r.after)}`; return !seen.has(k) && seen.add(k); });
-    return { tokens, files: [...files.keys()].filter((f) => !tokenOps.some((o) => o.file === f)) };
+    const tokens = rows.filter((r) => { const k = `${r.path}|${r.mode}|${JSON.stringify(r.before)}|${JSON.stringify(r.after)}`; return !seen.has(k) && seen.add(k); });
+    const files = new Map();
+    for (const line of git(root, ["diff", "--name-status", ref, "--"]).split("\n").filter(Boolean)) {
+      const [status, ...names] = line.split("\t");
+      files.set(names.at(-1), status[0] === "D" ? "deleted" : status[0] === "A" ? "added" : "modified");
+    }
+    for (const c of unsavedChanges(root)) if (c.status === "added") files.set(c.file, "added");
+    const other = [...files].filter(([f]) => !NOT_REVIEWED.test(f) && !/^(tokens\/|brands\/[^/]+\/tokens\.json$|design-system\.json$)/.test(f)).map(([file, status]) => ({ file, status }));
+    return { since: base ? git(root, ["rev-parse", "--short", ref]) : "the first version", tokens: tokens.slice(0, 300), tokensChanged: tokens.length, followTheseChanges: { count: follows.size, tokens: [...follows].slice(0, 40) }, files: other };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -512,59 +646,27 @@ function proseNotes(root, before, after, files) {
   return [...notes];
 }
 
-/** Queue a change for the user to review. */
-export function propose(root, { title, ops, rationale = "", by = "claude" }) {
-  if (!title || !Array.isArray(ops) || !ops.length) throw new Error("a change needs a title and at least one op");
-  const preview = previewOps(root, ops, listPending(root).flatMap((c) => c.ops));
-  const change = { id: randomUUID().slice(0, 8), title, rationale, by, createdAt: new Date().toISOString(), ops, preview };
-  savePending(root, [...listPending(root), change]);
-  return change;
-}
-
-export function discard(root, id) {
-  const list = listPending(root);
-  if (!list.some((c) => c.id === id)) throw new Error(`no pending change ${id}`);
-  savePending(root, list.filter((c) => c.id !== id));
-}
-
-/** Apply a pending change (or raw ops), regenerate, commit. Returns the new version. */
-export function apply(root, idOrChange) {
-  const list = listPending(root);
-  const change = typeof idOrChange === "string" ? list.find((c) => c.id === idOrChange) : idOrChange;
-  if (!change) throw new Error(`no pending change ${idOrChange}`);
-  const files = new Map();
-  for (const op of change.ops) applyOp(root, op, files);
-  // An outside edit to a file this change rewrites would end up in this version unreviewed: ask first.
-  const overlap = outsideChanges(root).filter((o) => files.has(o.file));
-  if (overlap.length) throw new Error(`${overlap.map((o) => o.file).join(", ")} changed outside Plinth. Record or discard that edit before applying this change.`);
-  writeFiles(root, files);
-  const issues = regenerate(root);
-  const sha = gitCommit(root, change.title, [...files.keys(), ...GENERATED]);
-  if (typeof idOrChange === "string") savePending(root, list.filter((c) => c.id !== change.id));
-  return { version: sha, issues };
-}
-
 // ---------------- exceptions ----------------
 /**
  * The user accepts a failing check on purpose (PRD: "退回，或明確選擇接受並記錄例外"). Recorded in
- * design-system.json so publish shows it; one commit, no review step since the user is the reviewer.
+ * design-system.json so publish shows it; a change like any other (undoable, saved with the next version).
  */
 export function acceptException(root, { check, key, reason = "" }) {
   if (!exceptionKey[check]) throw new Error(`unknown check ${check}`);
   if (!key || !/^[^|]+(\|[^|]+)+$/.test(key)) throw new Error("exception needs a key like brand|mode|bg|fg (segments may be *)");
-  const cfgPath = join(root, "design-system.json");
-  const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+  const cfg = JSON.parse(readFileSync(join(root, "design-system.json"), "utf8"));
   cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
   cfg.exceptions.push({ check, key, reason, at: new Date().toISOString() });
-  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
-  return gitCommit(root, `Accept exception: ${check} ${key}${reason ? ` (${reason})` : ""}`, ["design-system.json"]);
+  writeChange(root, { title: `Accept exception: ${check} ${key}${reason ? ` (${reason})` : ""}`, by: "you" }, new Map([["design-system.json", cfg]]));
+  regenerate(root);
+  return { accepted: key };
 }
 export function removeException(root, { check, key }) {
-  const cfgPath = join(root, "design-system.json");
-  const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
+  const cfg = JSON.parse(readFileSync(join(root, "design-system.json"), "utf8"));
   cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
-  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
-  return gitCommit(root, `Remove exception: ${check} ${key}`, ["design-system.json"]);
+  writeChange(root, { title: `Remove exception: ${check} ${key}`, by: "you" }, new Map([["design-system.json", cfg]]));
+  regenerate(root);
+  return { removed: key };
 }
 
 // ---------------- reading ----------------
@@ -589,5 +691,5 @@ export function listComponents(root) {
 
 export function summary(root) {
   const config = loadConfig(root);
-  return { root: root.split(sep).join("/"), config, brands: listBrands(root, config), components: listComponents(root).map((c) => c.id), pending: listPending(root).length, versions: versions(root, 5) };
+  return { root: root.split(sep).join("/"), config, brands: listBrands(root, config), components: listComponents(root).map((c) => c.id), unsaved: unsavedChanges(root).length, lastChange: lastChange(root), versions: versions(root, 5) };
 }

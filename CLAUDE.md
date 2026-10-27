@@ -14,6 +14,13 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   is computed in `engine/`.
 - Tokens are layered (design-system.json → layers): palette (Tailwind, regenerate with `scripts/tailwind-primitives.mjs`),
   roles, component tokens. Template components use only component tokens. Fixes never edit the palette.
+- One Plinth per folder (`server/owner.mjs`): whichever process starts first serves the UI and runs every write;
+  others forward tool calls to it. Writes go through `engine/workspace.mjs` `change` (validated, undoable); the user
+  saves versions. Nothing restricts direct edits: checks run on the state, and `plinth check` (`engine/check.mjs`)
+  runs in the user's deploy workflow.
+- Releases: bump `version` in `package.json` and `.claude-plugin/plugin.json`, then tag `v<version>` and push the tag.
+  The managed deploy workflow runs `npx -y github:jiashengchen610/Plinth#v<version> check`, so the tag must exist
+  before any workspace publishes with that version.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
 - After changing `engine/` or `server/`, run `npm test` (20 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
@@ -30,5 +37,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   from a checkout; its tools are named `mcp__plugin_plinth_plinth__<tool>` and `--allowedTools mcp__plugin_plinth_plinth`
   allows them all; the prompt can come from stdin; a nested run works after deleting `CLAUDECODE` from the env;
   `--resume <session_id>` continues a session. On Windows `claude` is a native exe (spawn without a shell).
+  `--allowedTools` with single tool names (`mcp__plugin_plinth_plinth__review_changes`) plus `--disallowedTools` for
+  the writing tools gives a read-only run (the review at publish).
+- shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
+  `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,
   Components, Do's and Don'ts; no multi-brand or mode support, hence one composed file per brand.

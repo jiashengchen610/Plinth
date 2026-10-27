@@ -21,12 +21,20 @@ export type CheckName = "contrast" | "distinct" | "hardcoded" | "structure";
 export type StructureResult = { brand: string; token: string; layer: string; kind: "upward" | "unlinked"; detail: string; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type Exception = { check: CheckName; key: string; reason?: string; at?: string };
 export type Op = { op: "set" | "delete" | "rename" | "write"; file: string; path?: string; to?: string; mode?: string; value?: unknown; type?: string; description?: string; alpha?: number; content?: string };
-export type Change = {
-  id: string; title: string; rationale: string; by: string; createdAt: string; ops: Op[];
-  preview: { files: string[]; failingAfter: number; issues: string[]; notes?: string[]; distinctFailures?: DistinctResult[]; contrastChanges: (ContrastResult & { before: number | null })[] };
+/** What a change reports back. Reminders never stop it. */
+export type ChangeResult = {
+  title: string; files: string[];
+  reminders: {
+    contrastFailing: { brand: string; mode: string; fg: string; bg: string; before: number | null; after: number | null; min: number }[];
+    contrastFixed: { brand: string; mode: string; fg: string; bg: string; before: number | null; after: number | null }[];
+    lookAlike: { brand: string; mode: string; a: string; b: string; reason: string | null }[];
+    guidelineNotes: string[];
+  };
 };
-export type Version = { short: string; sha: string; date: string; subject: string; outside?: boolean };
-export type OutsideChange = { file: string; status: "modified" | "added" | "deleted" };
+export type Version = { short: string; sha: string; date: string; subject: string; published?: boolean };
+export type UnsavedFile = { file: string; status: "modified" | "added" | "deleted" };
+export type LastChange = { title: string; by: string; at: string; files: string[] };
+export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null };
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
@@ -37,6 +45,7 @@ export type PublishStep = { name: string; ok: boolean; detail: unknown };
 export type PublishResult = {
   published: boolean; dryRun?: boolean; stoppedAt?: string; error?: string; next?: string; note?: string; version?: string; at?: string;
   github?: string; actions?: string; storybook?: string | null; steps: PublishStep[]; tests?: TestResult; pagesBlocked?: "plan" | null; repo?: string;
+  blocking?: { kind: string; detail: string }[]; unsaved?: UnsavedFile[];
 };
 export type PublishState = { running: boolean; steps: PublishStep[]; result: PublishResult | null; startedAt: string | null };
 export type PublishDefaults = {
@@ -47,11 +56,12 @@ export type PublishDefaults = {
 };
 export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
-export type ChatState = { messages: ChatMessage[]; working: boolean; terminal?: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
+export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
 export type ChatImage = { type: string; data: string; name: string };
 export type State = {
   rev: number; exists: boolean; workspace: string;
   chat: ChatState | null;
+  review: ReviewState | null;
   deps: { installed: boolean; installing: boolean; error: string | null };
   tests: { running: boolean; last: TestResult | null };
   publish: PublishState;
@@ -68,8 +78,8 @@ export type State = {
   };
   components: Component[];
   guidelines: { shared: string | null; writing: string | null; brands: Record<string, string | null> };
-  pending: Change[];
-  outside: OutsideChange[];
+  unsaved: UnsavedFile[];
+  lastChange: LastChange | null;
   layers: { id: string; name?: string; files: string[] }[] | null;
   upgradeAvailable: boolean;
   versions: Version[];
@@ -87,25 +97,24 @@ export const api = {
   resetChat: () => call<{ reset: boolean }>("POST", "/api/chat/reset"),
   install: () => call<{ started: boolean }>("POST", "/api/install"),
   runTests: () => call<{ started: boolean }>("POST", "/api/tests"),
-  apply: (id: string) => call<{ version: string }>("POST", `/api/changes/${id}/apply`),
-  discard: (id: string) => call<unknown>("POST", `/api/changes/${id}/discard`),
+  change: (title: string, ops: Op[]) => call<ChangeResult>("POST", "/api/change", { title, ops }),
+  undo: () => call<{ undone: string; files: string[] }>("POST", "/api/undo"),
+  save: (message: string) => call<{ version: string | null; message?: string }>("POST", "/api/save", { message }),
+  discardUnsaved: () => call<{ discarded: string[] }>("POST", "/api/discard"),
+  review: () => call<{ started: boolean }>("POST", "/api/review"),
   restore: (sha: string) => call<{ version: string }>("POST", `/api/versions/${sha}/restore`),
-  fixContrast: () => call<{ id?: string; message?: string }>("POST", "/api/contrast-fixes"),
-  acceptException: (check: CheckName, key: string, reason: string) => call<{ version: string }>("POST", "/api/exceptions", { check, key, reason }),
-  removeException: (check: CheckName, key: string) => call<{ version: string }>("POST", "/api/exceptions/remove", { check, key }),
+  fixContrast: () => call<Partial<ChangeResult> & { message?: string; fixes?: string[] }>("POST", "/api/contrast-fixes"),
+  acceptException: (check: CheckName, key: string, reason: string) => call<{ accepted: string }>("POST", "/api/exceptions", { check, key, reason }),
+  removeException: (check: CheckName, key: string) => call<{ removed: string }>("POST", "/api/exceptions/remove", { check, key }),
   startStorybook: () => call<{ url?: string; error?: string; next?: string }>("POST", "/api/storybook/start"),
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
   publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
-  previewDraft: (ops: Op[]) => call<Change["preview"]>("POST", "/api/preview", { ops }),
-  createChange: (title: string, ops: Op[], rationale = "") => call<{ id: string; preview: Change["preview"] }>("POST", "/api/changes", { title, ops, rationale }),
-  upgrade: () => call<{ id?: string; message?: string }>("POST", "/api/upgrade"),
-  linkPalette: () => call<{ id?: string; message?: string; unmatched?: unknown[] }>("POST", "/api/link-palette"),
-  addPaletteColor: (name: string, color: string) => call<{ id: string; name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),
-  recordOutside: (note: string) => call<{ version: string | null }>("POST", "/api/outside/record", { note }),
-  discardOutside: () => call<{ discarded: string[] }>("POST", "/api/outside/discard"),
+  upgrade: () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade"),
+  linkPalette: () => call<Partial<ChangeResult> & { message?: string; linked?: string[]; unmatched?: unknown[] }>("POST", "/api/link-palette"),
+  addPaletteColor: (name: string, color: string) => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

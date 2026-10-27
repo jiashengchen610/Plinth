@@ -1,5 +1,6 @@
 // MCP tool definitions. Each tool: { name, description, inputSchema, run(args, ctx) → JSON-able result }.
-// ctx: see context.mjs ({ root, ui, deps, storybook, tests, publish, notify }).
+// ctx: see context.mjs ({ root, ui, deps, storybook, tests, publish, notify }). Tools run in the process that owns
+// the workspace (owner.mjs); other processes forward their calls to it.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import * as ws from "../engine/workspace.mjs";
@@ -17,11 +18,11 @@ const OP_SCHEMA = {
   type: "object",
   properties: {
     op: { type: "string", enum: ["set", "delete", "rename", "write"] },
-    file: { type: "string", description: "Workspace-relative path, e.g. brands/acme/tokens.json, tokens/base.tokens.json, DESIGN.md, brands/acme/DESIGN.md, WRITING.md, design-system.json, src/components/<name>/<file>" },
+    file: { type: "string", description: "Workspace-relative path, e.g. brands/acme/tokens.json, tokens/base.tokens.json, tokens/components/button.tokens.json, DESIGN.md, brands/acme/DESIGN.md, WRITING.md, design-system.json, src/components/<name>/<file>" },
     path: { type: "string", description: "Token path inside a token file, e.g. color/primary (set, delete, rename)" },
     to: { type: "string", description: "New token path (rename). Aliases in token files and utilities in components (bg-old → bg-new) are rewritten." },
     mode: { type: "string", description: "Mode for set: omit for the default (light) value, or e.g. dark" },
-    value: { description: "Token value for set: CSS color string (oklch preferred), dimension object {value,unit}, or DTCG composite" },
+    value: { description: "Token value for set: a reference like {color.red.600} (preferred for colors), a CSS color string (oklch preferred), a dimension object {value,unit}, or a DTCG composite" },
     type: { type: "string", description: "DTCG $type when creating a token (color, dimension, shadow, typography, …)" },
     description: { type: "string" },
     alpha: { type: "number", description: "Opacity 0..1 of a color token (set), for `mode` or the light value; 1 removes it" },
@@ -44,23 +45,28 @@ const failures = (r) => ({
   exceptions: r.exceptions,
 });
 
+/** Write ops as one change and say what happened, for Claude to relay. */
+const write = (ctx, args) => {
+  const r = ws.change(ctx.root, args);
+  ctx.notify();
+  return { ...r, written: true, undo: "The user can press Undo in the UI, or ask you (tool: undo).", unsaved: ws.unsavedChanges(ctx.root).length };
+};
+
 export const TOOLS = [
   {
     name: "status",
-    description: "Summary of the design system in this folder: brands, components, pending changes, latest versions, quality gate, dependencies, last test run, and the local UI and Storybook URLs. Call this first.",
+    description: "Summary of the design system in this folder: brands, components, unsaved changes, the last change (what undo would take back), latest versions, checks, dependencies, last test run, and the local UI and Storybook URLs. Call this first.",
     inputSchema: { type: "object", properties: {} },
     run: async (_a, ctx) => {
       if (!existsSync(join(ctx.root, "design-system.json"))) return { workspace: ctx.root, exists: false, next: "Call create_design_system to scaffold a new design system here.", ui: ctx.ui.url };
       const checks = runChecks(ctx.root);
-      if (ctx.storybook.refresh) await ctx.storybook.refresh();
-      const outside = ws.outsideChanges(ctx.root);
       const config = loadConfig(ctx.root);
-      return { exists: true, ...ws.summary(ctx.root), layers: config.layers?.map((l) => l.id) ?? null, upgradeAvailable: !Array.isArray(config.layers), gate: checks.gate, checks: checks.summary, warnings: checks.warnings, outsideEdits: outside.length ? { files: outside, next: "Files changed outside Plinth. Tell the user; they record or discard them (UI banner, or record_outside_edits when they ask). Publish and restore wait until then." } : null, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
+      return { exists: true, ...ws.summary(ctx.root), layers: config.layers?.map((l) => l.id) ?? null, upgradeAvailable: !Array.isArray(config.layers), gate: checks.gate, checks: checks.summary, warnings: checks.warnings, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
     },
   },
   {
     name: "create_design_system",
-    description: "Scaffold a new design system in the current folder from the template (shadcn/ui base with status colors, Storybook, GitHub Pages workflow with tests) and make the first commit. Then customise it with propose_change.",
+    description: "Scaffold a new design system in the current folder from the template (shadcn/ui base with status colors, Storybook, GitHub Pages workflow with tests) and make the first version. Then customise it with change.",
     inputSchema: {
       type: "object",
       properties: {
@@ -70,7 +76,7 @@ export const TOOLS = [
       },
       required: ["name", "brand", "context"],
     },
-    run: (a, ctx) => ({ version: ws.initWorkspace(ctx.root, { name: a.name, brand: a.brand, context: a.context, naming: "shadcn" }), next: "Call install_dependencies, then propose_change to set the brand's tokens and guidelines." }),
+    run: (a, ctx) => { const v = ws.initWorkspace(ctx.root, { name: a.name, brand: a.brand, context: a.context, naming: "shadcn" }); ctx.notify(); return { version: v, next: "Call install_dependencies, then change to set the brand's tokens and guidelines." }; },
   },
   {
     name: "install_dependencies",
@@ -107,108 +113,60 @@ export const TOOLS = [
     run: (_a, ctx) => { requireWorkspace(ctx.root); return ws.listComponents(ctx.root); },
   },
   {
-    name: "propose_change",
-    description: "Queue a change for the user to review in the UI. Nothing is written until apply_change. Ops: set a token value (per mode), delete, rename (aliases and component utilities are rewritten), or write a whole file (guidelines, component files, design-system.json). Returns a preview: contrast before → after (failingAfter blocks publishing), role colors that would look alike (distinctFailures, advisory: point it out, the user may want it), and notes about guideline prose that still describes the old value (add the rewrite to the change).",
+    name: "change",
+    description: "Change the design system now: the files are written at once, CSS and fonts regenerate, and the user sees it in the UI immediately (they can undo it). Ops: set a token value (per mode, optionally its opacity), delete, rename (aliases and component utilities are rewritten), or write a whole file (guidelines, component files, design-system.json). Nothing is written if an op is invalid or the change would break a token reference. Returns reminders (they never block): contrast that fails after the change, contrast it fixed, role colors that look alike, and guideline prose that still describes an old value (fix that prose in a follow-up change). Read the guidelines first and keep the change consistent with them. Do not save a version: the user decides when.",
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Short imperative summary; becomes the commit message, e.g. 'Warm up the primary color'" },
-        rationale: { type: "string", description: "Why, in one or two sentences, for the reviewer" },
+        title: { type: "string", description: "Short imperative summary, shown in the UI and in Undo, e.g. 'Warm up the primary color'" },
         ops: { type: "array", items: OP_SCHEMA, minItems: 1 },
       },
       required: ["title", "ops"],
     },
-    run: (a, ctx) => { requireWorkspace(ctx.root); const c = ws.propose(ctx.root, a); ctx.notify(); return { id: c.id, preview: c.preview, review: `${ctx.ui.url}#changes` }; },
+    run: (a, ctx) => { requireWorkspace(ctx.root); return write(ctx, { title: a.title, ops: a.ops, by: "claude" }); },
   },
   {
-    name: "list_pending_changes",
-    description: "Changes waiting for review.",
+    name: "undo",
+    description: "Take back the newest change that has not been undone yet (any change: from you, from the UI, or from the engine). Refuses if one of its files was edited since. Saved versions are not affected; use restore_version to go back further.",
     inputSchema: { type: "object", properties: {} },
-    run: (_a, ctx) => ws.listPending(ctx.root).map(({ id, title, rationale, by, createdAt, ops, preview }) => ({ id, title, rationale, by, createdAt, ops: ops.length, files: preview.files, failingAfter: preview.failingAfter, distinctFailures: preview.distinctFailures?.length ?? 0, notes: preview.notes ?? [] })),
+    run: (_a, ctx) => { requireWorkspace(ctx.root); const r = ws.undo(ctx.root); ctx.notify(); return { ...r, next: ws.lastChange(ctx.root)?.title ?? null }; },
   },
   {
-    name: "get_change",
-    description: "One pending change in full, to review it before it is applied: every token it touches with the value before and after (as written and resolved, per brand and mode), other files it writes, and the preview's reminders (contrast that fails after, look-alike roles, guideline notes, broken references). Without id: the newest pending change.",
-    inputSchema: { type: "object", properties: { id: { type: "string" } } },
-    run: (a, ctx) => {
-      requireWorkspace(ctx.root);
-      const list = ws.listPending(ctx.root);
-      const c = a.id ? list.find((x) => x.id === a.id) : list.at(-1);
-      if (!c) return { message: "No pending change." };
-      const diff = ws.changeDiff(ctx.root, c.ops);
-      const p = c.preview;
-      return {
-        id: c.id, title: c.title, by: c.by, rationale: c.rationale || undefined, edits: c.ops.length,
-        tokens: diff.tokens, files: diff.files,
-        reminders: {
-          contrastFailingAfter: p.contrastChanges.filter((x) => !x.pass && !x.accepted).map(({ brand, mode, bg, fg, before, ratio, min }) => ({ brand, mode, fg, bg, before, after: ratio, min })),
-          contrastFixed: p.contrastChanges.filter((x) => x.pass && x.before !== null && x.before < x.min).map(({ brand, mode, bg, fg, before, ratio }) => ({ brand, mode, fg, bg, before, after: ratio })),
-          lookAlike: (p.distinctFailures ?? []).map(({ brand, mode, a: x, b, reason }) => ({ brand, mode, a: x, b, reason })),
-          guidelineNotes: p.notes ?? [],
-          brokenReferences: p.issues,
-        },
-      };
-    },
-  },
-  {
-    name: "apply_change",
-    description: "Apply a pending change: write files, regenerate CSS and fonts, commit. Only call when the user approved it (in chat or by asking you to apply).",
-    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-    run: (a, ctx) => { requireWorkspace(ctx.root); const r = ws.apply(ctx.root, a.id); ctx.notify(); return r; },
-  },
-  {
-    name: "discard_change",
-    description: "Drop a pending change.",
-    inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-    run: (a, ctx) => { ws.discard(ctx.root, a.id); ctx.notify(); return { discarded: a.id }; },
-  },
-  {
-    name: "propose_palette_color",
-    description: "Add a color to the palette (bottom layer): from one color, the engine generates a full 50–950 scale shaped like Tailwind's, with the given color on its nearest step. Queued as a proposal. Then point semantic tokens at it, e.g. {color.brand-red.600}.",
+    name: "add_palette_color",
+    description: "Add a color to the palette (bottom layer): from one color, the engine generates a full 50–950 scale shaped like Tailwind's, with the given color on its nearest step. Written at once. Then point roles at it, e.g. {color.lacquer-red.600}.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Palette name, kebab-case, e.g. lacquer-red" }, color: { type: "string", description: "Any CSS color: #d42515, oklch(0.55 0.2 27) …" } }, required: ["name", "color"] },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
       const p = paletteColorOps(ctx.root, { name: a.name, value: a.color, templateDir: ws.TEMPLATE_DIR });
-      const c = ws.propose(ctx.root, { title: `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`, rationale: `${a.color} sits on step ${p.anchor}; the other steps follow Tailwind's lightness curve with the same hue.`, ops: p.ops });
-      ctx.notify();
-      return { id: c.id, name: p.name, anchor: p.anchor, shades: p.shades, preview: c.preview };
+      const r = write(ctx, { title: `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`, ops: p.ops, by: "engine" });
+      return { ...r, name: p.name, anchor: p.anchor, shades: p.shades };
     },
   },
   {
-    name: "propose_upgrade",
-    description: "For a design system made before layers existed: propose the upgrade (Tailwind palette, component tokens, layer list; base components rewritten only if untouched). The user reviews it in Changes.",
+    name: "upgrade_to_layers",
+    description: "For a design system made before layers existed: upgrade it (Tailwind palette, component tokens, layer list; base components rewritten only if untouched). Written at once; undoable.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
       const p = upgradeProposal(ctx.root, ws.TEMPLATE_DIR);
       if (!p) return { message: "Already layered." };
-      const c = ws.propose(ctx.root, { title: p.title, rationale: p.rationale, ops: p.ops, by: "engine" });
-      ctx.notify();
-      return { id: c.id, kept: p.kept, preview: c.preview };
+      return { ...write(ctx, { title: p.title, ops: p.ops, by: "engine" }), kept: p.kept, about: p.rationale };
     },
   },
   {
-    name: "propose_link_to_palette",
-    description: "Point fixed semantic colors at the visually identical palette color (ΔE under 0.04), so they follow the palette. Colors without a close match are listed and left alone. Queued as a proposal.",
+    name: "link_to_palette",
+    description: "Point fixed role colors at the visually identical palette color (ΔE under 0.04), so they follow the palette. Colors without a close match are listed and left alone. Written at once; undoable.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
       const { ops, unmatched, reason } = linkToPaletteOps(ctx.root);
       if (!ops.length) return { message: reason ?? "Nothing to link.", unmatched };
-      const c = ws.propose(ctx.root, { title: `Link ${ops.length} color value${ops.length > 1 ? "s" : ""} to the palette`, rationale: ops.map((o) => o.why).join("; "), ops: ops.map(({ why, ...o }) => o), by: "engine" });
-      ctx.notify();
-      return { id: c.id, linked: ops.map((o) => o.why), unmatched };
+      return { ...write(ctx, { title: `Link ${ops.length} color value${ops.length > 1 ? "s" : ""} to the palette`, ops: ops.map(({ why, ...o }) => o), by: "engine" }), linked: ops.map((o) => o.why), unmatched };
     },
   },
   {
-    name: "record_outside_edits",
-    description: "Save files changed outside Plinth (by hand, another tool, or a Claude Code session with full permissions) as one version, after regenerating from them. Only when the user asks; they can also discard them in the UI. Run run_checks afterwards.",
-    inputSchema: { type: "object", properties: { note: { type: "string", description: "Why, in a few words; added to the version name" } } },
-    run: (a, ctx) => { requireWorkspace(ctx.root); const r = ws.recordOutside(ctx.root, a.note ?? ""); ctx.notify(); return r; },
-  },
-  {
     name: "run_checks",
-    description: "Deterministic quality checks: token consistency across brands, WCAG contrast for every brand × mode, hardcoded values in components (these three gate publishing), plus an advisory list of role colors that look alike (distinctFailures: mention them to the user; sharing a color on purpose is allowed). Returns failures with details and the exceptions the user accepted. Fast; run after every applied change.",
+    description: "Deterministic checks: token references (broken ones break the CSS and stop publishing), WCAG contrast for every brand × mode, role colors that look alike, layer structure, and hardcoded values in components. Everything except broken references is a reminder; hardcoded values in components also stop the deploy on GitHub. Fast.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
@@ -218,33 +176,43 @@ export const TOOLS = [
   },
   {
     name: "run_tests",
-    description: "The workspace's own tests: TypeScript check and every story's interaction and accessibility tests in a browser (npm run typecheck, npm test). Takes about a minute; needs install_dependencies. Run after creating or changing a component, and before publish.",
+    description: "The workspace's own tests: TypeScript check and every story's interaction and accessibility tests in a browser (npm run typecheck, npm test). Takes about a minute; needs install_dependencies. Run after creating or changing a component.",
     inputSchema: { type: "object", properties: {} },
     run: async (_a, ctx) => { requireWorkspace(ctx.root); return ctx.tests.run(); },
   },
   {
-    name: "propose_contrast_fixes",
-    description: "Compute deterministic fixes for every failing contrast pair (adjusts the foreground's OKLCH lightness, keeps hue) and queue them as one pending change.",
+    name: "fix_contrast",
+    description: "Fix every failing contrast pair deterministically (moves the foreground along its palette hue, or adjusts OKLCH lightness for fixed values; never edits the palette). Written at once as one change; undoable.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
       const { contrast } = runChecks(ctx.root);
       const { ops, skipped } = contrastFixes(contrast);
       if (!ops.length) return { message: "Nothing to fix.", skipped };
-      const c = ws.propose(ctx.root, { title: `Fix contrast (${ops.length} pair${ops.length > 1 ? "s" : ""})`, rationale: ops.map((o) => o.why).join("; "), ops: ops.map(({ why, ...o }) => o), by: "engine" });
-      ctx.notify();
-      return { id: c.id, fixes: ops.map((o) => o.why), skipped };
+      return { ...write(ctx, { title: `Fix contrast (${ops.length} pair${ops.length > 1 ? "s" : ""})`, ops: ops.map(({ why, ...o }) => o), by: "engine" }), fixes: ops.map((o) => o.why), skipped };
     },
   },
   {
+    name: "review_changes",
+    description: "Everything that changed since the last publish (or since the first version), unsaved work included: every token whose value differs, per brand and mode, before → after as written and as resolved, plus the other files that changed. For reviewing consistency before a publish.",
+    inputSchema: { type: "object", properties: {} },
+    run: (_a, ctx) => { requireWorkspace(ctx.root); return ws.changesSince(ctx.root); },
+  },
+  {
+    name: "save_version",
+    description: "Save every unsaved change as one version (a git commit). Only when the user asks you to; they usually save from the UI.",
+    inputSchema: { type: "object", properties: { message: { type: "string", description: "What changed, in a few words" } }, required: ["message"] },
+    run: (a, ctx) => { requireWorkspace(ctx.root); const r = ws.saveVersion(ctx.root, a.message); ctx.notify(); return r; },
+  },
+  {
     name: "list_versions",
-    description: "Version history (one commit per applied change).",
+    description: "Saved versions, newest first (published: already on GitHub), and the files changed since the last one.",
     inputSchema: { type: "object", properties: { limit: { type: "number" } } },
-    run: (a, ctx) => ws.versions(ctx.root, a.limit ?? 30),
+    run: (a, ctx) => ({ unsaved: ws.unsavedChanges(ctx.root), versions: ws.versions(ctx.root, a.limit ?? 30) }),
   },
   {
     name: "restore_version",
-    description: "Return the design system to an earlier version. Creates a new commit; history is kept.",
+    description: "Return the design system to an earlier version. Creates a new version; history is kept. Refuses while there are unsaved changes.",
     inputSchema: { type: "object", properties: { version: { type: "string", description: "Short or full commit id from list_versions" } }, required: ["version"] },
     run: (a, ctx) => { requireWorkspace(ctx.root); const v = ws.restore(ctx.root, a.version); ctx.notify(); return { version: v }; },
   },
@@ -262,13 +230,13 @@ export const TOOLS = [
   },
   {
     name: "open_ui",
-    description: "URL of the local Plinth UI (tokens, components, guidelines, pending changes, checks, versions, publish). Give it to the user.",
+    description: "URL of the local Plinth UI (tokens, components, guidelines, checks, history, publish). Give it to the user.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => ({ url: ctx.ui.url }),
   },
   {
     name: "publish",
-    description: "Publish: run the checks and the tests, write exports/<brand>/DESIGN.md, commit, push to GitHub (creates the repo on first publish) and enable GitHub Pages for Storybook. Requires the GitHub CLI signed in. Only call when the user asked to publish; they can also press Publish in the UI.",
+    description: "Publish saved versions: run the checks the deploy runs and the tests, write exports/<brand>/DESIGN.md, push to GitHub (creates the repo on first publish) and enable GitHub Pages for Storybook. Requires saved work (no unsaved changes) and the GitHub CLI signed in. Only call when the user asked to publish; they can also press Publish in the UI.",
     inputSchema: {
       type: "object",
       properties: {

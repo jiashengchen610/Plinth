@@ -76,15 +76,16 @@ test("contrast: text on a tint of its own color is checked like the browser test
   ws.initWorkspace(root, { name: "Tint", brand: "acme", context: "saas-dashboard" });
   // The red a real session chose: passes on the page, fails on its own 10% tint (axe measured 4.28 on that brand).
   // Button and Badge draw destructive text on destructive at 10% through their component tokens.
-  const c = ws.propose(root, { title: "Brighter red", ops: [{ op: "set", file: "brands/acme/tokens.json", path: "color/destructive", value: "#d42515" }] });
-  assert.equal(c.preview.failingAfter, 2, "the proposal preview sees both components");
-  ws.apply(root, c.id);
+  const brighter = [{ op: "set", file: "brands/acme/tokens.json", path: "color/destructive", value: "#d42515" }];
+  assert.equal(ws.previewOps(root, brighter).failingAfter, 2, "the preview sees both components");
+  const c = ws.change(root, { title: "Brighter red", ops: brighter });
+  assert.equal(c.reminders.contrastFailing.length, 2, "and so do the change's reminders");
   const failing = checkContrast(root).filter((r) => !r.pass);
   assert.deepEqual(failing.map((r) => `${r.mode} ${r.fg} on ${r.bg}`).sort(), ["default badge-destructive-foreground on badge-destructive-background", "default button-destructive-foreground on button-destructive-background"]);
   assert.ok(failing.every((r) => r.ratio > 4 && r.ratio < 4.5 && r.fgToken === "color/destructive"), JSON.stringify(failing.map((r) => [r.ratio, r.fgToken])));
   const { ops } = contrastFixes(checkContrast(root));
   assert.equal(ops.length, 1, "one fix to the semantic color serves both components");
-  ws.apply(root, ws.propose(root, { title: "Fix", ops: ops.map(({ why, ...o }) => o) }).id);
+  ws.change(root, { title: "Fix", ops: ops.map(({ why, ...o }) => o) });
   assert.ok(checkContrast(root).every((r) => r.pass), "after the fix every pair passes, the tints included");
 
   // Components written by hand with a Tailwind opacity modifier are read from the source.
@@ -102,12 +103,12 @@ test("palette: a color becomes a Tailwind-shaped scale; fixes move along the pal
   const p = paletteColorOps(root, { name: "Lacquer Red", value: "#c8102e" });
   assert.equal(p.name, "lacquer-red");
   assert.equal(p.ops.length, 11);
-  ws.apply(root, ws.propose(root, { title: "Add lacquer red", ops: p.ops }).id);
+  ws.change(root, { title: "Add lacquer red", ops: p.ops });
   // A semantic role points at a step that is too light for white text; the fix moves it down the same hue.
-  ws.apply(root, ws.propose(root, { title: "Red primary", ops: [
+  ws.change(root, { title: "Red primary", ops: [
     { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.lacquer-red.400}" },
     { op: "set", file: "brands/acme/tokens.json", path: "color/primary-foreground", value: "{color.white}" },
-  ] }).id);
+  ] });
   const failing = checkContrast(root).filter((r) => !r.pass && r.mode === "default" && r.fg === "primary-foreground");
   assert.ok(failing.length, "white on lacquer-red-400 fails");
   const fix = contrastFixes(checkContrast(root)).ops.find((o) => o.path === "color/primary-foreground" || o.path === "color/primary");
@@ -118,26 +119,87 @@ test("palette: a color becomes a Tailwind-shaped scale; fixes move along the pal
   assert.match(css, /--primary: var\(--lacquer-red-400\)/);
 });
 
-test("previews: stacked on earlier pending changes; guideline notes follow references", async (t) => {
+test("changes: guideline notes follow references; undo goes back one change at a time", async (t) => {
   const ws = await import("../engine/workspace.mjs");
   const { paletteColorOps } = await import("../engine/palette.mjs");
-  const root = join(mkdtempSync(join(tmpdir(), "plinth-stack-")), "ws");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-notes-")), "ws");
   t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
-  ws.initWorkspace(root, { name: "Stack", brand: "acme", context: "saas-dashboard" });
-  ws.apply(root, ws.propose(root, { title: "Prose", ops: [{ op: "write", file: "brands/acme/DESIGN.md", content: "# Acme\n\n## Colors\n\nA calm grey primary, neutral everywhere.\n" }] }).id);
+  ws.initWorkspace(root, { name: "Notes", brand: "acme", context: "saas-dashboard" });
+  ws.change(root, { title: "Prose", ops: [{ op: "write", file: "brands/acme/DESIGN.md", content: "# Acme\n\n## Colors\n\nA calm grey primary, neutral everywhere.\n" }] });
 
-  // A palette color, still pending, and a role that points at it: the second preview resolves the reference.
-  const pal = ws.propose(root, { title: "Add tea", ops: paletteColorOps(root, { name: "tea", value: "#2f5d50" }).ops });
-  const role = ws.propose(root, { title: "Tea primary", ops: [
+  // A palette color, then a role that points at it.
+  const pal = ws.change(root, { title: "Add tea", ops: paletteColorOps(root, { name: "tea", value: "#2f5d50" }).ops });
+  assert.equal(pal.reminders.guidelineNotes.length, 0, "adding palette steps no role uses says nothing about prose");
+  const role = ws.change(root, { title: "Tea primary", ops: [
     { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.tea.800}" },
     { op: "set", file: "brands/acme/tokens.json", path: "color/primary-foreground", value: "{color.white}" },
   ] });
-  assert.deepEqual(role.preview.issues, [], "no reference to nothing");
-  assert.equal(role.preview.failingAfter, 0, JSON.stringify(role.preview.contrastChanges.filter((c) => !c.pass)));
-  assert.equal(role.preview.assumes, "earlier pending changes applied");
+  assert.deepEqual(role.reminders.contrastFailing, []);
   // The guideline says grey; the primary is now a green-teal through the palette reference.
-  assert.ok(role.preview.notes.some((n) => /says "(grey|neutral)" but primary is now (teal|green)/.test(n)), JSON.stringify(role.preview.notes));
-  assert.equal(pal.preview.notes.length, 0, "adding palette steps no role uses says nothing about prose");
+  assert.ok(role.reminders.guidelineNotes.some((n) => /says "(grey|neutral)" but primary is now (teal|green)/.test(n)), JSON.stringify(role.reminders.guidelineNotes));
+
+  // Picking the value a token already has writes nothing and leaves nothing to undo.
+  const same = ws.change(root, { title: "Same tea", ops: [{ op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.tea.800}" }] });
+  assert.equal(same.unchanged, true);
+
+  // Undo takes changes back newest first, down to the last saved version.
+  assert.equal(ws.lastChange(root).title, "Tea primary");
+  assert.equal(ws.undo(root).undone, "Tea primary");
+  assert.equal(ws.undo(root).undone, "Add tea");
+  assert.doesNotMatch(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--tea-500/);
+  assert.equal(ws.undo(root).undone, "Prose");
+  assert.deepEqual(ws.unsavedChanges(root), []);
+  assert.throws(() => ws.undo(root), /Nothing to undo/);
+});
+
+test("plinth check: blocks broken references, stale generated files and components outside the format", async (t) => {
+  const ws = await import("../engine/workspace.mjs");
+  const { checkRepo, checkMarkdown } = await import("../engine/check.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-check-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Check", brand: "acme", context: "saas-dashboard" });
+  assert.deepEqual(checkRepo(root).blocking, [], "a fresh workspace passes");
+
+  // A token edited by hand and committed without regenerating: the CSS no longer matches.
+  const tokensFile = join(root, "brands/acme/tokens.json");
+  const original = readFileSync(tokensFile, "utf8");
+  writeFileSync(tokensFile, original.replace('"{color.neutral.900}"', '"{color.red.700}"'));
+  assert.deepEqual(checkRepo(root).blocking.map((b) => b.kind), ["generated", "generated"], "tokens.css and the Foundations data are stale");
+  ws.regenerate(root);
+  assert.equal(checkRepo(root).ok, true, "regenerating fixes it");
+  // A reference to nothing.
+  writeFileSync(tokensFile, original.replace('"{color.neutral.900}"', '"{color.nope.700}"'));
+  assert.ok(checkRepo(root).blocking.some((b) => b.kind === "token" && /nope/.test(b.detail)));
+  writeFileSync(tokensFile, original);
+  ws.regenerate(root);
+
+  // A component written by hand: no story, no component tokens, a hex value.
+  mkdirSync(join(root, "src/components/banner"), { recursive: true });
+  writeFileSync(join(root, "src/components/banner/banner.tsx"), 'export const Banner = () => <div className="bg-[#ff0000] p-4">Sale</div>;\n');
+  const r = checkRepo(root);
+  // bg-[#ff0000] is both an arbitrary Tailwind value and a hex literal.
+  assert.deepEqual(r.blocking.map((b) => b.kind).sort(), ["component", "component", "hardcoded", "hardcoded"], JSON.stringify(r.blocking));
+  assert.match(checkMarkdown(r), /4 problems stop the deploy/);
+  // Accepting the hardcoded value as an exception is the escape hatch; structure has none.
+  ws.acceptException(root, { check: "hardcoded", key: "src/components/banner/banner.tsx|tw-arbitrary|bg-[#ff0000]", reason: "campaign" });
+  ws.acceptException(root, { check: "hardcoded", key: "src/components/banner/banner.tsx|hex-color|#ff0000", reason: "campaign" });
+  assert.deepEqual(checkRepo(root).blocking.map((b) => b.kind), ["component", "component"]);
+});
+
+test("deny rules from Plinth before 0.4 are removed; the user's own rules stay", async (t) => {
+  const ws = await import("../engine/workspace.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-deny-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Deny", brand: "acme", context: "saas-dashboard" });
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  const old = ["Edit(/tokens/**)", "Edit(/brands/**)", "Edit(/DESIGN.md)", "Edit(/WRITING.md)", "Edit(/design-system.json)", "Edit(/src/components/**)", "Edit(/src/styles/**)", "Edit(/src/foundations/**)", "Edit(/exports/**)", "Edit(/.storybook/**)", "Edit(/.github/**)", "Edit(/.claude/**)", "Edit(/.ds/**)"];
+  writeFileSync(join(root, ".claude/settings.json"), JSON.stringify({ permissions: { deny: old } }));
+  ws.regenerate(root);
+  assert.ok(!existsSync(join(root, ".claude")), "only Plinth's rules: the file and folder go");
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(join(root, ".claude/settings.json"), JSON.stringify({ permissions: { deny: [...old, "Bash(rm:*)"] }, model: "sonnet" }));
+  ws.regenerate(root);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8")), { permissions: { deny: ["Bash(rm:*)"] }, model: "sonnet" });
 });
 
 test("typography: a part edited by path lands in the composite, and old child entries take effect", async (t) => {
@@ -146,10 +208,10 @@ test("typography: a part edited by path lands in the composite, and old child en
   t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
   ws.initWorkspace(root, { name: "Type", brand: "acme", context: "saas-dashboard" });
   // What a real session did: set the parts that get_tokens lists as their own paths.
-  ws.apply(root, ws.propose(root, { title: "Serif headings", ops: [
+  ws.change(root, { title: "Serif headings", ops: [
     { op: "set", file: "tokens/base.tokens.json", path: "typography/display/font-family", value: ["Cormorant Garamond", "serif"] },
     { op: "set", file: "tokens/base.tokens.json", path: "typography/display/font-size", value: { value: 2.75, unit: "rem" } },
-  ] }).id);
+  ] });
   const base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
   assert.deepEqual(base.typography.display.$value.fontFamily, ["Cormorant Garamond", "serif"]);
   assert.equal(base.typography.display["font-family"], undefined, "no child token left behind");

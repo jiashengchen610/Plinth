@@ -15,15 +15,15 @@ function readImage(file: File): Promise<ChatImage> {
   });
 }
 
-/** "propose change" → "Proposing a change"; keeps the UI's language plain. */
+/** "change" → "Making a change"; keeps the UI's language plain. */
 const ACTIVITY: Record<string, string> = {
   status: "Looking at the design system", "get tokens": "Reading the tokens", "get guidelines": "Reading the guidelines", "list components": "Listing the components",
-  "propose change": "Writing a proposal", "apply change": "Applying a change", "run checks": "Running the checks", "run tests": "Running the tests",
-  "propose contrast fixes": "Computing contrast fixes", "create design system": "Creating the design system", "install dependencies": "Installing dependencies (a few minutes)",
+  change: "Making a change", undo: "Undoing the last change", "run checks": "Running the checks", "run tests": "Running the tests",
+  "fix contrast": "Fixing contrast", "add palette color": "Adding a palette color", "review changes": "Reading the changes", "save version": "Saving a version", "create design system": "Creating the design system", "install dependencies": "Installing dependencies (a few minutes)",
   "start storybook": "Starting Storybook", publish: "Publishing", "export design md": "Composing DESIGN.md", Read: "Looking at your image", Glob: "Looking through files", Grep: "Searching the files",
 };
 
-function Reply({ text }: { text: string }) {
+export function Reply({ text }: { text: string }) {
   // Claude's replies are rendered as Markdown with raw HTML escaped.
   const html = useMemo(() => (marked.parse(text.replace(/</g, "&lt;"), { async: false }) as string), [text]);
   return <div className="text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: html }} />;
@@ -64,14 +64,13 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
   const elapsed = chat?.activity ? Math.round((Date.now() - chat.activity.since) / 1000) : 0;
   const activity = chat?.activity?.tool ? ACTIVITY[chat.activity.tool] ?? `Working: ${chat.activity.tool}` : "Thinking";
   const cannotStart = chat?.error && /Could not start Claude Code/.test(chat.error);
-  const inTerminal = Boolean(chat?.terminal);
 
   return (
     <section aria-label="Chat with Claude" className={`flex min-h-0 flex-col rounded-xl border bg-card ${className}`}>
       <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
         <div>
           <h2 className="text-sm font-medium">Chat</h2>
-          <p className="text-xs text-muted-foreground">Describe what you want. Claude proposes; you review in Changes.</p>
+          <p className="text-xs text-muted-foreground">Describe what you want. Claude changes it at once; Undo takes it back.</p>
         </div>
         {messages.length > 0 && !working && (
           <Button size="sm" variant="ghost" onClick={() => api.resetChat().catch((e) => onError(e.message))} title="Start a new conversation. Earlier messages stay visible.">New thread</Button>
@@ -105,12 +104,6 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
         )}
       </ol>
 
-      {inTerminal && (
-        <div className="mx-4 mb-3 rounded-lg border border-dashed p-3 text-xs">
-          <p className="font-medium">This conversation is open in a terminal.</p>
-          <p className="mt-1 text-muted-foreground">Keep talking there (<code>plinth --terminal</code>); proposals still appear in Changes. Close it to chat here again, with the conversation intact.</p>
-        </div>
-      )}
 
       {cannotStart && (
         <div className="mx-4 mb-3 rounded-lg border border-dashed p-3 text-xs">
@@ -149,7 +142,7 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
         <div className="flex items-center justify-between gap-2">
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
           <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Attach image</Button>
-          <Button type="submit" size="sm" disabled={sending || working || inTerminal || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
+          <Button type="submit" size="sm" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
         </div>
       </form>
     </section>

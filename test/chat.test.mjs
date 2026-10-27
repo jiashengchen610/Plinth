@@ -18,7 +18,7 @@ const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAY
 
 test("chat: UI message → headless Claude Code → reply, resume, recovery", async (t) => {
   const ws = mkdtempSync(join(tmpdir(), "plinth-chat-"));
-  const log = join(ws, "fake-claude.json");
+  const log = join(ws, ".fake-claude.json"); // hidden: an empty folder may hold dotfiles
   const env = { ...process.env, PLINTH_WORKSPACE: ws, PLINTH_TOKEN: "tok", PLINTH_PORT: "4396", PLINTH_CLAUDE_BIN: FAKE, FAKE_CLAUDE_LOG: log, CLAUDECODE: "1" };
   const child = spawn(process.execPath, [SERVER], { env, stdio: ["pipe", "pipe", "pipe"] });
   t.after(() => { child.stdin.end(); rmSync(ws, { recursive: true, force: true }); });
@@ -49,7 +49,7 @@ test("chat: UI message → headless Claude Code → reply, resume, recovery", as
   assert.equal(s.chat.session, "sess-0001");
   assert.deepEqual(s.chat.messages[1].tools, ["status"]);
   const call = lastCall();
-  assert.equal(call.env.PLINTH_CHILD, "1");
+  assert.equal(call.env.PLINTH_WORKSPACE, ws, "the session's Plinth server finds this one through the workspace");
   assert.equal(call.env.CLAUDECODE, null, "nested-session guard is cleared");
   assert.equal(call.cwd.replace(/\\/g, "/").toLowerCase(), ws.replace(/\\/g, "/").toLowerCase());
   assert.ok(call.args.includes("--plugin-dir") && call.args.includes("--allowedTools"));
@@ -84,4 +84,21 @@ test("chat: UI message → headless Claude Code → reply, resume, recovery", as
   assert.equal((await api("api/chat", { text: "x", images: [{ type: "image/svg+xml", data: "PHN2Zz4=" }] })).status, 400);
   assert.equal((await fetch(new URL("api/chat", ui), { method: "POST", body: "{}" })).status, 401);
   assert.ok(existsSync(join(ws, ".ds", "chat.jsonl")));
+
+  // 7. The review at publish: one run on a cheap model, with the read-only tools only.
+  await request("tools/call", { name: "create_design_system", arguments: { name: "Review", brand: "acme", context: "saas-dashboard" } });
+  assert.equal((await api("api/review", {})).status, 200);
+  let review = null;
+  for (let i = 0; i < 400 && !review; i++) {
+    const st = await (await api("api/state")).json();
+    if (st.review && !st.review.running && st.review.result) review = st.review.result;
+    else await new Promise((res) => setTimeout(res, 50));
+  }
+  assert.ok(review?.ok, JSON.stringify(review));
+  assert.equal(review.text, "Echo: Review the changes since the last publish.");
+  const args = lastCall().args;
+  assert.equal(args[args.indexOf("--model") + 1], "haiku");
+  assert.ok(args.includes("mcp__plugin_plinth_plinth__review_changes"));
+  assert.ok(args.indexOf("mcp__plugin_plinth_plinth__change") > args.indexOf("--disallowedTools"), "the review cannot write");
+  assert.ok(!args.includes("--resume"), "the review is not part of the chat thread");
 });

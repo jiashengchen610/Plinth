@@ -32,7 +32,7 @@ export function AddPaletteColorDialog({ onClose, onDone, onError }: { onClose: (
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     setBusy(true);
-    try { const r = await api.addPaletteColor(slug(name), color); onDone(`${r.name} proposed: ${color} sits on step ${r.anchor}. Review it in Changes.`); }
+    try { const r = await api.addPaletteColor(slug(name), color); onDone(`${r.name} added: ${color} sits on step ${r.anchor}. Point a role at it from the palette picker.`); }
     catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
   return (
@@ -75,7 +75,7 @@ export function AddLayerDialog({ state, onClose, onDone, onError }: { state: Sta
       { op: "write", file: "design-system.json", content: JSON.stringify(config, null, 2) + "\n" },
     ];
     setBusy(true);
-    try { await api.createChange(`Add the ${name.trim()} layer`, ops, `A layer between ${layers[at - 1]?.name ?? layers[at - 1]?.id} and ${layers[at]?.name ?? layers[at]?.id ?? "the top"}. Tokens in it should point at its own layer or lower ones.`); onDone("Layer proposed. Review it in Changes; after applying, add tokens with + in its column."); }
+    try { await api.change(`Add the ${name.trim()} layer`, ops); onDone("Layer added. Add tokens to it with + in its column."); }
     catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
   return (
@@ -116,7 +116,7 @@ export function NewTokenDialog({ g, state, layerId, mode, onClose, onEdit }: { g
   };
   return (
     <Dialog title={`New color in ${layer?.name ?? layerId}`} onClose={onClose}>
-      <p className="text-sm text-muted-foreground">{layerId === "semantic" ? `Added to every brand (${state.brands.join(", ")}) so components can use it everywhere.` : `Stored in ${files[0] ?? "this layer"}.`} It goes into the draft.</p>
+      <p className="text-sm text-muted-foreground">{layerId === "semantic" ? `Added to every brand (${state.brands.join(", ")}) so components can use it everywhere.` : `Stored in ${files[0] ?? "this layer"}.`} Written at once; Undo takes it back.</p>
       <label className="flex flex-col gap-1 text-sm">Name
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="highlight" className="h-9 rounded-md border bg-background px-2 font-mono" />
       </label>
@@ -124,7 +124,7 @@ export function NewTokenDialog({ g, state, layerId, mode, onClose, onEdit }: { g
         {(["default", "dark"] as Mode[]).map((m) => <Button key={m} size="sm" variant={which === m ? "secondary" : "ghost"} onClick={() => setWhich(m)}>{m === "default" ? "Light" : "Dark"}{(m === "default" ? light : dark) ? " ✓" : ""}</Button>)}
       </div>
       <PalettePicker g={g} mode={which} current={((which === "default" ? light : dark) ?? "").replace(/[{}]/g, "").replace(/\./g, "/") || null} onPick={(t) => (which === "default" ? setLight(refOf(t.path)) : setDark(refOf(t.path)))} />
-      <div className="flex justify-end"><Button onClick={submit} disabled={!slug(name) || !light || !files.length}>Add to draft</Button></div>
+      <div className="flex justify-end"><Button onClick={submit} disabled={!slug(name) || !light || !files.length}>Add token</Button></div>
     </Dialog>
   );
 }

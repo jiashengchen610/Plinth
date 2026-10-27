@@ -8,8 +8,8 @@ import { AddLayerDialog, AddPaletteColorDialog, NewTokenDialog } from "@/views/T
 type Props = {
   state: State; brand: string; mode: Mode;
   selected: string | null; onSelect: (key: string | null) => void;
-  draft: Op[]; onEdit: (op: Op) => void;
-  onProposed: (message: string) => void; onError: (message: string) => void;
+  onEdit: (ops: Op[]) => void;
+  onDone: (message: string) => void; onError: (message: string) => void;
 };
 
 /** A swatch for a color token in a mode (checkerboard behind translucent colors). */
@@ -27,7 +27,7 @@ const groupOf = (t: TokenRow) => componentOf(t) ?? t.path.split("/")[0];
 const GROUP_ORDER = ["color", "colors", "radius", "shadow", "font", "typography"];
 const groupRank = (g: string) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? GROUP_ORDER.length : i; };
 
-export function TokenGraph({ state, brand, mode, selected, onSelect, draft, onEdit, onProposed, onError }: Props) {
+export function TokenGraph({ state, brand, mode, selected, onSelect, onEdit, onDone, onError }: Props) {
   const g: Graph = useMemo(() => buildGraph(state, brand), [state, brand]);
   const reminders = useMemo(() => remindersByToken(state, brand, mode), [state, brand, mode]);
   const [query, setQuery] = useState("");
@@ -45,7 +45,6 @@ export function TokenGraph({ state, brand, mode, selected, onSelect, draft, onEd
   }, [g, sel, mode]);
   const q = query.trim().toLowerCase();
   const matches = (t: TokenRow) => !q || label(t).toLowerCase().includes(q) || t.path.toLowerCase().includes(q);
-  const drafted = useMemo(() => new Set(draft.map((o) => o.path).filter(Boolean) as string[]), [draft]);
 
   const columns = useMemo(() => g.layers.map((layer) => ({ layer, rows: g.rows.filter((r) => (r.layerId ?? "semantic") === layer.id) })), [g]);
 
@@ -99,7 +98,6 @@ export function TokenGraph({ state, brand, mode, selected, onSelect, draft, onEd
     >
       {isColor(t) ? <Swatch row={t} mode={mode} /> : <span className="w-4 shrink-0 text-center font-mono text-[10px] text-muted-foreground">{t.type.slice(0, 1).toUpperCase()}</span>}
       <span className="min-w-0 truncate font-mono">{label(t).replace(/^(button|badge|card|input|label)-/, "")}</span>
-      {drafted.has(t.path) && <span className="rounded bg-info/15 px-1 text-[10px] text-info">draft</span>}
       {dot(t)}
     </button>
   );
@@ -212,7 +210,7 @@ export function TokenGraph({ state, brand, mode, selected, onSelect, draft, onEd
 
         <aside aria-label="Token details" className="min-w-0 xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:self-start xl:overflow-y-auto">
           {sel ? (
-            <TokenEditor g={g} state={state} brand={brand} mode={mode} row={sel} reminders={reminders} draft={draft} onEdit={onEdit} onSelect={onSelect} />
+            <TokenEditor g={g} state={state} brand={brand} mode={mode} row={sel} reminders={reminders} onEdit={(op) => onEdit([op])} onSelect={onSelect} />
           ) : (
             <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
               <h2 className="font-medium">Layers, bottom up</h2>
@@ -221,16 +219,16 @@ export function TokenGraph({ state, brand, mode, selected, onSelect, draft, onEd
                 <li><strong className="text-foreground">Roles</strong>: what a color is for (primary, muted, border). Each points at a palette step, per brand and mode.</li>
                 <li><strong className="text-foreground">Components</strong>: what each component uses. Each points at a role.</li>
               </ol>
-              <p className="text-muted-foreground">Change the lowest layer that matches what you want: a palette step changes every role on it; a role changes every component using it; a component token changes only that component. Edits collect in a draft; send it to Changes to review and apply.</p>
+              <p className="text-muted-foreground">Change the lowest layer that matches what you want: a palette step changes every role on it; a role changes every component using it; a component token changes only that component. Edits apply at once; Undo takes the last one back.</p>
               <p className="text-muted-foreground">Dots on tokens are reminders (red: contrast, amber: other). They never block anything.</p>
             </div>
           )}
         </aside>
       </div>
 
-      {dialog === "palette" && <AddPaletteColorDialog onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); onProposed(m); }} onError={onError} />}
-      {dialog === "layer" && <AddLayerDialog state={state} onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); onProposed(m); }} onError={onError} />}
-      {dialog && typeof dialog === "object" && <NewTokenDialog g={g} state={state} layerId={dialog.layer} mode={mode} onClose={() => setDialog(null)} onEdit={(ops) => { ops.forEach(onEdit); setDialog(null); }} />}
+      {dialog === "palette" && <AddPaletteColorDialog onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); onDone(m); }} onError={onError} />}
+      {dialog === "layer" && <AddLayerDialog state={state} onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); onDone(m); }} onError={onError} />}
+      {dialog && typeof dialog === "object" && <NewTokenDialog g={g} state={state} layerId={dialog.layer} mode={mode} onClose={() => setDialog(null)} onEdit={(ops) => { onEdit(ops); setDialog(null); }} />}
     </div>
   );
 }

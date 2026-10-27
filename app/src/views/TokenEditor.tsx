@@ -5,7 +5,7 @@ import { chainDown, componentOf, dependents, isColor, isPalette, label, paletteH
 
 type Props = {
   g: Graph; state: State; brand: string; mode: Mode; row: TokenRow;
-  reminders: Map<string, Reminder[]>; draft: Op[];
+  reminders: Map<string, Reminder[]>;
   onEdit: (op: Op) => void; onSelect: (key: string) => void;
 };
 
@@ -43,7 +43,7 @@ export function PalettePicker({ g, mode, current, onPick }: { g: Graph; mode: Mo
   );
 }
 
-export function TokenEditor({ g, state, brand, mode, row, reminders, draft, onEdit, onSelect }: Props) {
+export function TokenEditor({ g, state, brand, mode, row, reminders, onEdit, onSelect }: Props) {
   const [editMode, setEditMode] = useState<Mode>(mode);
   useEffect(() => setEditMode(mode), [mode, row.path]);
   const layerIndex = g.layers.findIndex((l) => l.id === (row.layerId ?? "semantic"));
@@ -56,7 +56,6 @@ export function TokenEditor({ g, state, brand, mode, row, reminders, draft, onEd
   const mine = reminders.get(row.name) ?? [];
   const target = targetIn(g, row, editMode);
   const modeOp = editMode === "default" ? undefined : editMode;
-  const inDraft = draft.filter((o) => o.path === row.path && (o.mode ?? "default") === (modeOp ?? "default"));
   const alpha = Math.round((valueIn(row, editMode)?.alpha ?? 1) * 100);
   const [opacity, setOpacity] = useState(alpha);
   useEffect(() => setOpacity(alpha), [alpha, row.path, editMode]);
@@ -135,7 +134,6 @@ export function TokenEditor({ g, state, brand, mode, row, reminders, draft, onEd
               </div>
             )}
           </div>
-          {inDraft.length > 0 && <p className="text-xs text-info">In the draft: {inDraft.map((o) => (o.value !== undefined ? `→ ${String(o.value).replace(/[{}]/g, "").replace(/^color\./, "").replace(/\./g, "-")}` : `opacity ${Math.round((o.alpha ?? 1) * 100)}%`)).join(", ")}</p>}
 
           <div role="tablist" className="flex gap-1">
             {options.length > 0 && <button type="button" role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")} className={`rounded px-2 py-0.5 text-xs ${tab === "roles" ? "bg-secondary font-medium" : "text-muted-foreground"}`}>Point at a role</button>}
@@ -176,7 +174,7 @@ export function TokenEditor({ g, state, brand, mode, row, reminders, draft, onEd
               <span className="w-9 text-right tabular-nums">{opacity}%</span>
             </label>
           )}
-          <p className="text-[11px] text-muted-foreground">Edits go into the draft at the top of the page. Nothing is written until you send the draft to Changes and apply it.</p>
+          <p className="text-[11px] text-muted-foreground">Edits apply at once. Undo at the top of the page takes the last one back; Save version keeps them.</p>
         </section>
       )}
     </div>

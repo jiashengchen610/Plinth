@@ -4,9 +4,10 @@ import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { runChecks } from "../engine/checks.mjs";
+import { checkRepo } from "../engine/check.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
-import { git, regenerate, outsideChanges, gitCommit, GENERATED } from "../engine/workspace.mjs";
+import { git, regenerate, unsavedChanges, gitCommit, GENERATED } from "../engine/workspace.mjs";
 import { findGh, githubStatus } from "./github.mjs";
 
 function gh(root, args) {
@@ -61,21 +62,23 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   const step = (name, detail, ok = true) => { const s = { name, ok, detail }; steps.push(s); onStep(s); return s; };
   const stop = (stoppedAt, extra) => ({ published: false, stoppedAt, steps, ...extra });
 
-  // 0. Only reviewed work is published: edits made outside Plinth are recorded or discarded first.
-  const outside = outsideChanges(root);
-  if (outside.length) {
-    step("outside edits", outside.map((o) => o.file), false);
-    return stop("outside edits", { outside, error: `${outside.length} file(s) changed outside Plinth.`, next: "Record them as a version (they are checked like any change) or discard them, then publish again." });
+  // 0. Publishing pushes saved versions: unsaved work is saved (or discarded) first, by the user.
+  const generated = (f) => GENERATED.some((g) => f === g || f.startsWith(`${g}/`)) || f.startsWith("exports/");
+  const unsaved = unsavedChanges(root).filter((c) => !generated(c.file));
+  if (unsaved.length) {
+    step("unsaved changes", unsaved.map((o) => o.file), false);
+    return stop("unsaved", { unsaved, error: `${unsaved.length} unsaved change${unsaved.length > 1 ? "s" : ""}.`, next: "Save them as a version (or discard them), then publish again." });
   }
 
-  // 1. Deterministic checks
+  // 1. The same checks the deploy workflow runs (plinth check): broken token references and components outside the
+  //    component format stop here, so they never reach GitHub. Design findings are reminders.
   regenerate(root);
   const checks = runChecks(root);
-  if (!checks.gate) {
-    step("checks", checks.summary, false);
-    return stop("checks", { summary: checks.summary, tokenIssues: checks.tokenIssues, next: "These token problems break the generated CSS (a reference to a token that does not exist, a cycle, or a brand missing tokens). Fix them, then publish again." });
+  const repoCheck = checkRepo(root);
+  if (!repoCheck.ok) {
+    step("checks", repoCheck.blocking.map((b) => b.detail), false);
+    return stop("checks", { blocking: repoCheck.blocking, tokenIssues: checks.tokenIssues, next: "Fix these first (ask Claude in the chat): GitHub would refuse to deploy them. Then publish again." });
   }
-  // Design findings are reminders: listed with the result, never a reason to stop.
   step("checks", { ...checks.summary, exceptions: checks.exceptions.length, warnings: checks.warnings });
 
   // 2. Exports: one complete DESIGN.md per brand
@@ -137,6 +140,9 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   try {
     git(root, ["push", "-u", "origin", "HEAD"]);
     step("push", { remote: url, created });
+    // What the next review starts from, should the remote branch go away.
+    mkdirSync(join(root, ".ds"), { recursive: true });
+    writeFileSync(join(root, ".ds", "published.json"), JSON.stringify({ sha: git(root, ["rev-parse", "HEAD"]), at: new Date().toISOString() }) + "\n");
   } catch (e) {
     const msg = errText(e);
     step("push", msg, false);

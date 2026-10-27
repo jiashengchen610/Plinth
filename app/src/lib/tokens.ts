@@ -97,7 +97,7 @@ export function remindersByToken(state: State, brand: string, mode: Mode): Map<s
 /** Display name: palette steps as "red-500", the rest as their CSS name. */
 export const label = (t: TokenRow) => (isPalette(t) && t.path.startsWith("color/") ? t.path.slice(6).replace(/\//g, "-") : t.name);
 
-/** A short, human summary of an op for the draft bar. */
+/** A short, human summary of an op: the title of a change made in the UI. */
 export function describeOp(op: Op, g: Graph): string {
   const t = op.path ? g.byKey.get(op.path) : undefined;
   const name = t ? label(t) : op.path ?? op.file;
@@ -112,8 +112,3 @@ export function describeOp(op: Op, g: Graph): string {
   return `${op.op} ${name}`;
 }
 
-/** Add or replace an op in a draft: the latest edit of the same token, mode and field wins. */
-export function mergeOp(draft: Op[], op: Op): Op[] {
-  const same = (a: Op) => a.op === op.op && a.file === op.file && a.path === op.path && (a.mode ?? "default") === (op.mode ?? "default") && (a.value !== undefined) === (op.value !== undefined) && (a.alpha !== undefined) === (op.alpha !== undefined);
-  return [...draft.filter((a) => !same(a)), op];
-}

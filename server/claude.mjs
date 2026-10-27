@@ -1,10 +1,11 @@
-// Chat between the review UI and Claude: every message runs Claude Code headless (`claude -p`) in the
-// workspace, with the Plinth plugin loaded from this install and only the Plinth tools plus read-only file
-// tools allowed. Conversations resume by session id, so a thread keeps its context across messages and
-// server restarts. Nothing here calls a model API: Claude Code is the only driver, on the user's own plan.
+// Claude in the Plinth UI. Every chat message runs Claude Code headless (`claude -p`) in the workspace, with the
+// Plinth plugin loaded from this install and only the Plinth tools plus read-only file tools allowed. Conversations
+// resume by session id, so a thread keeps its context across messages and server restarts. The review at publish is
+// one more headless run, with read-only tools. Nothing here calls a model API: Claude Code is the only driver, on the
+// user's own plan.
 //
-// Writes are impossible from the chat by construction: Write/Edit/Bash are disallowed, so every change
-// still arrives as a proposal the user applies in the UI.
+// The chat changes the design system through the Plinth tools, which write at once; Write/Edit/Bash stay disallowed,
+// so every change goes through the engine's validation and can be undone in the UI.
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -18,51 +19,60 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_TEXT = 20000;
 const TOOL_PREFIX = /^mcp__plugin_plinth_plinth__|^mcp__plinth__/;
 
-const SYSTEM_PROMPT = `You are working for someone using the Plinth UI, a local web page with these tabs: Tokens, Components, Guidelines, Changes, Checks, History, and a Publish button. They read your answers in that page's chat, not in a terminal, and they may not know design or code.
+const SYSTEM_PROMPT = `You are working for someone using the Plinth UI, a local web page with these tabs: Tokens, Components, Guidelines, Checks, History, a Save version button, Undo, and Publish. They read your answers in that page's chat, not in a terminal, and they may not know design or code.
 
 Rules:
-- Use the Plinth tools for everything; you cannot edit files directly. Changes you propose wait in the Changes tab until the user presses Apply. Never call apply_change unless the user explicitly asks you to apply.
-- Answer in a few plain sentences. Say what you proposed and where to look ("waiting in Changes", "see Checks"). No code unless asked.
+- Use the Plinth tools for everything; you cannot edit files directly. When they ask for a change, make it with the change tool: it is written at once and they see it immediately. Read the guidelines first and keep the change consistent with them. Ask first only before deleting or renaming tokens or components, or restoring a version.
+- Do not save versions or publish unless they ask; they press Save version and Publish themselves.
+- Answer in a few plain sentences: what you changed, anything the tool reminded you of (contrast, look-alike colors, guideline prose), and that Undo takes it back. No code unless asked.
+- When a change's reminders report contrast failures, look-alike roles or guideline notes, fix them in a follow-up change when that matches what they asked, and say so.
 - If a message mentions an attached image path, Read it: it is an image the user attached.
-- When a proposal's preview reports contrast failures, distinct-color failures or prose notes, resolve them in the same or a follow-up proposal and tell the user.
 - The user can install dependencies, start Storybook, run tests, accept exceptions and publish from the UI; you can also do these with the tools when asked.`;
 
-const TERMINAL_PROMPT = `You are working with someone in a Claude Code terminal on a Plinth design system. The Plinth UI may also be open in their browser, showing the same pending changes (Changes tab), checks and history.
+const REVIEW_PROMPT = `You review a design system before it is published. You cannot change anything.
 
-Rules:
-- Change tokens, guidelines and components only through the Plinth tools (propose_change). Direct edits to those files are blocked in this folder.
-- After proposing, show the user what changes (old → new values, contrast before → after, any look-alike roles or guideline notes) and ask. Call apply_change only when they say to apply (here, or by pressing Apply in the UI).
-- Files changed outside Plinth are listed by status as outsideEdits; mention them, and record them only when the user asks.`;
+Call review_changes, then get_guidelines (get_tokens only if you need a value). Judge consistency: do the changes contradict each other, the guidelines (DESIGN.md, WRITING.md), or what a role is for (a destructive color on a default button, a success badge colored like a warning, controls rounder than containers…)? Contrast and look-alike numbers are already computed elsewhere; mention them only when they change what a role means.
 
-/** Tool restrictions of the UI chat: Plinth's tools and read-only file tools, nothing that writes. */
+Answer in the language the guidelines are written in, in plain sentences for someone who may not know design: at most five findings, each naming the token or file and why it matters; or say the changes look consistent. Finish with one line: "Changes reviewed: N." where N is the number of token values and files that changed.`;
+
+/** Tool restrictions of the UI chat: Plinth's tools and read-only file tools, nothing that writes files. */
 export const RESTRICTED_TOOLS = [
   "--allowedTools", "mcp__plugin_plinth_plinth", "mcp__plinth", "Read", "Glob", "Grep",
   "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch",
 ];
+// The review reads; it does not get the tools that write.
+const READ_TOOLS = ["review_changes", "get_guidelines", "get_tokens", "list_components"];
+const WRITE_TOOLS = ["change", "undo", "add_palette_color", "upgrade_to_layers", "link_to_palette", "fix_contrast", "save_version", "restore_version", "publish", "create_design_system", "install_dependencies"];
+const REVIEW_TOOLS = [
+  "--allowedTools", ...READ_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),
+  "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch", ...WRITE_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),
+];
 
-/** The conversation the UI chat and `plinth --terminal` share. */
+/** The UI chat's conversation. */
 export const sessionFile = (root) => join(root, ".ds", "claude-session.json");
-export const terminalLock = (root) => join(root, ".ds", "terminal.json");
-const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
-/** A `plinth --terminal` session holding the conversation, or null. */
-export function terminalHolder(root) {
-  try { const l = JSON.parse(readFileSync(terminalLock(root), "utf8")); return pidAlive(l.pid) ? l : null; } catch { return null; }
-}
+
+/** "mcp__plugin_plinth_plinth__change" → "change". */
+export const friendlyTool = (name) => name.replace(TOOL_PREFIX, "").replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "").replace(/_/g, " ");
 
 /**
- * Arguments for an interactive Claude Code session in the terminal. Strict (default) has the UI chat's
- * restrictions; full keeps every tool, with the workspace's .claude/settings.json still blocking direct edits
- * to design files.
+ * Run Claude Code headless in the workspace and stream its JSON lines to `onLine`. The session's Plinth server
+ * finds this one through .ds/server.json and forwards its tool calls here (owner.mjs).
  */
-export function terminalArgs({ full = false, resume = null } = {}) {
-  const args = ["--plugin-dir", PLUGIN_ROOT, ...(full ? [] : RESTRICTED_TOOLS), "--append-system-prompt", TERMINAL_PROMPT];
-  if (resume) args.push("--resume", resume);
-  if (process.env.PLINTH_MODEL) args.push("--model", process.env.PLINTH_MODEL);
-  return args;
+function spawnHeadless(root, bin, args, prompt) {
+  const env = { ...process.env, PLINTH_WORKSPACE: root };
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
+  // A JavaScript file as the binary (tests, or a wrapper) runs through this node.
+  const [cmd, pre] = /\.(mjs|cjs|js)$/i.test(bin) ? [process.execPath, [bin]] : [bin, []];
+  const proc = spawn(cmd, [...pre, "-p", "--output-format", "stream-json", "--verbose", "--plugin-dir", PLUGIN_ROOT, ...args], { cwd: root, env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  proc.stdin.end(prompt);
+  return proc;
 }
 
-/** "mcp__plugin_plinth_plinth__propose_change" → "propose change". */
-export const friendlyTool = (name) => name.replace(TOOL_PREFIX, "").replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "").replace(/_/g, " ");
+const killTree = (p) => {
+  if (process.platform === "win32") spawn("taskkill", ["/pid", String(p.pid), "/T", "/F"], { windowsHide: true });
+  else p.kill("SIGTERM");
+};
 
 export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAUDE_BIN || "claude" } = {}) {
   const dir = join(ctx.root, ".ds");
@@ -82,23 +92,10 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
   const saveSession = (id) => { if (!id || id === session.id) return; session = { id, at: new Date().toISOString() }; mkdirSync(dir, { recursive: true }); writeFileSync(sessionPath, JSON.stringify(session) + "\n"); };
 
   function spawnClaude(prompt, { fresh = false } = {}) {
-    const args = [
-      "-p", "--output-format", "stream-json", "--verbose",
-      "--plugin-dir", PLUGIN_ROOT,
-      ...RESTRICTED_TOOLS,
-      "--append-system-prompt", SYSTEM_PROMPT,
-    ];
+    const args = [...RESTRICTED_TOOLS, "--append-system-prompt", SYSTEM_PROMPT];
     if (session.id && !fresh) args.push("--resume", session.id);
     if (process.env.PLINTH_MODEL) args.push("--model", process.env.PLINTH_MODEL);
-    // The nested session gets its own Plinth server for the tools; long-lived processes stay with this one.
-    const env = { ...process.env, PLINTH_CHILD: "1", PLINTH_WORKSPACE: ctx.root, PLINTH_PARENT_URL: ctx.ui.url ?? "", PLINTH_PARENT_TOKEN: ctx.ui.token ?? "" };
-    delete env.CLAUDECODE;
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-    // A JavaScript file as the binary (tests, or a wrapper) runs through this node.
-    const [cmd, pre] = /\.(mjs|cjs|js)$/i.test(bin) ? [process.execPath, [bin]] : [bin, []];
-    const proc = spawn(cmd, [...pre, ...args], { cwd: ctx.root, env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    proc.stdin.end(prompt);
-    return proc;
+    return spawnHeadless(ctx.root, bin, args, prompt);
   }
 
   function runTurn(prompt) {
@@ -148,9 +145,6 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
     /** A message from the UI. Resolves when Claude's turn is complete. */
     async send({ text, images = [] }) {
       if (child) throw new Error("Claude is still working on the previous message. Wait or press Stop.");
-      if (terminalHolder(ctx.root)) throw new Error("This conversation is open in a terminal (plinth --terminal). Continue there, or close it to chat here.");
-      // The terminal may have moved the conversation on; pick up its latest session.
-      try { session = JSON.parse(readFileSync(sessionPath, "utf8")); } catch { /* none yet */ }
       const body = String(text ?? "").trim().slice(0, MAX_TEXT);
       if (!body && !images.length) throw new Error("Write a message or attach an image.");
       const id = randomUUID().slice(0, 8);
@@ -180,8 +174,7 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
       if (!child) return { stopped: false };
       const p = child;
       child = null;
-      if (process.platform === "win32") spawn("taskkill", ["/pid", String(p.pid), "/T", "/F"], { windowsHide: true });
-      else p.kill("SIGTERM");
+      killTree(p);
       return { stopped: true };
     },
 
@@ -192,11 +185,47 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
       return {
         messages: messages.slice(-200),
         working: Boolean(child),
-        terminal: Boolean(terminalHolder(ctx.root)),
         activity: activity ? { since: activity.since, tool: activity.tool, steps: activity.tools.length } : null,
         session: session.id ?? null,
         error: lastError,
       };
     },
+  };
+}
+
+/**
+ * The review at publish: one headless run that reads everything changed since the last publish and the guidelines
+ * and reports what does not fit. Suggestions only; it never blocks publishing. A cheap model is enough for this
+ * (PLINTH_REVIEW_MODEL, default haiku): on a test cart with three planted problems it found all three.
+ */
+export function createReview(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAUDE_BIN || "claude", model = process.env.PLINTH_REVIEW_MODEL || "haiku" } = {}) {
+  let running = null;
+  let last = null;
+  return {
+    state() { return { running: Boolean(running), since: running?.since ?? null, result: last }; },
+    start() {
+      if (running) return { started: false, running: true };
+      const since = Date.now();
+      const proc = spawnHeadless(ctx.root, bin, [...REVIEW_TOOLS, "--model", model, "--append-system-prompt", REVIEW_PROMPT], "Review the changes since the last publish.");
+      running = { proc, since };
+      bump();
+      let stderr = "", text = null, cost = null, isError = false;
+      const texts = [];
+      proc.stderr.on("data", (d) => (stderr += d));
+      createInterface({ input: proc.stdout }).on("line", (line) => {
+        let msg;
+        try { msg = JSON.parse(line); } catch { return; }
+        if (msg.type === "assistant") for (const b of msg.message?.content ?? []) if (b.type === "text" && b.text?.trim()) texts.push(b.text.trim());
+        if (msg.type === "result") { isError = Boolean(msg.is_error); text = isError ? (msg.result || msg.error || "unknown error") : (texts.at(-1) || msg.result || ""); cost = msg.total_cost_usd ?? null; }
+      });
+      const finish = (r) => { last = { ...r, model, at: new Date().toISOString(), seconds: Math.round((Date.now() - since) / 1000) }; running = null; bump(); };
+      proc.on("error", (e) => finish({ ok: false, error: `Could not start Claude Code (${bin}): ${e.message}` }));
+      proc.on("close", (code) => {
+        if (text !== null && !isError) finish({ ok: true, text: text.slice(0, MAX_TEXT), cost });
+        else finish({ ok: false, error: text ?? `Claude Code exited (${code}). ${stderr.trim().split("\n").slice(-3).join(" ")}` });
+      });
+      return { started: true };
+    },
+    stop() { if (running) { killTree(running.proc); running = null; } },
   };
 }

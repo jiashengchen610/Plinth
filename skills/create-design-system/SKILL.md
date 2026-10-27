@@ -1,7 +1,7 @@
 ---
 name: create-design-system
-description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools, with every step reviewed by the user before it is written."
-version: 0.2.0
+description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools. Each step is written at once and shows up in the UI; the user can undo it and decides when to save a version."
+version: 0.3.0
 ---
 
 # Create a design system
@@ -9,8 +9,8 @@ version: 0.2.0
 Turn a description (and any images the user attached) into a working design system: tokens for light and dark,
 design guidelines, writing guidelines and five base components, browsable in the Plinth UI and Storybook.
 
-Everything goes through the Plinth MCP tools. Never edit token, guideline or component files directly, and never
-write `src/styles/tokens.css` or `src/styles/fonts.css` (generated).
+Everything goes through the Plinth MCP tools: each change is validated, written at once and undoable. Never write
+`src/styles/tokens.css` or `src/styles/fonts.css` (generated).
 
 ## 1. Understand the brief
 
@@ -30,10 +30,10 @@ State the brief back in 4–6 lines and continue unless the user corrects it.
 1. `status` — if a design system already exists, switch to the change-design-system skill instead.
 2. `create_design_system` with `name`, `brand` (lowercase kebab-case id), `context`.
 3. `install_dependencies` (a few minutes; the UI shows progress). Continue with step 3 while it runs if your
-   client allows parallel calls; otherwise call it after the first proposal.
+   client allows parallel calls; otherwise call it after the first change.
 4. `open_ui` and give the user the URL if they are not already in the UI.
 
-## 3. Propose the brand tokens (one change)
+## 3. The brand tokens (one change)
 
 The tokens come in layers (`status` → `layers`): the **palette** (`tokens/primitives.tokens.json`, Tailwind's colors,
 radius and shadow scales), semantic **roles** (`brands/<brand>/tokens.json`, `tokens/base.tokens.json`) that point at
@@ -41,8 +41,8 @@ the palette, and **component tokens** (`tokens/components/*.tokens.json`) that p
 so you use the exact paths.
 
 1. If the brand needs a hue Tailwind does not have, or a specific brand color, add it to the palette first:
-   `propose_palette_color` with a name (`lacquer-red`) and the color; the engine generates its 50–950 scale.
-2. Then `propose_change` titled e.g. "Set Acme colors and type" with `set` ops on `brands/<brand>/tokens.json`
+   `add_palette_color` with a name (`lacquer-red`) and the color; the engine generates its 50–950 scale.
+2. Then `change` titled e.g. "Set Acme colors and type" with `set` ops on `brands/<brand>/tokens.json`
    (roles) and `tokens/base.tokens.json` (radius roles, fonts, shadows, motion).
 
 How to choose values:
@@ -55,7 +55,7 @@ How to choose values:
   `zinc`, `neutral` …) or light steps of the brand hue. `destructive` stays red in every brand.
 - Status colors exist in the template: `success` (green), `warning` (amber), `info` (blue), each with a `-foreground`.
   Tune their chroma and lightness to the brand; keep their hue families so they stay distinguishable from `primary`
-  and from each other (the engine checks this: see `distinctFailures` in the preview).
+  and from each other (the engine checks this: see `lookAlike` in the change's reminders).
 - Every `X` has an `X-foreground` that reads on it. Aim for ≥ 4.5:1; the engine checks and can repair it.
 - Set a `dark` value for every color (`mode: "dark"`). Dark mode is not inverted light mode: lower chroma, lighter
   primaries, never pure black surfaces.
@@ -69,13 +69,11 @@ How to choose values:
 - Avoid the generated-design defaults: warm cream background with terracotta accent; near-black with one acid
   accent; every surface the same radius and the same grey shadow. Use one only if the brief asks for it.
 
-Read the proposal's preview: `failingAfter` (contrast), `distinctFailures` (look-alike roles) and `notes` (guideline
-prose that still names an old hue). These are reminders, not blockers: tell the user, and fix what they want fixed
-(contrast: move the role to a darker or lighter step of the same hue).
-Then tell the user it is waiting in the Changes tab. Call `apply_change` only after they approve; in the UI they
-can press Apply themselves.
+Read the change's reminders: `contrastFailing`, `lookAlike` (look-alike roles) and `guidelineNotes` (guideline
+prose that still names an old hue). These are reminders, not blockers: fix them in a follow-up change (contrast: move
+the role to a darker or lighter step of the same hue, or `fix_contrast`) and tell the user.
 
-## 4. Propose the guidelines (one change)
+## 4. The guidelines (one change)
 
 `write` ops for:
 
@@ -92,15 +90,15 @@ token hues when colors change later. Don'ts must be short, specific and checkabl
 
 ## 5. Verify and hand over
 
-1. `run_checks` → the gate must pass. Fix contrast with `propose_contrast_fixes`; fix look-alike roles by moving one
-   of them; the user can also accept an exception in the Checks tab.
+1. `run_checks` → no broken references. Fix contrast with `fix_contrast`; fix look-alike roles by moving one of
+   them; the user can also accept an exception in the Checks tab.
 2. Once dependencies are installed: `run_tests` (types, interaction and accessibility for every story) and
    `start_storybook` (components render in every brand × mode via the toolbar and the Components tab).
 3. Summarise for the user: the brand in two sentences, where to look in the UI, and what to do next
-   ("ask for a component", "add a second brand", "press Publish").
+   ("ask for a component", "add a second brand", "press Save version, then Publish"). Do not save a version yourself.
 
 ## Rules
 
-- One theme per change; small changes are easier to review and to undo.
-- Never apply a change the user has not approved.
+- One theme per change; small changes are easier to follow and to undo.
+- Never save a version or publish unless the user asks.
 - Every value comes from the brief or from these rules; never invent brand facts (claims, numbers, names).

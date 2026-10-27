@@ -12,7 +12,7 @@ import { gitCommit } from "../engine/workspace.mjs";
  * is closing trips a libuv assertion on Node 24 / Windows and kills the process silently. node:http with
  * agent: false leaves nothing behind.
  */
-export function httpJson(url, { method = "GET", headers = {}, body } = {}) {
+export function httpJson(url, { method = "GET", headers = {}, body, timeout = 0 } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const data = body === undefined ? undefined : JSON.stringify(body);
@@ -25,6 +25,7 @@ export function httpJson(url, { method = "GET", headers = {}, body } = {}) {
         res.on("end", () => { try { resolve({ status: res.statusCode, json: out ? JSON.parse(out) : {} }); } catch (e) { reject(e); } });
       },
     );
+    if (timeout) req.setTimeout(timeout, () => req.destroy(new Error(`no answer within ${timeout} ms`)));
     req.on("error", reject);
     req.end(data);
   });
@@ -127,33 +128,4 @@ export function createStorybook(root, deps, bump = () => {}) {
     },
     stop() { kill(child); child = null; url = null; },
   };
-}
-
-/**
- * Inside the headless Claude session the Plinth UI spawns, a second server instance runs for the tools.
- * Long-lived processes (install, Storybook, tests) stay with the UI's server; this proxy forwards to it.
- * Nothing is requested at construction: the first request happens inside a tool call, on demand.
- */
-export function createRemote(root, parentUrl, token) {
-  const call = async (path, method = "POST") => {
-    if (!parentUrl) throw new Error("The Plinth UI server is not reachable from this session.");
-    const r = await httpJson(new URL(path, parentUrl).href, { method, headers: { "X-Plinth-Token": token } });
-    if (r.status >= 400) throw new Error(r.json.error ?? `Plinth UI server answered ${r.status}`);
-    return r.json;
-  };
-  let url = null;
-  const deps = {
-    get installed() { return existsSync(join(root, "node_modules", ".package-lock.json")); },
-    installing: false,
-    state: () => ({}),
-    install: () => call("api/install?wait=1"),
-  };
-  const storybook = {
-    get url() { return url; },
-    async refresh() { try { url = (await call("api/state", "GET")).storybook ?? null; } catch { /* parent gone */ } return url; },
-    async start() { const r = await call("api/storybook/start"); url = r.url ?? url; return r; },
-    stop() {},
-  };
-  const tests = { running: false, last: null, state: () => ({}), run: () => call("api/tests?wait=1") };
-  return { deps, storybook, tests };
 }

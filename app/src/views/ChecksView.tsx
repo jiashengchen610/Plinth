@@ -80,7 +80,7 @@ export function ChecksView({ state, busy, onFixContrast, onRunTests, onInstall, 
       </p>
 
       <Section title="Contrast" advisory ok={contrast.length === 0} count={`${c.summary.contrast?.failing ?? 0} failing · ${c.summary.contrast?.accepted ?? 0} accepted · ${c.contrast.length} pairs`}
-        action={contrast.length > 0 ? <Button size="sm" onClick={onFixContrast} disabled={busy}>Propose fixes</Button> : undefined}>
+        action={contrast.length > 0 ? <Button size="sm" onClick={onFixContrast} disabled={busy}>Fix contrast</Button> : undefined}>
         {contrast.length > 0 && (
           <ul className="mt-3 divide-y">
             {contrast.map((r: ContrastResult) => (

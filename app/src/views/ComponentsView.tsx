@@ -6,7 +6,7 @@ import { TokenEditor } from "@/views/TokenEditor";
 
 type Props = {
   state: State; brand: string; mode: "light" | "dark"; busy: boolean;
-  graph: Graph | null; draft: Op[]; onEdit: (op: Op) => void; onOpenToken: (key: string) => void;
+  graph: Graph | null; onEdit: (op: Op) => void; onOpenToken: (key: string) => void;
   onStartStorybook: () => void; onInstall: () => void;
 };
 
@@ -15,7 +15,7 @@ type Props = {
  * order of impact: this component only (its token), every component on a role (the role), every role on a palette
  * step (the palette, changed by pointing roles elsewhere).
  */
-function ComponentTokens({ g, state, brand, mode, component, draft, onEdit, onOpenToken }: { g: Graph; state: State; brand: string; mode: Mode; component: string; draft: Op[]; onEdit: (op: Op) => void; onOpenToken: (key: string) => void }) {
+function ComponentTokens({ g, state, brand, mode, component, onEdit, onOpenToken }: { g: Graph; state: State; brand: string; mode: Mode; component: string; onEdit: (op: Op) => void; onOpenToken: (key: string) => void }) {
   const tokens = g.rows.filter((r) => componentOf(r) === component);
   const reminders = useMemo(() => remindersByToken(state, brand, mode), [state, brand, mode]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -70,13 +70,13 @@ function ComponentTokens({ g, state, brand, mode, component, draft, onEdit, onOp
           ))}
         </div>
       </div>
-      {row && <TokenEditor g={g} state={state} brand={brand} mode={mode} row={row} reminders={reminders} draft={draft} onEdit={onEdit} onSelect={(k) => (componentOf(g.byKey.get(k) as TokenRow) === component ? setPicked(k) : onOpenToken(k))} />}
-      <p className="text-xs text-muted-foreground">The preview updates after the draft is applied.</p>
+      {row && <TokenEditor g={g} state={state} brand={brand} mode={mode} row={row} reminders={reminders} onEdit={onEdit} onSelect={(k) => (componentOf(g.byKey.get(k) as TokenRow) === component ? setPicked(k) : onOpenToken(k))} />}
+      <p className="text-xs text-muted-foreground">Edits apply at once: the preview reloads with them. Undo takes the last one back.</p>
     </div>
   );
 }
 
-export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall, busy, graph, draft, onEdit, onOpenToken }: Props) {
+export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall, busy, graph, onEdit, onOpenToken }: Props) {
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const [selected, setSelected] = useState<string | null>(state.components[0]?.id ?? null);
   const [view, setView] = useState<"preview" | "spec">("preview");
@@ -138,7 +138,7 @@ export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall
       </section>
       {graph && component && (
         <aside aria-label="Component tokens" className="min-w-0 flex-[1_1_300px] xl:max-w-sm">
-          <ComponentTokens g={graph} state={state} brand={brand} mode={mode === "dark" ? "dark" : "default"} component={component.id} draft={draft} onEdit={onEdit} onOpenToken={onOpenToken} />
+          <ComponentTokens g={graph} state={state} brand={brand} mode={mode === "dark" ? "dark" : "default"} component={component.id} onEdit={onEdit} onOpenToken={onOpenToken} />
         </aside>
       )}
     </div>

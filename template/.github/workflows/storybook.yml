@@ -27,6 +27,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Plinth's checks, from the Plinth release that last updated this workflow: token references that resolve to
+      # nothing, generated files that no longer match the tokens, and components without component tokens, a story,
+      # or with hardcoded values stop the deploy. Design reminders are listed in the run summary.
+      - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} check
       # Not `npm ci`: a lockfile written on Windows or macOS can miss Linux-only optional packages (npm/cli#4828),
       # which makes `npm ci` refuse to install. `npm install` keeps the locked versions and fills those in.
       - run: npm install --no-audit --no-fund

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, type PublishDefaults, type PublishState, type State } from "@/lib/api";
+import { Reply } from "@/views/ChatPanel";
 
 type Props = { state: State; onClose: () => void; onError: (message: string) => void };
 
-const STEP_LABEL: Record<string, string> = { "outside edits": "Outside edits", checks: "Checks", exports: "DESIGN.md exports", commit: "Commit", tests: "Tests", "create repository": "Create GitHub repository", push: "Push to GitHub", pages: "GitHub Pages" };
+const STEP_LABEL: Record<string, string> = { "unsaved changes": "Unsaved changes", unsaved: "Unsaved changes", checks: "Checks", exports: "DESIGN.md exports", commit: "Commit", tests: "Tests", "create repository": "Create GitHub repository", push: "Push to GitHub", pages: "GitHub Pages" };
 
 function Steps({ publish }: { publish: PublishState }) {
   if (!publish.steps.length) return null;
@@ -50,6 +51,19 @@ export function PublishDialog({ state, onClose, onError }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // The review at publish: Claude reads everything since the last publish once, when the dialog opens. Suggestions only.
+  const review = state.review;
+  const [reviewAsked, setReviewAsked] = useState(false);
+  const askReview = useCallback(() => { setReviewAsked(true); api.review().catch((e) => onError(e.message)); }, [onError]);
+  useEffect(() => { if (!reviewAsked && review && !review.running) askReview(); }, [reviewAsked, review, askReview]);
+  const unsaved = state.unsaved ?? [];
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try { await api.save(message.trim()); setMessage(""); } catch (e) { onError((e as Error).message); } finally { setSaving(false); }
+  };
+
   const start = async () => {
     try { setStarted(true); await api.publish(defaults?.remote ? {} : { repo, visibility }); } catch (e) { setStarted(false); onError((e as Error).message); }
   };
@@ -83,7 +97,35 @@ export function PublishDialog({ state, onClose, onError }: Props) {
         </header>
 
         {!gate && !started && (
-          <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">The checks are not passing. Fix or accept the findings in <strong>Checks</strong> first; publish stops at the first failing check.</p>
+          <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">Some token references are broken. Publishing stops at the checks until they are fixed: see <strong>Checks</strong>.</p>
+        )}
+
+        {!started && unsaved.length > 0 && (
+          <form className="flex flex-col gap-2 rounded-lg border border-warning/60 bg-warning/10 p-4 text-sm" onSubmit={(e) => { e.preventDefault(); if (message.trim()) save(); }}>
+            <p><strong>{unsaved.length} unsaved file{unsaved.length > 1 ? "s" : ""}.</strong> Publishing pushes saved versions: save these first.</p>
+            <div className="flex flex-wrap gap-2">
+              <label htmlFor="publish-version" className="sr-only">What changed</label>
+              <input id="publish-version" value={message} onChange={(e) => setMessage(e.target.value)} placeholder={state.lastChange?.title ?? "What changed"} className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm" />
+              <Button size="sm" type="submit" disabled={saving || !message.trim()}>{saving ? "Saving…" : "Save version"}</Button>
+            </div>
+          </form>
+        )}
+
+        {!started && review && (
+          <section aria-labelledby="review-step" className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+            <h3 id="review-step" className="flex items-center justify-between gap-2 font-medium">
+              Claude's review
+              {!review.running && review.result && <Button size="sm" variant="ghost" onClick={askReview}>Review again</Button>}
+            </h3>
+            {review.running ? (
+              <p className="flex items-center gap-2 text-muted-foreground"><span aria-hidden="true" className="size-2 animate-pulse rounded-full bg-primary" />Reading everything since the last publish… usually under half a minute.</p>
+            ) : review.result?.ok ? (
+              <Reply text={review.result.text ?? ""} />
+            ) : review.result ? (
+              <p className="text-muted-foreground">The review could not run: {review.result.error}</p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">Suggestions only: publishing does not wait for them. To act on one, ask in the chat.</p>
+          </section>
         )}
 
         {/* Step 1: GitHub account */}
@@ -191,8 +233,9 @@ export function PublishDialog({ state, onClose, onError }: Props) {
             <p className="font-medium">Stopped at {STEP_LABEL[result.stoppedAt ?? ""] ?? result.stoppedAt}.</p>
             {result.error && <p>{result.error}</p>}
             {result.next && <p className="text-muted-foreground">{result.next}</p>}
-            {result.stoppedAt === "checks" && <p className="text-muted-foreground">See the <strong>Checks</strong> tab.</p>}
-            {result.stoppedAt === "outside edits" && <p className="text-muted-foreground">Use the banner at the top of the page: save them as a version or discard them.</p>}
+            {result.blocking?.length ? <ul className="list-disc pl-5">{result.blocking.map((b) => <li key={b.detail}>{b.detail}</li>)}</ul> : null}
+            {result.stoppedAt === "checks" && <p className="text-muted-foreground">GitHub runs the same checks before it deploys. See the <strong>Checks</strong> tab, or ask Claude in the chat.</p>}
+            {result.stoppedAt === "unsaved" && <p className="text-muted-foreground">Save them as a version above (or in History), then publish again.</p>}
             {result.tests?.tests?.failures?.length ? <ul className="list-disc pl-5">{result.tests.tests.failures.map((f) => <li key={f}>{f}</li>)}</ul> : null}
           </div>
         )}
@@ -201,7 +244,7 @@ export function PublishDialog({ state, onClose, onError }: Props) {
           {result ? <Button onClick={onClose}>Done</Button> : (
             <>
               <Badge variant="outline">{state.brands.length} brand{state.brands.length === 1 ? "" : "s"} · {state.components.length} components</Badge>
-              <Button onClick={start} disabled={!ready || privateBlocked || publish.running || (!defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo))}>{publish.running ? "Publishing…" : defaults?.remote ? "Publish" : "Create repository and publish"}</Button>
+              <Button onClick={start} disabled={!ready || privateBlocked || publish.running || unsaved.length > 0 || (!defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo))}>{publish.running ? "Publishing…" : defaults?.remote ? "Publish" : "Create repository and publish"}</Button>
             </>
           )}
         </footer>

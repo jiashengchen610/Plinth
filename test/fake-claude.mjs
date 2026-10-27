@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const prompt = readFileSync(0, "utf8");
 const args = process.argv.slice(2);
-if (process.env.FAKE_CLAUDE_LOG) writeFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ args, prompt, cwd: process.cwd(), env: { PLINTH_CHILD: process.env.PLINTH_CHILD, PLINTH_WORKSPACE: process.env.PLINTH_WORKSPACE, CLAUDECODE: process.env.CLAUDECODE ?? null } }));
+if (process.env.FAKE_CLAUDE_LOG) writeFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ args, prompt, cwd: process.cwd(), env: { PLINTH_WORKSPACE: process.env.PLINTH_WORKSPACE, CLAUDECODE: process.env.CLAUDECODE ?? null } }));
 
 const resumed = args.indexOf("--resume") >= 0 ? args[args.indexOf("--resume") + 1] : null;
 if (resumed === "gone-session") { process.stderr.write("No conversation found with session ID: gone-session\n"); process.exit(1); }
