@@ -115,6 +115,13 @@ export function formatHex({ r, g, b }) {
   return "#" + [r, g, b].map((x) => Math.round(clamp01(x) * 255).toString(16).padStart(2, "0")).join("");
 }
 
+/** `value` at `alpha` (0..1) painted over the opaque `base`, as a hex color. null if unparseable. */
+export function tint(value, alpha, base) {
+  const c = parseColor(value), b = parseColor(base);
+  if (!c || !b) return null;
+  return formatHex(over({ ...c, alpha: (c.alpha ?? 1) * alpha }, b));
+}
+
 // ---------- distance ----------
 /** Perceptual distance in OKLab (ΔE_OK). Roughly: 0.02 just noticeable, 0.1 clearly different. null if unparseable. */
 export function deltaE(aValue, bValue) {

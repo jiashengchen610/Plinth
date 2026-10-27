@@ -2,9 +2,9 @@
 // apart, token consistency across brands, and hardcoded values in component code. Also turns contrast
 // failures into token fixes. Exceptions the user accepted (design-system.json → exceptions) are reported
 // but do not block the gate.
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { contrastRatio, fixContrast, deltaE, hueDifference } from "./color.mjs";
+import { contrastRatio, fixContrast, deltaE, hueDifference, tint } from "./color.mjs";
 import { loadConfig, listBrands, resolveBrand, buildCss } from "./tokens.mjs";
 import { scan } from "./check-hardcoded.mjs";
 
@@ -31,26 +31,73 @@ export function contrastPairs(colorNames, config = {}) {
   return pairs;
 }
 
+/**
+ * Text drawn on a translucent tint of its own color, as components write it: `bg-destructive/10 text-destructive`
+ * (shadcn's destructive Badge and Button), with `dark:bg-X/NN` for the dark mode. The token pairs above do not
+ * cover these, and the browser's accessibility test does, so they are read from the component sources.
+ * @returns {Array<{ fg: string, light: number, dark: number, files: string[] }>} alphas 0..1
+ */
+export function tintedPairs(root) {
+  const dir = join(root, "src", "components");
+  if (!existsSync(dir)) return [];
+  const found = new Map();
+  for (const comp of readdirSync(dir)) {
+    const folder = join(dir, comp);
+    if (!statSync(folder).isDirectory()) continue;
+    for (const file of readdirSync(folder).filter((f) => f.endsWith(".tsx") && !f.endsWith(".stories.tsx"))) {
+      const src = readFileSync(join(folder, file), "utf8");
+      // Every string literal is one class list.
+      for (const [, cls] of src.matchAll(/["'`]([^"'`\n]*\bbg-[a-z0-9-]+\/\d+[^"'`\n]*)["'`]/g)) {
+        const words = cls.split(/\s+/);
+        for (const w of words) {
+          const m = w.match(/^bg-([a-z0-9-]+)\/(\d+)$/);
+          if (!m || !words.includes(`text-${m[1]}`)) continue;
+          const dark = words.map((x) => x.match(new RegExp(`^dark:bg-${m[1]}\\/(\\d+)$`))).find(Boolean);
+          const key = `${m[1]}|${m[2]}|${dark?.[1] ?? m[2]}`;
+          const entry = found.get(key) ?? { fg: m[1], light: Number(m[2]) / 100, dark: Number(dark?.[1] ?? m[2]) / 100, files: [] };
+          const rel = `src/components/${comp}/${file}`;
+          if (!entry.files.includes(rel)) entry.files.push(rel);
+          found.set(key, entry);
+        }
+      }
+    }
+  }
+  return [...found.values()];
+}
+
 /** Contrast results for every brand and mode. */
 export function checkContrast(root, config = loadConfig(root)) {
   const results = [];
+  const tinted = tintedPairs(root);
   for (const brand of listBrands(root, config)) {
     const r = resolveBrand(root, brand, config);
     const colors = r.tokens.filter((t) => t.type === "color");
     const byName = new Map(colors.map((t) => [t.name, t]));
+    const valueIn = (name, mode) => byName.get(name).values[mode] ?? byName.get(name).values.default;
+    const row = (p, mode, bgValue, extra = {}) => {
+      const fg = valueIn(p.fg, mode);
+      const ratio = contrastRatio(fg?.resolved, bgValue);
+      return {
+        brand, mode, bg: p.bg, fg: p.fg, min: p.min,
+        ratio: ratio === null ? null : Number(ratio.toFixed(2)),
+        pass: ratio !== null && ratio >= p.min,
+        fgToken: byName.get(p.fg).key, fgSource: byName.get(p.fg).source,
+        // The value to edit: this mode's own value when it has one, else the default it inherits.
+        fgRaw: byName.get(p.fg).values[mode]?.raw ?? byName.get(p.fg).values.default?.raw, bgValue,
+        ...extra,
+      };
+    };
     for (const p of contrastPairs(colors.map((t) => t.name), config)) {
+      for (const mode of r.modes) results.push(row(p, mode, valueIn(p.bg, mode)?.resolved));
+    }
+    for (const t of tinted) {
+      if (!byName.has(t.fg) || !byName.has("background")) continue;
       for (const mode of r.modes) {
-        const bg = byName.get(p.bg).values[mode] ?? byName.get(p.bg).values.default;
-        const fg = byName.get(p.fg).values[mode] ?? byName.get(p.fg).values.default;
-        const ratio = contrastRatio(fg?.resolved, bg?.resolved);
-        results.push({
-          brand, mode, bg: p.bg, fg: p.fg, min: p.min,
-          ratio: ratio === null ? null : Number(ratio.toFixed(2)),
-          pass: ratio !== null && ratio >= p.min,
-          fgToken: byName.get(p.fg).key, fgSource: byName.get(p.fg).source,
-          // The value to edit: this mode's own value when it has one, else the default it inherits.
-          fgRaw: byName.get(p.fg).values[mode]?.raw ?? byName.get(p.fg).values.default?.raw, bgValue: bg?.resolved,
-        });
+        const alpha = mode === "dark" ? t.dark : t.light;
+        const base = valueIn("background", mode)?.resolved;
+        const bgValue = tint(valueIn(t.fg, mode)?.resolved, alpha, base);
+        // The background moves with the text color: fixes recompute it (see contrastFixes).
+        results.push(row({ fg: t.fg, bg: `${t.fg}/${Math.round(alpha * 100)}`, min: 4.5 }, mode, bgValue, { selfTint: { alpha, base }, files: t.files }));
       }
     }
   }
@@ -118,25 +165,28 @@ export function contrastFixes(results) {
     if (!failing.length) continue;
     const r = failing[0];
     if (typeof r.fgRaw === "string" && /^\{.+\}$/.test(r.fgRaw)) { skipped.push(...failing.map((f) => ({ ...f, reason: "foreground is an alias; fix the token it points to" }))); continue; }
+    // A tint of the text's own color moves with it; every other background is fixed.
+    const bgOf = (p, v) => (p.selfTint ? tint(v, p.selfTint.alpha, p.selfTint.base) : p.bgValue);
     let value = r.fgRaw;
-    for (let round = 0; round < 4; round++) {
+    for (let round = 0; round < 8; round++) {
       let changed = false;
       for (const p of pairs) {
-        const ratio = contrastRatio(value, p.bgValue);
+        const ratio = contrastRatio(value, bgOf(p, value));
         if (ratio !== null && ratio >= p.min) continue;
-        const fix = fixContrast(value, p.bgValue, p.min);
+        // Aim a little higher on a self-tint: the background follows the text and gives some contrast back.
+        const fix = fixContrast(value, bgOf(p, value), p.selfTint ? p.min + 0.15 : p.min);
         if (!fix) { value = null; break; }
         value = fix.value;
         changed = true;
       }
       if (!value || !changed) break;
     }
-    const ok = value && pairs.every((p) => (contrastRatio(value, p.bgValue) ?? 0) >= p.min);
+    const ok = value && pairs.every((p) => (contrastRatio(value, bgOf(p, value)) ?? 0) >= p.min);
     if (!ok) { skipped.push(...failing.map((f) => ({ ...f, reason: "no lightness satisfies every background this color is used on; change a background or the hue" }))); continue; }
     ops.push({
       op: "set", file: r.fgSource === "base" ? "tokens/base.tokens.json" : `${r.fgSource}/tokens.json`,
       path: r.fgToken, mode: r.mode, value,
-      why: `${r.fg} (${r.brand}, ${r.mode === "default" ? "light" : r.mode}): ${failing.map((f) => `on ${f.bg} ${f.ratio} → ${contrastRatio(value, f.bgValue).toFixed(2)}`).join(", ")}`,
+      why: `${r.fg} (${r.brand}, ${r.mode === "default" ? "light" : r.mode}): ${failing.map((f) => `on ${f.bg} ${f.ratio} → ${contrastRatio(value, bgOf(f, value)).toFixed(2)}`).join(", ")}`,
     });
   }
   return { ops, skipped };

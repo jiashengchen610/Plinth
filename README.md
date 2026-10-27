@@ -109,20 +109,34 @@ Claude scaffolds the repo (about 20 seconds) and proposes tokens and guidelines 
    then choose the repository name and visibility. On GitHub's free plan choose **Public**: Pages does not work for
    private repositories there, so Storybook would not go online.
 
-Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup`.
+Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup` (and `--terminal`, `--full`, below).
 
-### From a Claude Code session (plugin)
+### From the terminal
 
-To talk in the terminal and use the UI for review:
+Same pipeline, without the browser:
 
 ```bash
-claude plugin marketplace add jiashengchen610/Plinth
-claude plugin install plinth@plinth
-cd my-design-system && claude
+npx -y github:jiashengchen610/Plinth --terminal   # Claude Code here, with the UI chat's tools and conversation
+npx -y github:jiashengchen610/Plinth --full       # every Claude Code tool (each asks first)
 ```
 
-The plugin starts the same UI; ask Claude for the link. The terminal conversation and the UI chat are separate
-sessions on the same folder. This path is less tested than the UI path.
+Both continue the UI chat's conversation, and proposals still wait in the queue: Claude shows you old → new and
+applies when you say so (or you press Apply in the UI, which keeps running at the printed address). The UI chat
+waits while a terminal holds the conversation. Use `--full` for work outside the design files, such as adding a
+package; those edits show up as outside edits for you to record.
+
+A plain `claude` session in the folder with the plugin installed (`claude plugin install plinth@plinth` from the
+`jiashengchen610/Plinth` marketplace) works too, as a separate conversation.
+
+### One way to change the design
+
+Design files change only through Plinth, so every change is previewed, checked and saved as its own version:
+
+- **Claude Code sessions** in a design-system folder cannot write tokens, guidelines, components, generated or
+  Plinth-managed files: the folder's `.claude/settings.json` (managed by Plinth) denies it, whatever the mode.
+- **Edits from anywhere else** (an editor, git, another tool, `--full`) are not blocked, but they are caught:
+  the UI shows them as *outside edits* with **Save as a version** or **Discard**, History marks such versions,
+  a Plinth change never includes them, and Publish and Restore wait until they are handled.
 
 ## What you get
 
@@ -137,6 +151,7 @@ my-design-system/
 ├── DESIGN.md                      guidelines shared by all brands
 ├── WRITING.md                     voice, tone, interface copy rules, terminology
 ├── design-system.json             name, context, brands, accepted exceptions
+├── .claude/settings.json          Plinth-managed: Claude Code may change design files only through Plinth
 ├── src/
 │   ├── styles/tokens.css          generated: CSS variables per brand × mode + Tailwind v4 @theme
 │   ├── styles/fonts.css           generated: Google Fonts imports for the font tokens
@@ -216,6 +231,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `run_checks`, `propose_contrast_fixes` | Deterministic checks; computed contrast fixes as a proposal |
 | `run_tests` | Typecheck and story tests in the workspace |
 | `list_versions`, `restore_version` | History; a restore is a new commit |
+| `record_outside_edits` | Save files changed outside Plinth as one version (when the user asks) |
 | `export_design_md` | The complete DESIGN.md for one brand, with lint |
 | `start_storybook`, `open_ui` | Previews and the UI link |
 | `publish` | The full publish (or `dryRun`) |
@@ -254,7 +270,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
   index ("used by these components"), screenshot previews, behavior that depends on the context (mobile vs
   dashboard), touch-target and same-radius checks, a CHANGELOG at publish, and publishing through a pull request.
 - Fonts load from Google Fonts at runtime. Self-hosted fonts are not supported yet.
-- The UI chat and a terminal Claude Code session are separate conversations.
+- A plain `claude` session (plugin installed) is a separate conversation from the UI chat; `--terminal` shares it.
 - One chat message runs at a time.
 - Windows with Node 24: two runtime bugs abort Node without an error (`fs.cpSync` into `D:\<folder>`, and
   `process.exit()` right after `fetch`). Plinth avoids both, and a test keeps `cpSync` out. If you see

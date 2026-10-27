@@ -358,7 +358,7 @@ export function previewOps(root, ops) {
   for (const op of ops) applyOp(root, op, files);
   const scratch = mkdtempSync(join(tmpdir(), "ds-preview-"));
   try {
-    for (const f of ["design-system.json", "tokens", "brands"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
+    for (const f of ["design-system.json", "tokens", "brands", "src/components"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
     writeFiles(scratch, files);
     const exceptions = loadConfig(root).exceptions ?? [];
     const before = checkContrast(root);

@@ -31,6 +31,7 @@ visibility (default private).
 | Result | What to tell the user |
 |---|---|
 | `published: true` | The GitHub link and the Storybook link; GitHub Actions runs the tests again and deploys Storybook a few minutes after the push (`actions` link shows progress) |
+| `stoppedAt: "outside edits"` | Files changed outside Plinth; the user saves them as a version or discards them (banner in the UI), then publish again |
 | `stoppedAt: "checks"` | Which checks failed; fix or accept in Checks, then publish again |
 | `stoppedAt: "tests"` | Which tests failed; fix the component (create-component skill), then publish again |
 | `stoppedAt: "github"`, sign-in expired or missing | Run `gh auth login --web` and finish in the browser, then ask to publish again. Local work is safe. |

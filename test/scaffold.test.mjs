@@ -67,3 +67,22 @@ test("foundations: generated data for Storybook, managed files restored from the
   assert.match(readFileSync(join(root, ".storybook/preview.tsx"), "utf8"), /globalsUpdated/);
   assert.deepEqual(syncManaged(root), [], "nothing to do the second time");
 });
+
+test("contrast: text on a tint of its own color (bg-X/10 text-X) is checked like the browser test, and fixable", async (t) => {
+  const { checkContrast, contrastFixes } = await import("../engine/checks.mjs");
+  const ws = await import("../engine/workspace.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-tint-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Tint", brand: "acme", context: "saas-dashboard" });
+  // The red a real session chose: passes on the page, fails on its own 10% tint (axe measured 4.28 on that brand).
+  const c = ws.propose(root, { title: "Brighter red", ops: [{ op: "set", file: "brands/acme/tokens.json", path: "color/destructive", value: "#d42515" }] });
+  assert.equal(c.preview.failingAfter, 1, "the proposal preview sees it");
+  ws.apply(root, c.id);
+  const failing = checkContrast(root).filter((r) => !r.pass);
+  assert.deepEqual(failing.map((r) => `${r.mode} ${r.fg} on ${r.bg}`), ["default destructive on destructive/10"]);
+  assert.ok(failing[0].ratio > 4 && failing[0].ratio < 4.5, String(failing[0].ratio));
+  const { ops } = contrastFixes(checkContrast(root));
+  assert.equal(ops.length, 1);
+  ws.apply(root, ws.propose(root, { title: "Fix", ops: ops.map(({ why, ...o }) => o) }).id);
+  assert.ok(checkContrast(root).every((r) => r.pass), "after the fix every pair passes, the tint included");
+});

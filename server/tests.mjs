@@ -20,7 +20,9 @@ export function createTests(root, deps, bump = () => {}) {
         const tests = await run("npm", ["test"], root, { timeout: 10 * 60 * 1000 });
         const counts = tests.output.match(/Tests\s+(?:(\d+) failed[^\n]*?\|\s*)?(\d+) passed \((\d+)\)/);
         const failedCount = counts ? Number(counts[1] ?? 0) : null;
-        const failures = [...tests.output.matchAll(/^\s*(?:×|✗|✖|FAIL)\s+(.+)$/gm)].map((m) => m[1].trim()).slice(0, 20);
+        // "FAIL  |storybook (chromium)| src/components/badge/badge.stories.tsx > Destructive", then the rule that failed.
+        const failures = [...tests.output.matchAll(/^\s*FAIL\s+(?:\|[^|]*\|\s*)?(.+?)\s*\n(?:\s*\n)*\s*"?([^"\n]*)"?/gm)]
+          .map((m) => `${m[1].replace(/^src\/components\//, "")}${m[2] ? ` — ${m[2]}` : ""}`).slice(0, 20);
         return {
           ok: typecheck.code === 0 && tests.code === 0,
           at: startedAt,

@@ -15,6 +15,9 @@ before `apply_change`, and every applied change is a commit the user can return 
 - `get_tokens` (per brand) for exact token paths and current values.
 - `get_guidelines` before changing anything visual or any copy. When a color changes hue, note the sentences that
   describe it: they change in the same proposal.
+- If `status` reports `outsideEdits` (files changed by hand or by another tool), tell the user before proposing: a
+  change to one of those files is refused until they record or discard the edit (banner in the UI, or
+  `record_outside_edits` when they ask you to).
 
 ## Propose
 
@@ -47,10 +50,17 @@ Then point the user to the Changes tab in the UI.
 Call `apply_change` only when the user approves (in the UI they can press Apply themselves; in chat, they say so).
 Then `run_checks`. If the gate fails, explain and propose a fix. After component changes, `run_tests`.
 
+## Direct edits
+
+Design files (tokens, guidelines, components, `design-system.json`) cannot be written directly in this folder:
+`.claude/settings.json` blocks it so every change is previewed and versioned. Do not try other ways around it
+(shell commands, copying files). Files outside the design (`package.json`, configuration) may be edited when the
+user asks and you have the tools; they appear as outside edits for the user to record.
+
 ## Undo
 
 `list_versions`, then `restore_version` with the version the user picked. Restoring creates a new version, so it can
-itself be undone.
+itself be undone. It waits while there are outside edits.
 
 ## Rules
 

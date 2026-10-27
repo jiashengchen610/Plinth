@@ -45,12 +45,17 @@ export function freePort(start) {
 /** Run a command to completion; resolves with the exit code and the last lines of output. */
 export function run(cmd, args, cwd, { timeout = 15 * 60 * 1000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, shell: isWin, windowsHide: true, env: { ...process.env, CI: "1", FORCE_COLOR: "0" } });
+    const child = spawn(cmd, args, { cwd, shell: isWin, windowsHide: true, env: { ...process.env, CI: "1", FORCE_COLOR: "0", NO_COLOR: "1" } });
     let out = "";
     const timer = setTimeout(() => { kill(child); out += "\n[timed out]"; }, timeout);
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
-    child.on("close", (code) => { clearTimeout(timer); resolve({ code, output: out, tail: out.trim().split("\n").slice(-20).join("\n") }); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      // Some tools color their output even when asked not to; the UI and the parsers want plain text.
+      const plain = out.replace(/\x1b\[[0-9;]*m/g, "");
+      resolve({ code, output: plain, tail: plain.trim().split("\n").slice(-20).join("\n") });
+    });
     child.on("error", (e) => { clearTimeout(timer); resolve({ code: -1, output: e.message, tail: e.message }); });
   });
 }
