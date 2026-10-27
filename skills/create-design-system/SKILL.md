@@ -1,7 +1,7 @@
 ---
 name: create-design-system
 description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools. Each step is written at once and shows up in the UI; the user can undo it and decides when to save a version."
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Create a design system
@@ -11,6 +11,12 @@ design guidelines, writing guidelines and five base components, browsable in the
 
 Everything goes through the Plinth MCP tools: each change is validated, written at once and undoable. Never write
 `src/styles/tokens.css` or `src/styles/fonts.css` (generated).
+
+**From the UI's Describe step:** the message starts "Set up my new design system from my answers" (or "I answered
+the questions again"). Plinth has already scaffolded the repo and applied the main color, grays, corners and font
+(listed in the message). Skip steps 2 and 3 unless the message lets you choose colors, corners or a font (then use
+`set_style`); write the guidelines (step 4), add the components it asks for (the create-component skill), and do
+not save a version.
 
 ## 1. Understand the brief
 
@@ -42,8 +48,10 @@ so you use the exact paths.
 
 1. If the brand needs a hue Tailwind does not have, or a specific brand color, add it to the palette first:
    `add_palette_color` with a name (`lacquer-red`) and the color; the engine generates its 50–950 scale.
-2. Then `change` titled e.g. "Set Acme colors and type" with `set` ops on `brands/<brand>/tokens.json`
-   (roles) and `tokens/base.tokens.json` (radius roles, fonts, shadows, motion).
+2. `set_style` for the four big choices: main color (a palette family), grays, corners (`square`, `slight`, `round`,
+   `pill`) and font. The engine picks the palette steps that keep text readable.
+3. Then `change` titled e.g. "Set Acme colors and type" for anything finer, with `set` ops on
+   `brands/<brand>/tokens.json` (roles) and `tokens/base.tokens.json` (radius roles, fonts, shadows, motion).
 
 How to choose values:
 
@@ -91,11 +99,12 @@ token hues when colors change later. Don'ts must be short, specific and checkabl
 ## 5. Verify and hand over
 
 1. `run_checks` → no broken references. Fix contrast with `fix_contrast`; fix look-alike roles by moving one of
-   them; the user can also accept an exception in the Checks tab.
+   them; the user can also mark one as on purpose under "Things to look at" in the Style step.
 2. Once dependencies are installed: `run_tests` (types, interaction and accessibility for every story) and
-   `start_storybook` (components render in every brand × mode via the toolbar and the Components tab).
-3. Summarise for the user: the brand in two sentences, where to look in the UI, and what to do next
-   ("ask for a component", "add a second brand", "press Save version, then Publish"). Do not save a version yourself.
+   `start_storybook` (components render in every brand × mode via the toolbar and the Components step).
+3. Summarise for the user in plain words (no token names): the brand in two sentences, where to look in the UI
+   (Style, Components), and what to do next ("ask for a component", "add a second brand", "save a version, then
+   Publish"). Do not save a version yourself.
 
 ## Rules
 

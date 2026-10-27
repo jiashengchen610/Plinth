@@ -1,67 +1,59 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { State } from "@/lib/api";
+import { Cta } from "@/lib/cta";
 import { timeAgo } from "@/lib/format";
+import { fileName, isGenerated } from "@/lib/plain";
 
-type Props = { state: State; onRestore: (sha: string) => void; onSave: (message: string) => void; onDiscard: () => void; busy: boolean };
+type Props = {
+  state: State; busy: boolean; backLabel: string; onBack: () => void;
+  onSave: (message: string) => void; onDiscard: () => void; onRestore: (sha: string) => void;
+};
 
-/** Unsaved work on top (save it as a version, or throw it away), then the saved versions. */
-export function HistoryView({ state, onRestore, onSave, onDiscard, busy }: Props) {
-  const [confirming, setConfirming] = useState<string | null>(null);
+/** What changed, what's saved, and going back. Saving a version is a git commit; nothing here goes online. */
+export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard, onRestore }: Props) {
   const [message, setMessage] = useState("");
-  const [discarding, setDiscarding] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   const unsaved = state.unsaved ?? [];
+  const groups = [...new Set(unsaved.filter((u) => !isGenerated(u.file)).map((u) => fileName(u.file)))];
+  const live = state.versions.find((v) => v.published);
   return (
     <div className="flex flex-col gap-4">
-      <section aria-label="Unsaved changes" className="rounded-xl border bg-card p-4">
-        {unsaved.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No unsaved changes. Everything you change applies at once and shows up here until you save it as a version.</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-sm font-medium">{unsaved.length} unsaved file{unsaved.length > 1 ? "s" : ""}</h2>
-              <p className="text-xs text-muted-foreground">Already applied and checked. Save them as a version when you are happy; only saved versions can be published.</p>
-            </div>
-            <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto font-mono text-xs">
-              {unsaved.map((u) => <li key={u.file} className="truncate"><span className="inline-block w-16 text-muted-foreground">{u.status}</span>{u.file}</li>)}
-            </ul>
-            <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); if (message.trim()) { onSave(message.trim()); setMessage(""); } }}>
-              <label htmlFor="version-message" className="sr-only">What changed</label>
-              <input id="version-message" value={message} onChange={(e) => setMessage(e.target.value)} placeholder={state.lastChange?.title ?? "What changed"} className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm" />
-              <Button size="sm" type="submit" disabled={busy || !message.trim()}>Save version</Button>
-              {discarding ? (
-                <span className="flex flex-wrap items-center gap-2 text-sm">
-                  Throw away every unsaved change?
-                  <Button size="sm" variant="destructive" type="button" onClick={() => { setDiscarding(false); onDiscard(); }} disabled={busy}>Discard</Button>
-                  <Button size="sm" variant="ghost" type="button" onClick={() => setDiscarding(false)}>Cancel</Button>
-                </span>
-              ) : (
-                <Button size="sm" variant="ghost" type="button" onClick={() => setDiscarding(true)} disabled={busy}>Discard…</Button>
-              )}
-            </form>
-          </div>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">History</h1>
+        <p className="text-muted-foreground">Every change is kept on your computer as soon as you make it. A version is a snapshot you can come back to, and it's what you publish.</p>
+      </div>
+      <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+        <h2 className="text-base font-semibold">Not in a version yet</h2>
+        {!unsaved.length ? <p className="text-sm text-muted-foreground">Everything is in a version.</p> : (
+          <>
+            <p className="text-sm">{groups.join(", ")}{state.lastChange ? <span className="text-muted-foreground"> · last change: {state.lastChange.title}</span> : null}</p>
+            <label className="flex flex-col gap-1 text-sm font-semibold">Describe this version<input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={state.lastChange?.title ?? "For example: softer corners"} className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
+            {!confirm ? <button type="button" onClick={() => setConfirm(true)} className="min-h-11 self-start rounded-lg border px-3.5 text-sm font-medium text-destructive">Throw away these changes</button> : (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-destructive/40 bg-destructive/5 py-2 pr-2 pl-3.5 text-sm">
+                <span className="flex-[1_1_240px]">Throw away the changes since your last version? You can't get them back.</span>
+                <Button variant="destructive" className="min-h-10" disabled={busy} onClick={() => { onDiscard(); setConfirm(false); }}>Throw away</Button>
+                <Button variant="outline" className="min-h-10" onClick={() => setConfirm(false)}>Keep them</Button>
+              </div>
+            )}
+          </>
         )}
       </section>
-
-      <ol aria-label="Saved versions" className="flex flex-col divide-y rounded-xl border bg-card">
+      <section className="flex flex-col rounded-2xl border bg-background p-5">
+        <h2 className="mb-2 text-base font-semibold">Saved versions</h2>
         {state.versions.map((v, i) => (
-          <li key={v.sha} className="flex flex-wrap items-center gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{v.subject}{v.published && <span className="ml-2 rounded border px-1.5 py-0.5 text-xs font-normal text-muted-foreground">published</span>}</p>
-              <p className="text-xs text-muted-foreground"><code>{v.short}</code> · {timeAgo(v.date)}{i === 0 ? " · latest version" : ""}</p>
-            </div>
-            {(i > 0 || unsaved.length > 0) && (confirming === v.sha ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm">{unsaved.length ? "Save or discard the unsaved changes first." : "Restore this version? Later versions stay in the history."}</span>
-                {!unsaved.length && <Button size="sm" onClick={() => { setConfirming(null); onRestore(v.short); }} disabled={busy}>Restore</Button>}
-                <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
-              </div>
-            ) : (
-              i > 0 && <Button size="sm" variant="outline" onClick={() => setConfirming(v.sha)}>Restore…</Button>
-            ))}
-          </li>
+          <div key={v.sha} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-muted py-2.5">
+            <span className="flex min-w-0 flex-[1_1_260px] flex-col leading-snug"><span className="font-semibold">{v.subject}</span><span className="text-xs text-muted-foreground">{timeAgo(v.date)} · {v.short}</span></span>
+            {live && v.sha === live.sha && <span className="rounded-full border border-success/50 bg-success/10 px-2.5 py-0.5 text-xs font-semibold">Your team sees this</span>}
+            {i === 0 ? <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold">Latest</span> : (
+              <Button variant="outline" className="min-h-10" disabled={busy || unsaved.length > 0} title={unsaved.length ? "Save or throw away your changes first" : undefined} onClick={() => onRestore(v.sha)}>Go back to this version</Button>
+            )}
+          </div>
         ))}
-      </ol>
+        {unsaved.length > 0 && state.versions.length > 1 && <p className="mt-2 text-xs text-muted-foreground">Save or throw away your changes before going back to an older version.</p>}
+      </section>
+      <Cta back={{ label: `← Back to ${backLabel}`, onClick: onBack }} status={unsaved.length ? `${groups.length} kind${groups.length > 1 ? "s" : ""} of change not in a version yet` : "Everything is saved"}
+        next={unsaved.length ? { label: "Save version", disabled: busy, onClick: () => { onSave(message.trim() || state.lastChange?.title || "Changes"); setMessage(""); } } : undefined} />
     </div>
   );
 }

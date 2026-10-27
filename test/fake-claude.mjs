@@ -17,6 +17,13 @@ const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 
 out({ type: "system", subtype: "init", session_id: session, cwd: process.cwd() });
 if (/crash/.test(prompt)) { process.stderr.write("boom\n"); process.exit(3); }
+// The Describe step's suggestion run: one JSON answer, no tools.
+if (/^Suggest starting answers/.test(prompt)) {
+  const json = JSON.stringify({ name: "Pocket", kind: "mobile-app", feels: ["Warm and trustworthy", "Calm", "Playful", "Focused"], palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch", "not-a-component"], question: null });
+  out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: json }] } });
+  out({ type: "result", subtype: "success", is_error: false, result: json, session_id: session, total_cost_usd: 0.002, num_turns: 1 });
+  process.exit(0);
+}
 out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Let me look." }, { type: "tool_use", id: "t1", name: "mcp__plugin_plinth_plinth__status", input: {} }] } });
 out({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "{}" }] } });
 const reply = /image/i.test(prompt) ? `I read ${(prompt.match(/Attached image 1: (.+)/) ?? [])[1] ?? "no image"}.` : `Echo: ${prompt.split("\n")[0]}`;

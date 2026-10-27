@@ -19,7 +19,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_TEXT = 20000;
 const TOOL_PREFIX = /^mcp__plugin_plinth_plinth__|^mcp__plinth__/;
 
-const SYSTEM_PROMPT = `You are working for someone using the Plinth UI, a local web page with these tabs: Tokens, Components, Guidelines, Checks, History, a Save version button, Undo, and Publish. They read your answers in that page's chat, not in a terminal, and they may not know design or code.
+const SYSTEM_PROMPT = `You are working for someone using the Plinth UI, a local web page with four steps (Describe, Style, Components, Publish), a History page, Undo and a "Save" button at the top, and this chat on the right. They read your answers in that chat, not in a terminal, and they may not know design or code. Talk about colors, corners, fonts and components in plain words; token names only when they ask.
 
 Rules:
 - Use the Plinth tools for everything; you cannot edit files directly. When they ask for a change, make it with the change tool: it is written at once and they see it immediately. Read the guidelines first and keep the change consistent with them. Ask first only before deleting or renaming tokens or components, or restoring a version.
@@ -33,7 +33,7 @@ const REVIEW_PROMPT = `You review a design system before it is published. You ca
 
 Call review_changes, then get_guidelines (get_tokens only if you need a value). Judge consistency: do the changes contradict each other, the guidelines (DESIGN.md, WRITING.md), or what a role is for (a destructive color on a default button, a success badge colored like a warning, controls rounder than containers…)? Contrast and look-alike numbers are already computed elsewhere; mention them only when they change what a role means.
 
-Answer in the language the guidelines are written in, in plain sentences for someone who may not know design: at most five findings, each naming the token or file and why it matters; or say the changes look consistent. Finish with one line: "Changes reviewed: N." where N is the number of token values and files that changed.`;
+Answer in the language the guidelines are written in, in plain sentences for someone who may not know design: at most five findings, each saying what changed and why it matters; or say the changes look consistent. Name things the way the Plinth UI does, not by token or file: "the main color", "text on the main color", "the corners of buttons and fields", "the corners of cards", "badge corners", "the font", "the Button's background", "the style guide". No token paths, CSS names or file names. Finish with one line: "Changes reviewed: N." where N is the number of token values and files that changed.`;
 
 /** Tool restrictions of the UI chat: Plinth's tools and read-only file tools, nothing that writes files. */
 export const RESTRICTED_TOOLS = [
@@ -42,7 +42,7 @@ export const RESTRICTED_TOOLS = [
 ];
 // The review reads; it does not get the tools that write.
 const READ_TOOLS = ["review_changes", "get_guidelines", "get_tokens", "list_components"];
-const WRITE_TOOLS = ["change", "undo", "add_palette_color", "upgrade_to_layers", "link_to_palette", "fix_contrast", "save_version", "restore_version", "publish", "create_design_system", "install_dependencies"];
+const WRITE_TOOLS = ["change", "undo", "set_style", "remove_component", "add_palette_color", "upgrade_to_layers", "link_to_palette", "fix_contrast", "save_version", "restore_version", "publish", "create_design_system", "install_dependencies"];
 const REVIEW_TOOLS = [
   "--allowedTools", ...READ_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),
   "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch", ...WRITE_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),

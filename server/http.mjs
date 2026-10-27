@@ -11,6 +11,8 @@ import { runChecks } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy } from "./publish.mjs";
 import { toolByName } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
+import { createSetup, presets, suggest } from "./start.mjs";
+import { readStyle } from "../engine/style.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".woff2": "font/woff2", ".json": "application/json" };
@@ -38,9 +40,12 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     });
   } catch { /* recursive watch unsupported: tools still bump rev */ }
 
+  // Creating the design system from the Describe step (start.mjs): the engine's part at once, Claude's in the chat.
+  ctx.setup ??= createSetup(ctx, { bump });
+
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
-    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, review: ctx.review?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state(), github: ctx.github.state() };
+    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, review: ctx.review?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state(), github: ctx.github.state(), setup: ctx.setup.state() };
     if (!exists) return common;
     const config = loadConfig(ctx.root);
     const brands = listBrands(ctx.root, config);
@@ -55,6 +60,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       checks: { gate: checks.gate, summary: checks.summary, warnings: checks.warnings, contrast: checks.contrast, distinct: checks.distinct, structure: checks.structure, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues, exceptions: checks.exceptions },
       layers: (config.layers ?? null), upgradeAvailable: !Array.isArray(config.layers),
       components: ws.listComponents(ctx.root),
+      style: Object.fromEntries(brands.map((b) => [b, readStyle(ctx.root, b)])),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },
       unsaved: ws.unsavedChanges(ctx.root),
       lastChange: ws.lastChange(ctx.root),
@@ -111,6 +117,12 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return ws.removeException(ctx.root, await readJson(req)); },
     "POST /api/palette": async (req) => { needsWorkspace(); return tool("add_palette_color", await readJson(req)); },
     "POST /api/upgrade": () => { needsWorkspace(); return tool("upgrade_to_layers"); },
+    // The Describe step: presets, Claude's suggestions after the first answer, and creating from the answers.
+    "GET /api/presets": () => presets(),
+    "POST /api/suggest": async (req) => { const { product } = await readJson(req); if (!String(product ?? "").trim()) throw new Error("Say what you're making first."); return suggest(ctx, product); },
+    "POST /api/setup": async (req) => { const answers = await readJson(req); if (ctx.setup.state()?.running) throw new Error("Already setting up."); ctx.setup.start(answers).catch(() => {}); return { started: true }; },
+    "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
+    "POST /api/remove-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("remove_component", { name, by: "you" }); },
     "POST /api/link-palette": () => { needsWorkspace(); return tool("link_to_palette"); },
     // The AI review at publish: one short headless run over everything since the last publish.
     "POST /api/review": () => { needsWorkspace(); if (!ctx.review) throw new Error("Review is not available in this server."); return ctx.review.start(); },

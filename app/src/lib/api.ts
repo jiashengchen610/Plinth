@@ -35,7 +35,19 @@ export type Version = { short: string; sha: string; date: string; subject: strin
 export type UnsavedFile = { file: string; status: "modified" | "added" | "deleted" };
 export type LastChange = { title: string; by: string; at: string; files: string[] };
 export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
-export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null };
+export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null; usedBy: string[] };
+export type Style = { main: string; gray: string; corners: string; font: string | null; hues: string[]; grays: string[] };
+export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
+export type SetupStep = { id: string; label: string; who: string; status: "waiting" | "active" | "done" | "error"; detail?: string };
+export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
+export type Presets = {
+  kinds: { id: string; label: string }[]; feels: string[]; fonts: { family: string; mood: string }[];
+  components: { id: string; name: string; hint: string; ready?: boolean }[];
+  palettes: { id: string; name: string; mood: string; main: string; gray: string; swatches: (string | null)[]; main600: string | null }[];
+  corners: { id: string; name: string; control: string | null; container: string | null }[];
+};
+export type Suggestions = { name: string | null; kind: string; feels: string[]; palette: string; corners: string; font: string; components: string[]; question: string | null; by: "claude" | "fallback"; error?: string; seconds?: number; cost?: number | null };
+export type Answers = { product: string; name?: string; feel: string; kind: string; palette: string; brandColor?: string; corners: string; font: string; components: string[]; extraText: string };
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
   typecheck?: { ok: boolean; tail?: string };
@@ -66,8 +78,10 @@ export type State = {
   tests: { running: boolean; last: TestResult | null };
   publish: PublishState;
   github: GithubLogin;
+  setup: SetupState;
   // Present when exists is true.
-  config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[]; exceptions?: Exception[] };
+  config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[]; exceptions?: Exception[]; brief?: Brief };
+  style: Record<string, Style>;
   brands: string[];
   tokens: Record<string, { modes: string[]; layers?: { id: string; name: string }[]; issues: string[]; rows: TokenRow[] }>;
   checks: {
@@ -115,6 +129,11 @@ export const api = {
   upgrade: () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade"),
   linkPalette: () => call<Partial<ChangeResult> & { message?: string; linked?: string[]; unmatched?: unknown[] }>("POST", "/api/link-palette"),
   addPaletteColor: (name: string, color: string) => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),
+  presets: () => call<Presets>("GET", "/api/presets"),
+  suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
+  setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
+  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick }),
+  removeComponent: (name: string) => call<ChangeResult>("POST", "/api/remove-component", { name }),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

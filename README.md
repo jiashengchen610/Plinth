@@ -1,14 +1,14 @@
 # Plinth
 
-Create and maintain a multi-brand design system by talking to Claude. Describe the product, paste a screenshot,
-and get design tokens, design and writing guidelines, and shadcn/ui components. Every change applies at once in a
-local UI and can be undone; you decide when to save a version, and you publish the result as Storybook on GitHub
-Pages, with pages for the tokens and guidelines next to the components. The whole loop happens in one UI:
-describe → change → save → publish.
+Create and maintain a multi-brand design system by talking to Claude. Answer a few questions (most are one click:
+a palette, corners, a font), and get design tokens, design and writing guidelines, and shadcn/ui components. Every
+change applies at once in a local UI and can be undone; you decide when to save a version, and you publish the result
+as Storybook on GitHub Pages, with pages for the tokens and guidelines next to the components. The whole loop is four
+steps in one UI, with Claude in a chat beside them: Describe → Style → Components → Publish.
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.4).** Tested by `npm test` (20 tests), by the 42 story tests in a generated workspace, and
+> **Status: early (0.5).** Tested by `npm test` (22 tests), by the 42 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -29,8 +29,8 @@ See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), includ
 
 ```
  you ──▶ Plinth UI (http://localhost:4319)            Claude Code in the folder (terminal, IDE)
-           chat · Tokens · Components · Guidelines           │ Plinth plugin
-           Checks · History · Undo · Save · Publish          │
+           Describe → Style → Components → Publish           │ Plinth plugin
+           chat · Undo · Save · History                      │
            │                                                 │ tool calls
            ▼                                                 ▼
        Plinth (one per folder) ◀──────────────────────────────┘
@@ -102,28 +102,30 @@ Missing tools are installed with winget (Windows) or Homebrew (macOS) when you a
 npm. Sign-ins (Claude Code, GitHub) open the browser. GitHub is optional at this point: you can also connect it
 later from the Publish dialog. Skip the checks with `--no-setup`.
 
-Then the UI opens at http://localhost:4319. Keep the terminal window open while you use it. Type the brief in the chat,
-for example:
+Then the UI opens at http://localhost:4319. Keep the terminal window open while you use it. Four steps, each with
+its main button in the bar at the bottom of the screen:
 
-> Create a design system for a budgeting app for young professionals. Warm and trustworthy, dark mode matters.
+1. **Describe.** Say what you're making ("a budgeting app for young professionals"). Claude reads that one answer
+   (a few seconds, a cheap model) and suggests the rest: how it should feel, a palette, corners, a font and the
+   components you'll likely need. Keep each suggestion with **Next**, pick another, say it your own way, or let Claude
+   decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
+   and asks Claude in the chat to write the style guides and any extra components you picked. The result is saved as
+   your first version. Dependencies for the preview install in the background (1–3 minutes, once).
+2. **Style.** Main color, grays, corners and font, with a sample screen in light and dark. Each pick re-points the
+   roles at palette steps the engine chooses for readable text. **Things to look at** lists text that is hard to read
+   and colors that look alike, with **Fix it** or **That's on purpose**.
+3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
+   (roles) → base colors (palette). Click a part, then a color, to connect them. Add components (Claude writes them)
+   or remove ones nothing else uses.
+4. **Publish** (optional). Save your changes as a version first; Claude's review appears (suggestions only). The first
+   time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
+   repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
+   does not work for private repositories there.
 
-Claude scaffolds the repo (about 20 seconds) and sets the tokens and guidelines (about a minute); you see each change
-as it lands. Then:
-
-1. **Install dependencies** (banner at the top, 1–3 minutes, once): Storybook and the test browser.
-2. **Components**: start Storybook, switch brand and light/dark in the header.
-3. **Tokens**: the layers side by side (palette → roles → component tokens). Click a token to light up where it
-   comes from and everything that uses it; re-point it at another palette step or role, per light and dark, or set
-   its opacity. **Components**: pick a component and change it from its tokens, narrowest first (this component →
-   its role → the palette). Edits apply at once; **Undo** in the header takes the last change back.
-4. Or keep talking: "make the primary blue", "use Inter", "add a kids brand", "make a pricing card from this
-   screenshot" (attach or paste images in the chat).
-5. **Checks**: reminders to fix or mark as intended; **Run tests**.
-6. **History**: the unsaved files, **Save version** with a short description (or discard them), and every saved
-   version, which you can restore.
-7. **Publish**: Claude's review appears first (suggestions only). The first time, press **Connect GitHub** (a GitHub
-   page opens; enter the code shown and authorize), then choose the repository name and visibility. On GitHub's free
-   plan choose **Public**: Pages does not work for private repositories there, so Storybook would not go online.
+The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
+kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
+for the page you're on. **Undo** at the top takes the last change back, whoever made it; **History** lists what isn't
+in a version yet, saves a version, throws changes away, and restores any saved version.
 
 Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup`. If Plinth already runs
 for the folder, the command opens that one instead of starting a second.
@@ -234,9 +236,10 @@ previous Storybook online.
 |---|---|---|
 | Your messages, attached images, and the token / guideline / component content Claude reads through the tools | Anthropic, through your Claude Code sign-in | **Yes**, the same as any Claude Code session. Plinth's own code is never sent. |
 | The review at publish: the changes since the last publish and the guidelines | Anthropic, through your Claude Code sign-in | **Yes** |
+| Your first answer in Describe (what you're making), for the suggestions | Anthropic, through your Claude Code sign-in | **Yes**: only that text, no files |
 | Plinth UI, engine, checks, tests | localhost (127.0.0.1 only, per-session token) | No |
 | Install dependencies | the npm registry, and Playwright's browser download | Package requests only |
-| Fonts | Google Fonts, from the browser showing Storybook or your app | Font requests only (no content) |
+| Fonts | Google Fonts, from the browser showing Storybook, your app, or the font choices in the Plinth UI | Font requests only (no content) |
 | Publish | GitHub (your account, private by default) | Yes, your design-system repo |
 
 The UI accepts requests only from localhost, with a token issued per session, and refuses other host names to
@@ -252,8 +255,10 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `create_design_system` | Scaffold from the template and make the first version |
 | `install_dependencies` | `npm install` plus the Playwright browser |
 | `get_tokens`, `get_guidelines`, `list_components` | Read the system (per brand) |
-| `change` | Ops (`set`, `delete`, `rename`, `write`), validated and written at once, with reminders |
+| `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
 | `undo` | Take back the newest change |
+| `set_style` | Main color, grays, corners, font in one step (what the Style step does): roles re-pointed at readable palette steps |
+| `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `add_palette_color` | Add a color to the palette as a 50–950 scale |
 | `upgrade_to_layers`, `link_to_palette` | Move a design system made before layers onto them; point fixed colors at the palette |
 | `run_checks`, `fix_contrast` | Deterministic checks; computed contrast fixes, applied |
@@ -287,6 +292,8 @@ design-system folder.
 | `PLINTH_WORKSPACE` | current folder | Design-system folder |
 | `PLINTH_MODEL` | Claude Code's default | Model for the UI chat, e.g. `sonnet` |
 | `PLINTH_REVIEW_MODEL` | `haiku` | Model for the review at publish |
+| `PLINTH_SUGGEST_MODEL` | `haiku` | Model for the suggestions after the first answer in Describe (one run, no tools) |
+| `PLINTH_NO_INSTALL` | unset | Set it to stop Create from installing dependencies (tests, CI) |
 | `PLINTH_CLAUDE_BIN` | `claude` | Claude Code executable |
 
 In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinctRoles`, `distinctMin`,
@@ -295,9 +302,11 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Limitations and known issues
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
-- Decided but not built yet (PRD, "下一版"): the five-screen UI (start, import report, style, components, publish),
-  a built-in catalog of about 16 components to pick from, importing an existing library as reference, and a shadcn
-  registry plus `plinth connect` so product repos get components and ask Plinth for new ones.
+- Decided but not built yet (PRD, "下一版"): a built-in catalog of about 16 ready-made components (today five come
+  ready-made and Claude writes the others, about US$1.50 each), starting from something you have (a Storybook, a
+  website, a GitHub repo; the Describe step shows the option as coming later), and a shadcn registry plus
+  `plinth connect` so product repos get components and ask Plinth for new ones.
+- The five template components can't be removed: the Foundations pages of the component site use them.
 - Not built yet, although the PRD lists them: importing DTCG / Tokens Studio / DESIGN.md files, the token usage
   index ("used by these components"), screenshot previews, behavior that depends on the context (mobile vs
   dashboard), touch-target and same-radius checks, a CHANGELOG at publish, and publishing through a pull request.
@@ -321,7 +330,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 20 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 22 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

@@ -1,0 +1,122 @@
+// The Describe step and the new UI's edits, end to end with a stand-in for the claude binary: presets, Claude's
+// suggestions after the first answer, creating from the answers (engine part at once, Claude's part in the chat,
+// first version saved), a style pick, removing a component and undoing it, and answering again.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
+import { readStyle, styleOps } from "../engine/style.mjs";
+import * as wsx from "../engine/workspace.mjs";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const SERVER = join(here, "..", "server", "index.mjs");
+const FAKE = join(here, "fake-claude.mjs");
+
+test("style: a pick re-points roles at readable palette steps; component removal is one undoable change", () => {
+  const root = mkdtempSync(join(tmpdir(), "plinth-style-"));
+  try {
+    wsx.initWorkspace(root, { name: "Probe", brand: "probe", context: "mobile-app" });
+    assert.deepEqual(readStyle(root, "probe"), { ...readStyle(root, "probe"), main: "neutral", gray: "neutral", corners: "round", font: "Geist" });
+    wsx.change(root, { title: "teal", ops: styleOps(root, "probe", { main: "teal", gray: "stone", corners: "pill", font: "Source Serif 4" }), by: "test" });
+    const st = readStyle(root, "probe");
+    assert.equal(st.main, "teal"); assert.equal(st.gray, "stone"); assert.equal(st.corners, "pill"); assert.equal(st.font, "Source Serif 4");
+    const roles = JSON.parse(readFileSync(join(root, "brands/probe/tokens.json"), "utf8")).color;
+    assert.equal(roles.primary.$value, "{color.teal.700}", "teal-600 is too light for white text, so 700");
+    assert.equal(roles["primary-foreground"].$value, "{color.white}");
+    assert.equal(roles.border.$value, "{color.stone.200}", "grays move to the same step of the new family");
+    const base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
+    assert.deepEqual(base.font.sans.$value, ["Source Serif 4", "serif"]);
+    assert.deepEqual(base.typography.body.$value.fontFamily, ["Source Serif 4", "serif"]);
+    assert.equal(base.radius.control.$value, "{radius.full}");
+    assert.throws(() => styleOps(root, "probe", { main: "not-a-color" }), /no palette color/);
+
+    // A component nothing imports can go; the template's ones are used by the Foundations pages.
+    assert.throws(() => wsx.removeComponentOps(root, "button"), /used by .*foundations/);
+    mkdirSync(join(root, "src/components/chip"), { recursive: true });
+    writeFileSync(join(root, "src/components/chip/chip.tsx"), "export const Chip = () => null;\n");
+    writeFileSync(join(root, "tokens/components/chip.tokens.json"), JSON.stringify({ chip: { $type: "color", background: { $value: "{color.primary}" } } }));
+    const r = wsx.change(root, { title: "Remove chip", ops: wsx.removeComponentOps(root, "chip"), by: "test" });
+    assert.deepEqual(r.files.sort(), ["src/components/chip/chip.tsx", "tokens/components/chip.tokens.json"]);
+    assert.ok(!existsSync(join(root, "src/components/chip/chip.tsx")) && !existsSync(join(root, "tokens/components/chip.tokens.json")));
+    wsx.undo(root);
+    assert.ok(existsSync(join(root, "src/components/chip/chip.tsx")) && existsSync(join(root, "tokens/components/chip.tokens.json")), "undo brings the files back");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("describe: suggestions, create from answers, style pick, remove, answer again", async (t) => {
+  const ws = mkdtempSync(join(tmpdir(), "plinth-describe-"));
+  const env = { ...process.env, PLINTH_WORKSPACE: ws, PLINTH_TOKEN: "tok", PLINTH_PORT: "4397", PLINTH_CLAUDE_BIN: FAKE, PLINTH_NO_INSTALL: "1", CLAUDECODE: "1" };
+  const child = spawn(process.execPath, [SERVER], { env, stdio: ["pipe", "pipe", "pipe"] });
+  const exited = new Promise((res) => child.once("exit", res));
+  t.after(async () => { child.stdin.end(); await exited; rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
+  const responses = new Map();
+  let nextId = 1;
+  createInterface({ input: child.stdout }).on("line", (line) => { const m = JSON.parse(line); if (m.id !== undefined) responses.get(m.id)?.(m); });
+  const request = (method, params) => new Promise((resolve) => { const id = nextId++; responses.set(id, resolve); child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n"); });
+  await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+  const ui = JSON.parse((await request("tools/call", { name: "open_ui", arguments: {} })).result.content[0].text).url;
+  const api = async (path, body) => {
+    const r = await fetch(new URL(path, ui), { method: body ? "POST" : "GET", headers: { "X-Plinth-Token": "tok", "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    return { status: r.status, json: await r.json() };
+  };
+  const settled = async () => {
+    for (let i = 0; i < 400; i++) {
+      const s = (await api("api/state")).json;
+      if (s.setup && !s.setup.running) return s;
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    throw new Error("setup did not finish");
+  };
+
+  const presets = (await api("api/presets")).json;
+  assert.equal(presets.palettes.length, 6);
+  assert.ok(presets.palettes.every((p) => p.swatches.every(Boolean)), "every preset palette resolves in the template");
+  assert.deepEqual(presets.corners.map((c) => c.id), ["square", "slight", "round", "pill"]);
+  assert.deepEqual(presets.components.filter((c) => c.ready).map((c) => c.id), ["button", "input", "label", "card", "badge"]);
+
+  const sugg = (await api("api/suggest", { product: "A budgeting app for young professionals" })).json;
+  assert.equal(sugg.by, "claude");
+  assert.equal(sugg.palette, "blue-slate");
+  assert.deepEqual(sugg.components, ["switch"], "ids outside the catalog are dropped");
+  assert.equal((await api("api/suggest", { product: " " })).status, 400);
+
+  // Create: scaffold and style at once, the guidelines through the chat, then the first version is saved.
+  assert.equal((await api("api/setup", { product: "A budgeting app for young professionals", name: "Pocket", feel: "Warm and trustworthy", kind: "mobile-app", palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch"], extraText: "" })).json.started, true);
+  let s = await settled();
+  assert.equal(s.exists, true);
+  assert.equal(s.setup.error, null);
+  assert.deepEqual(s.setup.steps.map((x) => [x.id, x.status]), [["scaffold", "done"], ["style", "done"], ["claude", "done"], ["deps", "waiting"]]);
+  assert.equal(s.config.name, "Pocket");
+  assert.equal(s.config.brief.feel, "Warm and trustworthy");
+  assert.deepEqual(s.style.pocket, { ...s.style.pocket, main: "blue", gray: "slate", corners: "pill", font: "Nunito" });
+  const ask = s.chat.messages.find((m) => m.role === "user");
+  assert.match(ask.text, /^Set up my new design system from my answers:/);
+  assert.match(ask.text, /Switch as components the Plinth way/);
+  assert.equal(s.unsaved.length, 0, "the creation is saved as a version");
+  assert.match(s.versions[0].subject, /Style and guidelines for Pocket/);
+
+  // A style pick from the UI is a change: written at once, undoable.
+  const picked = (await api("api/style", { brand: "pocket", main: "rose" })).json;
+  assert.equal(picked.style.main, "rose");
+  assert.equal((await api("api/style", { brand: "pocket", main: "rose" })).json.unchanged, true);
+  await api("api/undo", {});
+  assert.equal((await api("api/state")).json.style.pocket.main, "blue");
+
+  // Removing: refused for a component the Foundations pages use.
+  const refused = await api("api/remove-component", { name: "button" });
+  assert.equal(refused.status, 400);
+  assert.match(refused.json.error, /used by/);
+  assert.deepEqual((await api("api/state")).json.components.find((c) => c.id === "button").usedBy.includes("src/foundations/blocks.tsx"), true);
+
+  // Answering again keeps the workspace; the new style is applied and left for the user to save.
+  await api("api/setup", { product: "A budgeting app for students", feel: "Bright and playful", kind: "mobile-app", palette: "orange-stone", corners: "round", font: "Inter", components: [], extraText: "" });
+  s = await settled();
+  assert.equal(s.setup.fresh, false);
+  assert.equal(s.style.pocket.main, "orange");
+  assert.ok(s.unsaved.length > 0, "answering again is not saved for the user");
+  assert.match(s.chat.messages.filter((m) => m.role === "user").at(-1).text, /^I answered the questions again/);
+});

@@ -1,0 +1,247 @@
+import { useMemo, useState } from "react";
+import { api, exceptionKey, type ChangeResult, type Presets, type State, type TokenRow } from "@/lib/api";
+import { Cta, fontsHref } from "@/lib/cta";
+import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from "@/lib/plain";
+import { buildGraph, dependents, type Mode } from "@/lib/tokens";
+
+type Props = {
+  state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
+  onChanged: (r: Partial<ChangeResult> & { unchanged?: boolean; message?: string }, fallback: string) => void; onError: (m: string) => void;
+  onBack: () => void; onNext: () => void; onAsk: (text: string) => void;
+};
+
+const MAIN_FIRST = ["teal", "blue", "emerald", "orange", "violet", "rose", "zinc"];
+const GRAY_FIRST = ["slate", "neutral", "stone"];
+const GRAY_LABEL: Record<string, string> = { slate: "Cool", neutral: "Neutral", stone: "Warm" };
+const ring = (on: boolean) => (on ? "border-foreground" : "border-border");
+
+/** CSS variables for a brand and mode, from the values the engine resolved: the preview paints with them. */
+export function previewVars(rows: TokenRow[], mode: Mode) {
+  const vars: Record<string, string> = {};
+  for (const r of rows) {
+    if (r.layerId === "primitives") continue;
+    const v = r.values[mode] ?? r.values.default;
+    const val = v?.resolved ?? v?.css;
+    if (val) vars[`--${r.name}`] = val;
+  }
+  return vars as React.CSSProperties;
+}
+
+export function ModeSwitch({ mode, onMode }: { mode: "light" | "dark"; onMode: (m: "light" | "dark") => void }) {
+  return (
+    <div role="group" aria-label="Preview in light or dark mode" className="inline-flex rounded-xl bg-muted p-1">
+      {(["light", "dark"] as const).map((m) => (
+        <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)} className={`min-h-9 rounded-lg px-3.5 text-sm font-medium capitalize ${mode === m ? "bg-background shadow-sm" : "text-muted-foreground"}`}>{m}</button>
+      ))}
+    </div>
+  );
+}
+
+export function StyleView({ state, presets, brand, mode, onMode, onChanged, onError, onBack, onNext, onAsk }: Props) {
+  const st = state.style?.[brand];
+  const rows = useMemo(() => state.tokens[brand]?.rows ?? [], [state.tokens, brand]);
+  const g = useMemo(() => buildGraph(state, brand), [state, brand]);
+  const tmode: Mode = mode === "dark" ? "dark" : "default";
+  const [busy, setBusy] = useState(false);
+  const [moreMain, setMoreMain] = useState(false);
+  const [moreGray, setMoreGray] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState("#ca8a04");
+
+  const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
+  const pick = async (p: { main?: string; gray?: string; corners?: string; font?: string }, label: string) => {
+    setBusy(true);
+    try { onChanged(await api.style(brand, p), label); } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
+  };
+  if (!st) return <p className="text-muted-foreground">Loading the style…</p>;
+
+  const custom = st.hues.filter((h) => !TAILWIND_FAMILIES.has(h));
+  const mains = [...new Set([...custom, ...(moreMain ? [...st.hues, ...st.grays] : MAIN_FIRST), st.main])].filter((f) => st.hues.includes(f) || st.grays.includes(f));
+  const grays = [...new Set([...(moreGray ? st.grays : GRAY_FIRST), st.gray])].filter((f) => st.grays.includes(f));
+  const fonts = [...new Set([...(presets?.fonts.map((f) => f.family) ?? []), ...(st.font ? [st.font] : [])])];
+  const href = fontsHref(fonts);
+  const roleRows = rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/"));
+  const usedBy = (r: TokenRow) => new Set(dependents(g, r.path).filter((d) => d.layerId === "components").map((d) => d.path.split("/")[0])).size;
+  const famUsed = (fam: string) => roleRows.some((r) => Object.values(r.values).some((v) => typeof v.raw === "string" && v.raw.includes(`{color.${fam}.`)));
+  const vars = previewVars(rows, tmode);
+
+  const contrast = state.checks.contrast.filter((c) => c.brand === brand && !c.pass && !c.accepted);
+  const distinct = state.checks.distinct.filter((d) => d.brand === brand && !d.pass && !d.accepted);
+  const nWarn = contrast.length + distinct.length;
+  const modeWord = (m: string) => (m === "dark" ? " in dark mode" : m === "default" || m === "light" ? " in light mode" : ` (${m})`);
+  const accept = async (check: "contrast" | "distinct", key: string) => {
+    try { await api.acceptException(check, key, "Marked as on purpose in the Style step"); onChanged({ title: "Marked as on purpose" }, "Marked as on purpose."); } catch (e) { onError((e as Error).message); }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {href && <link rel="stylesheet" href={href} precedence="default" />}
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-muted-foreground">Step 2 of 4</span>
+        <h1 className="text-2xl font-semibold tracking-tight">Style</h1>
+        <p className="text-muted-foreground">A few choices set the look of every component. Pick here, or just tell Claude in the chat what you want. Changes show up right away, and Undo takes them back.</p>
+      </div>
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-4">
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div><h2 className="text-base font-semibold">Main color</h2><p className="text-sm text-muted-foreground">For buttons, links and anything people should notice.</p></div>
+            <div className="flex flex-wrap gap-2">
+              {mains.map((f) => (
+                <button key={f} type="button" disabled={busy} aria-pressed={st.main === f} onClick={() => pick({ main: f }, `Main color: ${familyName(f)}.`)} className={`inline-flex min-h-11 items-center gap-2 rounded-full border-2 py-1 pr-3.5 pl-1.5 text-sm font-medium ${ring(st.main === f)}`}>
+                  <span className="size-7 rounded-full border" style={{ background: swatch(f, GRAYS_SET.has(f) ? "900" : "600") ?? undefined }} />{familyName(f)}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <button type="button" onClick={() => setMoreMain(!moreMain)} className="min-h-10 text-sm font-medium text-info underline underline-offset-2">{moreMain ? "Fewer colors" : "More colors"}</button>
+              <button type="button" onClick={() => setAdding(!adding)} className="min-h-10 text-sm font-medium text-info underline underline-offset-2">Add your brand color</button>
+            </div>
+            {adding && (
+              <form className="flex flex-wrap items-end gap-2.5" onSubmit={async (e) => { e.preventDefault(); if (!newName.trim()) return; setBusy(true); try { const r = await api.addPaletteColor(newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"), newColor); onChanged(r, `Added ${r.name}.`); setAdding(false); setNewName(""); } catch (err) { onError((err as Error).message); } finally { setBusy(false); } }}>
+                <label className="flex flex-[1_1_160px] flex-col gap-1 text-sm font-semibold">Name<input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="For example: brand" className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
+                <label className="flex flex-col gap-1 text-sm font-semibold">Color<input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="h-11 w-16 rounded-lg border bg-background p-0.5" /></label>
+                <button type="submit" disabled={busy || !newName.trim()} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add</button>
+                <p className="basis-full text-xs text-muted-foreground">Plinth makes lighter and darker versions of it. Then pick it above as your main color.</p>
+              </form>
+            )}
+            {custom.length > 0 && (
+              <div className="flex flex-wrap gap-2 text-sm">
+                {custom.map((f) => (
+                  <span key={f} className="inline-flex items-center gap-2 rounded-lg border px-2.5 py-1">
+                    <span className="size-4 rounded" style={{ background: swatch(f, "600") ?? undefined }} />{familyName(f)}
+                    {famUsed(f) ? <span className="text-xs text-muted-foreground">in use</span> : (
+                      <button type="button" className="min-h-9 text-xs font-medium text-destructive underline" onClick={async () => { try { onChanged(await api.change(`Remove ${f} from the palette`, [{ op: "delete", file: "tokens/primitives.tokens.json", path: `color/${f}` }]), `Removed ${f}.`); } catch (e) { onError((e as Error).message); } }}>Remove</button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div><h2 className="text-base font-semibold">Grays</h2><p className="text-sm text-muted-foreground">For backgrounds, lines and quieter text.</p></div>
+            <div className="flex flex-wrap gap-2">
+              {grays.map((f) => (
+                <button key={f} type="button" disabled={busy} aria-pressed={st.gray === f} onClick={() => pick({ gray: f }, `Grays: ${familyName(f)}.`)} className={`flex flex-[1_1_110px] flex-col items-start gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold ${ring(st.gray === f)}`}>
+                  <span className="flex gap-1">{["50", "400", "900"].map((s) => <span key={s} className="size-5 rounded-md border" style={{ background: swatch(f, s) ?? undefined }} />)}</span>
+                  {GRAY_LABEL[f] ?? familyName(f)}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setMoreGray(!moreGray)} className="min-h-10 self-start text-sm font-medium text-info underline underline-offset-2">{moreGray ? "Fewer grays" : "More grays"}</button>
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div><h2 className="text-base font-semibold">Corners</h2><p className="text-sm text-muted-foreground">How round buttons, fields and cards are.</p></div>
+            <div className="flex flex-wrap gap-2">
+              {(presets?.corners ?? []).map((c) => (
+                <button key={c.id} type="button" disabled={busy} aria-pressed={st.corners === c.id} onClick={() => pick({ corners: c.id }, `Corners: ${c.name}.`)} className={`flex flex-[1_1_100px] flex-col items-center gap-2 rounded-xl border-2 px-2 py-3 text-sm font-semibold ${ring(st.corners === c.id)}`}>
+                  <span className="px-3.5 py-1.5 text-xs font-semibold" style={{ background: "var(--primary)", color: "var(--primary-foreground)", borderRadius: c.control ?? undefined, ...vars }}>Button</span>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+            {st.corners === "custom" && <p className="text-sm text-muted-foreground">Your corners are custom right now. Picking a preset replaces them.</p>}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div><h2 className="text-base font-semibold">Font</h2><p className="text-sm text-muted-foreground">Used for headings and text.</p></div>
+            <div className="flex flex-wrap gap-2">
+              {fonts.map((f) => (
+                <button key={f} type="button" disabled={busy} aria-pressed={st.font === f} onClick={() => pick({ font: f }, `Font: ${f}.`)} className={`flex flex-[1_1_130px] flex-col items-start gap-0.5 rounded-xl border-2 p-3 text-left ${ring(st.font === f)}`}>
+                  <span className="text-2xl font-bold leading-tight" style={{ fontFamily: `'${f}', sans-serif` }}>Aa</span>
+                  <span className="text-sm font-semibold">{f}</span>
+                  <span className="text-sm text-muted-foreground">{presets?.fonts.find((x) => x.family === f)?.mood ?? "Your font"}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2 rounded-2xl border bg-background p-5">
+            <div><h2 className="text-base font-semibold">Your colors</h2><p className="text-sm text-muted-foreground">Every color your components use. To change one, pick it in Components or ask Claude.</p></div>
+            <ul className="flex flex-col">
+              {roleRows.map((r) => {
+                const n = usedBy(r);
+                return (
+                  <li key={r.path} className="flex items-center gap-3 border-b border-muted py-2 last:border-0">
+                    <span className="size-7 flex-none rounded-lg border" style={{ background: (r.values[tmode] ?? r.values.default)?.resolved ?? undefined }} />
+                    <span className="flex min-w-0 flex-1 flex-col leading-tight"><span className="text-sm font-semibold">{roleName(r.name)}</span><span className="text-xs text-muted-foreground">{roleHint(r.name)}</span></span>
+                    <span className="text-xs whitespace-nowrap text-muted-foreground">{n ? `Used in ${n} component${n > 1 ? "s" : ""}` : "Not used yet"}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {state.brands.length === 1 && (
+            <section className="flex flex-wrap items-center gap-3 rounded-2xl border bg-background px-5 py-4">
+              <span className="flex-[1_1_240px] text-sm"><strong>More than one brand?</strong> Same components, different colors and fonts.</span>
+              <button type="button" onClick={() => onAsk("Add a second brand called ")} className="min-h-11 rounded-lg border px-3.5 text-sm font-medium">Ask Claude to add a brand</button>
+            </section>
+          )}
+        </div>
+
+        <div className="flex min-w-0 flex-[999_1_380px] flex-col gap-4 lg:sticky lg:top-0">
+          <section className="flex flex-col gap-3.5 rounded-2xl border bg-background p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-base font-semibold">Preview</h2><ModeSwitch mode={mode} onMode={onMode} /></div>
+            <Sample vars={vars} />
+            <p className="text-xs text-muted-foreground">A sample screen painted with your design system's values. The real components are in Components.</p>
+          </section>
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <h2 className="text-base font-semibold">Things to look at</h2>
+            {!nWarn && <p className="text-sm text-muted-foreground">Nothing right now. Plinth checks every change for text that's hard to read and colors that look alike.</p>}
+            {contrast.map((c) => (
+              <div key={exceptionKey.contrast(c)} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warning/50 bg-warning/10 py-2 pr-2 pl-3.5 text-sm">
+                <span className="flex-[1_1_220px]">{roleName(c.fg)} is hard to read on {roleName(c.bg.replace(/\/\d+$/, ""))}{modeWord(c.mode)}.</span>
+                <button type="button" onClick={async () => { try { onChanged(await api.fixContrast(), "Contrast fixed."); } catch (e) { onError((e as Error).message); } }} className="min-h-10 rounded-lg bg-foreground px-3.5 text-sm font-semibold text-background">Fix it</button>
+                <button type="button" onClick={() => accept("contrast", exceptionKey.contrast(c))} className="min-h-10 rounded-lg border px-3 text-sm font-medium">That's on purpose</button>
+              </div>
+            ))}
+            {distinct.map((d) => (
+              <div key={exceptionKey.distinct(d)} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warning/50 bg-warning/10 py-2 pr-2 pl-3.5 text-sm">
+                <span className="flex-[1_1_220px]">{roleName(d.a)} and {roleName(d.b)} look almost the same{modeWord(d.mode)}, so people may mix them up.</span>
+                <button type="button" onClick={() => onAsk(`${roleName(d.a)} and ${roleName(d.b)} look too similar. Make them easier to tell apart.`)} className="min-h-10 rounded-lg bg-foreground px-3.5 text-sm font-semibold text-background">Ask Claude</button>
+                <button type="button" onClick={() => accept("distinct", exceptionKey.distinct(d))} className="min-h-10 rounded-lg border px-3 text-sm font-medium">That's on purpose</button>
+              </div>
+            ))}
+          </section>
+        </div>
+      </div>
+      <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
+    </div>
+  );
+}
+
+const GRAYS_SET = new Set(["slate", "gray", "zinc", "neutral", "stone", "mauve", "olive", "mist", "taupe"]);
+
+/** A small budgeting screen drawn with the component tokens, so a change shows up the way components will show it. */
+export function Sample({ vars }: { vars: React.CSSProperties }) {
+  const v = (n: string) => `var(--${n})`;
+  return (
+    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--sans-font)" }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold">Your budget</span></div>
+        <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
+      </div>
+      <div className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
+        <span className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
+        <span className="text-[28px] leading-tight font-bold">$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
+        <span className="mt-2 block h-2 rounded-full" style={{ background: v("muted") }}><span className="block h-2 w-[62%] rounded-full" style={{ background: v("primary") }} /></span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-semibold" style={{ color: v("label-text-foreground") }}>Search</label>
+        <span className="flex h-11 items-center border px-3.5 text-[15px]" style={{ background: v("input-field-background"), borderColor: v("input-field-border"), color: v("input-field-placeholder"), borderRadius: v("input-radius") }}>Search expenses</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {[["Groceries", "secondary"], ["Paid", "success"], ["Over budget", "destructive"]].map(([t, k]) => (
+          <span key={t} className="px-2.5 py-0.5 text-xs font-semibold" style={{ background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
+        ))}
+      </div>
+      <div className="flex gap-2.5">
+        <span className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
+        <span className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
+      </div>
+    </div>
+  );
+}

@@ -1,233 +1,193 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, type ChangeResult, type Op, type State } from "@/lib/api";
-import { buildGraph, describeOp, type Mode } from "@/lib/tokens";
-import { TokenGraph } from "@/views/TokenGraph";
-import { ComponentsView } from "@/views/ComponentsView";
-import { GuidelinesView } from "@/views/GuidelinesView";
-import { ChecksView } from "@/views/ChecksView";
-import { HistoryView } from "@/views/HistoryView";
+import { api, type Answers, type ChangeResult, type Op, type Presets, type State } from "@/lib/api";
+import { CtaSlot } from "@/lib/cta";
+import { componentLabel, roleName } from "@/lib/plain";
 import { ChatPanel } from "@/views/ChatPanel";
-import { PublishDialog } from "@/views/PublishDialog";
+import { DescribeView } from "@/views/DescribeView";
+import { CreatingView } from "@/views/CreatingView";
+import { StyleView } from "@/views/StyleView";
+import { ComponentsView } from "@/views/ComponentsView";
+import { PublishView } from "@/views/PublishView";
+import { HistoryView } from "@/views/HistoryView";
 
-const TABS = ["chat", "tokens", "components", "guidelines", "checks", "history"] as const;
+const SCREENS = ["describe", "creating", "style", "components", "publish", "history"] as const;
+type Screen = (typeof SCREENS)[number];
+const STEPS: { id: Screen; label: string }[] = [{ id: "describe", label: "Describe" }, { id: "style", label: "Style" }, { id: "components", label: "Components" }, { id: "publish", label: "Publish" }];
+const fromHash = (): Screen | null => ((SCREENS as readonly string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Screen) : null);
 
-/** One line about what a change's reminders say, or null. */
+/** One line about what a change's reminders say, in plain words, or null. */
 function remindersLine(r: ChangeResult["reminders"] | undefined) {
   if (!r) return null;
   const parts = [];
-  if (r.contrastFailing.length) parts.push(`${r.contrastFailing.length} contrast pair${r.contrastFailing.length > 1 ? "s" : ""} below the minimum`);
-  if (r.lookAlike.length) parts.push(`${r.lookAlike.map((l) => `${l.a} and ${l.b}`).slice(0, 2).join(", ")} look alike`);
-  if (r.guidelineNotes.length) parts.push("the guidelines still describe the old color");
-  return parts.length ? `Reminder: ${parts.join("; ")}. See Checks.` : null;
+  if (r.contrastFailing.length) parts.push(`${r.contrastFailing.length === 1 ? `${roleName(r.contrastFailing[0].fg)} is` : `${r.contrastFailing.length} text colors are`} hard to read now`);
+  if (r.lookAlike.length) parts.push(`${roleName(r.lookAlike[0].a)} and ${roleName(r.lookAlike[0].b)} look alike`);
+  if (r.guidelineNotes.length) parts.push("the style guide still describes the old color (ask Claude to update it)");
+  return parts.length ? `Heads-up: ${parts.join("; ")}.` : null;
 }
-type Tab = (typeof TABS)[number];
-const initialTab = (): Tab => (TABS as readonly string[]).includes(location.hash.slice(1)) ? (location.hash.slice(1) as Tab) : "tokens";
+
+const TIPS: Record<string, string[]> = {
+  describe: ["Why did you pick these colors?", "Make the whole thing feel more premium"],
+  creating: ["What are you doing right now?"],
+  style: ["Make it feel more premium", "Use the colors from our logo", "Make the grays a bit warmer"],
+  publish: ["Fix the things to look at", "What changed since the last publish?"],
+  history: ["What changed in the last version?"],
+};
 
 export default function App() {
   const [state, setState] = useState<State | null>(null);
+  const [presets, setPresets] = useState<Presets | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [brand, setBrand] = useState<string>("");
+  const [screen, setScreen] = useState<Screen>(() => fromHash() ?? "style");
+  const [lastStep, setLastStep] = useState<Screen>("style");
+  const [visited, setVisited] = useState<Set<Screen>>(() => { try { return new Set(JSON.parse(localStorage.getItem("plinth-visited") ?? "[]")); } catch { return new Set(); } });
+  const [brand, setBrand] = useState("");
   const [mode, setMode] = useState<"light" | "dark">("light");
-  const [publishing, setPublishing] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [redo, setRedo] = useState(false);
+  const [chatText, setChatText] = useState("");
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const rev = useRef(0);
-  // On wide screens the chat is a side panel, so the Chat tab does not exist there.
-  const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const on = () => setWide(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
 
   const load = useCallback(async () => {
     try {
       const s = await api.state();
       rev.current = s.rev;
       setState(s);
-      setError(null);
       setBrand((b) => (s.exists && (!b || !s.brands.includes(b)) ? s.config.defaultBrand ?? s.brands[0] : b));
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    } catch (e) { setError((e as Error).message); }
   }, []);
-
-  // Poll a cheap revision counter; reload the full state only when something changed.
   useEffect(() => {
     load();
-    const t = setInterval(async () => {
-      try {
-        const { rev: r } = await api.rev();
-        if (r !== rev.current) load();
-      } catch { /* server restarting */ }
-    }, 1000);
+    api.presets().then(setPresets).catch(() => {});
+    const t = setInterval(async () => { try { const { rev: r } = await api.rev(); if (r !== rev.current) load(); } catch { /* server restarting */ } }, 1000);
     return () => clearInterval(t);
   }, [load]);
 
-  useEffect(() => { history.replaceState(null, "", `#${tab}`); }, [tab]);
-  useEffect(() => {
-    const onHash = () => setTab(initialTab());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+  const go = useCallback((s: Screen) => {
+    setScreen(s);
+    if (STEPS.some((x) => x.id === s)) setLastStep(s);
+    setVisited((v) => { const n = new Set(v); n.add(s); try { localStorage.setItem("plinth-visited", JSON.stringify([...n])); } catch { /* ignore */ } return n; });
+    document.querySelector("main")?.scrollTo({ top: 0 });
   }, []);
+  useEffect(() => { history.replaceState(null, "", `#${screen}`); }, [screen]);
 
+  // Before a design system exists the only page is Describe; while one is being made, the progress page.
+  const effective: Screen = !state ? screen : state.setup?.running ? "creating" : !state.exists ? "describe" : screen === "creating" && !state.setup ? "style" : screen;
+
+  const onError = useCallback((m: string) => { setError(m); setNotice(null); }, []);
+  const onChanged = useCallback((r: Partial<ChangeResult> & { unchanged?: boolean; message?: string }, fallback: string) => {
+    setError(null);
+    setNotice(r.unchanged ? "Nothing to change: it's already like that." : [r.message ?? (r.title ? `${r.title}.` : fallback), remindersLine(r.reminders)].filter(Boolean).join(" "));
+    load();
+  }, [load]);
+  const edit = useCallback(async (title: string, ops: Op[]) => {
+    try { onChanged(await api.change(title, ops), title); } catch (e) { onError((e as Error).message); }
+  }, [onChanged, onError]);
   const act = async (fn: () => Promise<unknown>, done: string) => {
     setBusy(true);
-    try {
-      await fn();
-      if (done) setNotice(done);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    try { await fn(); setError(null); if (done) setNotice(done); await load(); } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
-  const onError = useCallback((m: string) => setError(m), []);
+  const ask = useCallback((text: string) => {
+    setChatText(text);
+    document.getElementById("chat-input")?.scrollIntoView({ block: "nearest" });
+  }, []);
+  const create = async (answers: Answers) => {
+    try { await api.setup(answers); setRedo(false); setScreen("creating"); await load(); } catch (e) { onError((e as Error).message); }
+  };
 
-  const graph = useMemo(() => (state?.exists && brand ? buildGraph(state, brand) : null), [state, brand]);
-  const tokenMode: Mode = mode === "dark" ? "dark" : "default";
-  // Edits in the UI are written at once, like any change; Undo takes the last one back.
-  const edit = useCallback(async (ops: Op[]) => {
-    if (!graph || !ops.length) return;
-    try {
-      const r = await api.change(ops.length === 1 ? describeOp(ops[0], graph) : `${ops.length} token edits`, ops);
-      setError(null);
-      setNotice(`${r.title}.${remindersLine(r.reminders) ? ` ${remindersLine(r.reminders)}` : ""}`);
-      await load();
-    } catch (e) { setError((e as Error).message); }
-  }, [graph, load]);
-  const openToken = useCallback((key: string | null) => { setSelectedToken(key); if (key) setTab("tokens"); }, []);
+  if (!state) return <main className="grid min-h-dvh place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
 
-  if (!state) {
-    return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
-  }
-  if (!state.exists) {
-    // First run: the chat is the whole page, because the first message is the brief.
-    return (
-      <main className="mx-auto flex h-screen max-w-2xl flex-col gap-4 p-4 sm:p-6">
-        <div>
-          <h1 className="text-xl font-semibold">Plinth</h1>
-          <p className="text-sm text-muted-foreground">
-            Describe the product and how it should feel. Paste screenshots, mood boards or an existing site you like.
-            Claude creates the design system in <code className="text-xs">{state.workspace}</code>. Every change applies at once; you can undo it, and you decide when to save a version.
-          </p>
-        </div>
-        {error && <p role="status" className="text-sm text-destructive">{error}</p>}
-        <ChatPanel chat={state.chat} onError={onError} className="min-h-0 flex-1" />
-      </main>
-    );
-  }
-
-  const gate = state.checks.gate;
-  // Only broken token references block publishing; everything else is a reminder.
-  const failing = state.checks.tokenIssues.length;
-  const advisories = (state.checks.warnings ?? []).reduce((n, w) => n + w.count, 0);
-  const deps = state.deps;
+  const exists = state.exists;
+  const chatOn = exists;
+  const unsaved = state.unsaved?.length ?? 0;
+  const everPublished = state.versions?.some((v) => v.published);
+  const done = (id: Screen) => (id === "describe" ? exists : id === "publish" ? everPublished : visited.has(id));
+  const compName = componentLabel(state.components?.[0]?.id ?? "button", presets?.components);
+  const tips = effective === "components" ? [`Make the ${compName.toLowerCase()} a bit bigger`, "Add a loading state to Button", "Add a date picker"] : TIPS[effective] ?? [];
+  const placeholder = effective === "style" ? "Tell Claude how the style should change" : effective === "components" ? "Tell Claude what to change in a component" : effective === "publish" ? "Ask Claude about your changes" : "Tell Claude what to change";
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="font-semibold">Plinth</span>
-          <span className="truncate text-sm text-muted-foreground">{state.config.name}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="brand" className="text-sm text-muted-foreground">Brand</label>
-          <select id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} className="h-8 rounded-md border bg-background px-2 text-sm">
-            {state.brands.map((b) => <option key={b} value={b}>{state.config.brands.find((x) => x.id === b)?.name ?? b}</option>)}
-          </select>
-          <div role="group" aria-label="Preview mode" className="flex rounded-md border p-0.5">
-            {(["light", "dark"] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`rounded px-2.5 py-1 text-xs capitalize ${mode === m ? "bg-secondary font-medium text-secondary-foreground" : "text-muted-foreground"}`}>{m}</button>
-            ))}
+    <div className="flex min-h-dvh flex-col bg-muted/40 text-foreground lg:h-dvh lg:overflow-hidden">
+      <header className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b bg-background px-4 py-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="17" width="22" height="7" rx="2" fill="currentColor" /><rect x="8" y="5" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <strong className="truncate text-[15px]">{exists ? state.config.name : "New design system"}</strong>
+            <span className="text-xs text-muted-foreground">{exists ? (state.checks.gate ? "Style guide up to date" : "Some colors need fixing") : "Not created yet"}</span>
           </div>
+          {exists && state.brands.length > 1 && (
+            <select aria-label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className="h-10 rounded-lg border bg-background px-2 text-sm">
+              {state.brands.map((b) => <option key={b} value={b}>{state.config.brands.find((x) => x.id === b)?.name ?? b}</option>)}
+            </select>
+          )}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setTab("checks")} className="rounded-full">
-            <Badge variant={!gate ? "destructive" : advisories ? "warning" : "secondary"}>{!gate ? `${failing} token problem${failing === 1 ? "" : "s"}` : advisories ? `${advisories} reminder${advisories === 1 ? "" : "s"}` : "No reminders"}</Badge>
-          </button>
-          {state.publish.running && <Badge variant="outline">Publishing…</Badge>}
-          {state.lastChange && <Button size="sm" variant="ghost" title={`Undo: ${state.lastChange.title}`} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undone: ${r.undone}.`); }, "")} disabled={busy}>Undo</Button>}
-          <Button size="sm" variant={state.unsaved.length ? "outline" : "ghost"} onClick={() => setTab("history")} title="Unsaved changes: save them as a version in History">{state.unsaved.length ? `${state.unsaved.length} unsaved · Save…` : "All saved"}</Button>
-          <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={() => setChatOpen(!chatOpen)} aria-pressed={chatOpen}>{chatOpen ? "Hide chat" : "Show chat"}</Button>
-          <Button size="sm" onClick={() => setPublishing(true)} disabled={state.publish.running}>Publish</Button>
-        </div>
+        <nav aria-label="Steps" className="flex flex-[1_1_440px] flex-wrap items-center justify-center gap-1">
+          {STEPS.map((s, i) => {
+            const current = effective === s.id || (s.id === "describe" && effective === "creating");
+            const locked = !exists && s.id !== "describe";
+            const isDone = !current && done(s.id);
+            return (
+              <span key={s.id} className="inline-flex items-center gap-1">
+                {i > 0 && <span aria-hidden="true" className="block h-px w-4 bg-border" />}
+                <button type="button" disabled={locked || state.setup?.running} aria-current={current ? "step" : undefined} title={locked ? "Available after you create your design system" : undefined} onClick={() => go(s.id)}
+                  className={`inline-flex h-11 items-center gap-2 rounded-full pr-3.5 pl-2 text-sm font-medium disabled:cursor-not-allowed ${current ? "bg-primary text-primary-foreground" : locked ? "text-muted-foreground" : "hover:bg-muted"}`}>
+                  <span className={`grid size-6 place-items-center rounded-full text-xs font-semibold ${isDone ? "bg-success text-white" : current ? "border-[1.5px] border-primary-foreground" : "border-[1.5px] border-muted-foreground/60"}`}>{isDone ? "✓" : i + 1}</span>
+                  {s.label}
+                </button>
+              </span>
+            );
+          })}
+        </nav>
+        {exists && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="min-h-10" disabled={busy || !state.lastChange} title={state.lastChange ? `Undo: ${state.lastChange.title}` : "Nothing to undo"} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "")}>Undo</Button>
+            <Button variant="outline" className={`min-h-10 ${unsaved ? "border-warning/60 bg-warning/10" : ""}`} onClick={() => go("history")}>{unsaved ? `Not saved · Save` : "All saved"}</Button>
+            <Button variant={effective === "history" ? "secondary" : "ghost"} className="min-h-10" aria-current={effective === "history" ? "page" : undefined} onClick={() => go("history")}>History</Button>
+          </div>
+        )}
       </header>
 
-      {!deps.installed && (
-        <div role="status" className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-4 py-2 text-sm sm:mx-6">
-          <span className="min-w-0">
-            {deps.installing ? "Installing dependencies (Storybook, the test browser)… a few minutes." : deps.error ? `Dependency install failed: ${deps.error}` : "Dependencies are not installed yet. Component previews and tests need them."}
-          </span>
-          {!deps.installing && <Button size="sm" variant="outline" onClick={() => act(() => api.install(), "Installing dependencies.")} disabled={busy}>{deps.error ? "Retry install" : "Install dependencies"}</Button>}
-        </div>
-      )}
-
-      {state.upgradeAvailable && (
-        <div role="status" className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info/50 bg-info/10 px-4 py-3 text-sm sm:mx-6">
-          <span className="min-w-0"><strong>Upgrade available: layered tokens.</strong> Adds Tailwind's palette at the bottom and component tokens on top, so you can change one component or one role without touching code. Your colors keep their values; edited components are left as they are. Undo takes it back.</span>
-          <Button size="sm" onClick={() => act(() => api.upgrade(), "Upgraded to layered tokens. Undo takes it back; Save version keeps it.")} disabled={busy}>Upgrade</Button>
-        </div>
-      )}
-
-
       {(error || notice) && (
-        <div role="status" className={`mx-4 mt-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-2 text-sm sm:mx-6 ${error ? "border-destructive/40 text-destructive" : ""}`}>
-          <span className="min-w-0">{error ?? notice}</span>
-          <Button size="sm" variant="ghost" onClick={() => { setError(null); setNotice(null); }}>Dismiss</Button>
+        <div role="status" className={`flex flex-none items-center gap-3 border-b px-4 text-sm ${error ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-info/30 bg-info/5"}`}>
+          <span className="min-w-0 flex-1 py-2.5">{error ?? notice}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => { setError(null); setNotice(null); }} className="grid size-11 place-items-center">×</button>
+        </div>
+      )}
+      {exists && state.upgradeAvailable && (
+        <div role="status" className="flex flex-none flex-wrap items-center gap-3 border-b bg-info/5 px-4 py-2 text-sm">
+          <span className="min-w-0 flex-1">This design system was made by an older Plinth. Upgrade it so each component gets its own colors. Undo takes it back.</span>
+          <Button onClick={() => act(() => api.upgrade(), "Upgraded. Undo takes it back.")} disabled={busy}>Upgrade</Button>
         </div>
       )}
 
-      <main className={`grid gap-4 px-4 py-4 sm:px-6 ${chatOpen ? "lg:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
-        <Tabs value={tab === "chat" && wide ? "tokens" : tab} onValueChange={(v) => setTab(v as Tab)} className="min-w-0 gap-4">
-          <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="chat" className="lg:hidden">Chat{state.chat?.working ? " · working" : ""}</TabsTrigger>
-            <TabsTrigger value="tokens">Tokens</TabsTrigger>
-            <TabsTrigger value="components">Components</TabsTrigger>
-            <TabsTrigger value="guidelines">Guidelines</TabsTrigger>
-            <TabsTrigger value="checks">Checks{failing ? ` (${failing})` : advisories ? ` (${advisories})` : ""}</TabsTrigger>
-            <TabsTrigger value="history">History{state.unsaved.length ? ` (${state.unsaved.length} unsaved)` : ""}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="chat" className="lg:hidden">
-            <ChatPanel chat={state.chat} onError={onError} className="h-[75vh]" />
-          </TabsContent>
-          <TabsContent value="tokens">
-            {graph && <TokenGraph state={state} brand={brand} mode={tokenMode} selected={selectedToken} onSelect={setSelectedToken} onEdit={edit} onDone={(m) => { setNotice(m); load(); }} onError={onError} />}
-          </TabsContent>
-          <TabsContent value="components">
-            <ComponentsView state={state} brand={brand} mode={mode} busy={busy} graph={graph} onEdit={(op) => edit([op])} onOpenToken={openToken} onStartStorybook={() => act(async () => { const r = await api.startStorybook(); if (r.error) throw new Error(`${r.error} ${r.next ?? ""}`); }, "Storybook started.")} onInstall={() => act(() => api.install(), "Installing dependencies.")} />
-          </TabsContent>
-          <TabsContent value="guidelines">
-            <GuidelinesView state={state} brand={brand} />
-          </TabsContent>
-          <TabsContent value="checks">
-            <ChecksView
-              state={state} busy={busy} onError={onError} onChanged={load}
-              onFixContrast={() => act(() => api.fixContrast(), "Contrast fixed. Undo takes it back.")}
-              onRunTests={() => act(() => api.runTests(), "Tests started. Results appear here in about a minute.")}
-              onInstall={() => act(() => api.install(), "Installing dependencies.")}
-            />
-          </TabsContent>
-          <TabsContent value="history">
-            <HistoryView state={state} busy={busy}
-              onRestore={(sha) => act(() => api.restore(sha), "Version restored as a new version.")}
-              onSave={(message) => act(() => api.save(message), "Saved as a new version.")}
-              onDiscard={() => act(() => api.discardUnsaved(), "Unsaved changes discarded.")} />
-          </TabsContent>
-        </Tabs>
-        {/* Wide screens: the chat stays beside whatever tab is open. */}
-        {chatOpen && <ChatPanel chat={state.chat} onError={onError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />}
-      </main>
-
-      {publishing && <PublishDialog state={state} onClose={() => setPublishing(false)} onError={onError} />}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="min-h-0 flex-1 px-4 py-5 lg:overflow-y-auto">
+            <CtaSlot.Provider value={slot}>
+              <div className={`mx-auto ${effective === "describe" || effective === "creating" ? "max-w-3xl" : effective === "publish" || effective === "history" ? "max-w-4xl" : "max-w-6xl"}`}>
+                {effective === "describe" && <DescribeView key={`${exists}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} />}
+                {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
+                {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => go("components")} onAsk={ask} />}
+                {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => go("publish")} />}
+                {effective === "publish" && exists && <PublishView state={state} onError={onError} onAsk={ask} onBack={() => go("components")} onSaved={(m) => { setNotice(m); load(); }} />}
+                {effective === "history" && exists && (
+                  <HistoryView state={state} busy={busy} backLabel={STEPS.find((s) => s.id === lastStep)?.label ?? "Style"} onBack={() => go(lastStep)}
+                    onSave={(m) => act(() => api.save(m), "Saved a version.")} onDiscard={() => act(() => api.discardUnsaved(), "Threw away the changes.")}
+                    onRestore={(sha) => act(() => api.restore(sha), "Went back to that version. Your newer versions are still in History.")} />
+                )}
+              </div>
+            </CtaSlot.Provider>
+          </main>
+          <div ref={setSlot} className="sticky bottom-0 z-10 flex-none lg:static" />
+        </div>
+        {chatOn && (
+          <aside className="flex min-h-[520px] flex-none flex-col border-t lg:h-auto lg:min-h-0 lg:w-[380px] lg:border-t-0 lg:border-l">
+            <ChatPanel chat={state.chat} onError={onError} className="min-h-0 flex-1" text={chatText} onText={setChatText} tips={tips} placeholder={placeholder} />
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

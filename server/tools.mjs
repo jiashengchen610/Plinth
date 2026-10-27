@@ -9,6 +9,7 @@ import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
+import { readStyle, styleOps, styleTitle } from "../engine/style.mjs";
 
 const requireWorkspace = (root) => {
   if (!existsSync(join(root, "design-system.json"))) throw new Error(`No design system in ${root}. Call create_design_system first.`);
@@ -140,6 +141,38 @@ export const TOOLS = [
       const p = paletteColorOps(ctx.root, { name: a.name, value: a.color, templateDir: ws.TEMPLATE_DIR });
       const r = write(ctx, { title: `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`, ops: p.ops, by: "engine" });
       return { ...r, name: p.name, anchor: p.anchor, shades: p.shades };
+    },
+  },
+  {
+    name: "set_style",
+    description: "Change the overall look in one step, the way the UI's Style step does: main color (a palette family such as teal, or a gray family for black and white), grays (a gray family: slate, gray, zinc, neutral, stone …), corners (square, slight, round, pill) and font (a Google Fonts family). Roles are re-pointed at palette steps the engine picks for readable text; the palette is not edited. Written at once; undoable. Prefer this over hand-made ops for these four choices.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Brand id; default: the default brand" },
+        main: { type: "string" }, gray: { type: "string" },
+        corners: { type: "string", enum: ["square", "slight", "round", "pill"] },
+        font: { type: "string", description: "Google Fonts family, e.g. Inter, Nunito, Source Serif 4" },
+      },
+    },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+      const pick = Object.fromEntries(["main", "gray", "corners", "font"].filter((k) => a[k] !== undefined && a[k] !== "").map((k) => [k, a[k]]));
+      if (!Object.keys(pick).length) throw new Error("set_style needs main, gray, corners or font");
+      const ops = styleOps(ctx.root, brand, pick);
+      if (!ops.length) return { title: styleTitle(pick), files: [], unchanged: true, style: readStyle(ctx.root, brand) };
+      return { ...write(ctx, { title: styleTitle(pick), ops, by: a.by ?? "claude" }), style: readStyle(ctx.root, brand) };
+    },
+  },
+  {
+    name: "remove_component",
+    description: "Remove a component: its folder (code, story, spec) and its token file, as one change Undo can take back. Refused for a component that other code imports (the Foundations pages, other components). Ask the user before removing.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "Component folder name, e.g. date-picker" } }, required: ["name"] },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      return write(ctx, { title: `Remove ${a.name}`, ops: ws.removeComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
     },
   },
   {

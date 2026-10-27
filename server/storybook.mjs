@@ -83,7 +83,7 @@ export function createDeps(root, bump = () => {}) {
         const npm = await run("npm", ["install", "--no-audit", "--no-fund"], root);
         if (npm.code !== 0) return { installed: false, error: npm.tail };
         // npm rewrites the lockfile for this machine; save that as its own version, not as an outside edit.
-        try { gitCommit(root, "Update package-lock.json after installing dependencies", ["package-lock.json"]); } catch { /* not a git repo yet */ }
+        try { gitCommit(root, "Installed the preview tools (package-lock.json)", ["package-lock.json"]); } catch { /* not a git repo yet */ }
         // Story tests run in a real browser; a missing one is the most common reason "npm test" fails locally.
         const pw = await run("npx", ["playwright", "install", "chromium"], root);
         return { installed: true, browser: pw.code === 0, note: pw.code === 0 ? undefined : `Playwright browser install failed: ${pw.tail}` };

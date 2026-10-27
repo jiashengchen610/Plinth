@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { api, inboxUrl, type ChatImage, type ChatState } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 
-type Props = { chat: ChatState | null; onError: (message: string) => void; className?: string };
+type Props = {
+  chat: ChatState | null; onError: (message: string) => void; className?: string;
+  /** The message box is controlled by the page, so "Ask Claude" buttons elsewhere can fill it in. */
+  text: string; onText: (text: string) => void;
+  tips?: string[]; placeholder?: string;
+};
 
 function readImage(file: File): Promise<ChatImage> {
   return new Promise((resolve, reject) => {
@@ -29,9 +34,11 @@ export function Reply({ text }: { text: string }) {
   return <div className="text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export function ChatPanel({ chat, onError, className = "" }: Props) {
-  const [text, setText] = useState("");
+export function ChatPanel({ chat, onError, className = "", text, onText: setText, tips = [], placeholder }: Props) {
   const [images, setImages] = useState<ChatImage[]>([]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // A page filled the box in (an "Ask Claude" button): put the cursor at the end so they can finish the sentence.
+  useEffect(() => { if (text && document.activeElement !== inputRef.current) { inputRef.current?.focus(); inputRef.current?.setSelectionRange(text.length, text.length); } }, [text]);
   const [sending, setSending] = useState(false);
   const [, setTick] = useState(0);
   const listRef = useRef<HTMLOListElement>(null);
@@ -66,11 +73,11 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
   const cannotStart = chat?.error && /Could not start Claude Code/.test(chat.error);
 
   return (
-    <section aria-label="Chat with Claude" className={`flex min-h-0 flex-col rounded-xl border bg-card ${className}`}>
+    <section aria-label="Chat with Claude" className={`flex min-h-0 flex-col bg-card ${className}`}>
       <header className="flex items-start justify-between gap-2 border-b px-4 py-3">
         <div>
-          <h2 className="text-sm font-medium">Chat</h2>
-          <p className="text-xs text-muted-foreground">Describe what you want. Claude changes it at once; Undo takes it back.</p>
+          <h2 className="text-sm font-semibold">Chat with Claude</h2>
+          <p className="text-xs text-muted-foreground">Say what to change. Claude changes it right away; Undo at the top takes it back.</p>
         </div>
         {messages.length > 0 && !working && (
           <Button size="sm" variant="ghost" onClick={() => api.resetChat().catch((e) => onError(e.message))} title="Start a new conversation. Earlier messages stay visible.">New thread</Button>
@@ -80,7 +87,7 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
       <ol ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite">
         {messages.length === 0 && (
           <li className="text-sm text-muted-foreground">
-            Try: "Create a design system for a budgeting app for young professionals. Warm and trustworthy, dark mode matters." Paste a screenshot to show the look you want.
+            Tell Claude what you'd like to change, in your own words, for example "make the buttons rounder" or "remove the toast". Paste a screenshot to show a look you like.
           </li>
         )}
         {messages.map((m) => (
@@ -128,21 +135,31 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
             ))}
           </ul>
         )}
-        <label htmlFor="chat-input" className="sr-only">Message</label>
+        {tips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Try asking:</span>
+            {tips.map((t) => (
+              <button key={t} type="button" onClick={() => setText(t)} className="min-h-8 rounded-full border bg-muted/50 px-2.5 py-1 text-left text-xs hover:bg-muted">{t}</button>
+            ))}
+          </div>
+        )}
+        <label htmlFor="chat-input" className="sr-only">Message to Claude</label>
         <textarea
+          ref={inputRef}
           id="chat-input"
           rows={3}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
-          placeholder={working ? "Claude is working; you can type the next message" : "Ask for a change, or paste a screenshot"}
+          placeholder={working ? "Claude is working; you can type the next message" : placeholder ?? "Tell Claude what to change"}
           className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <div className="flex items-center justify-between gap-2">
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
-          <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Attach image</Button>
-          <Button type="submit" size="sm" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Add a picture</Button>
+          <span className="flex-1 text-right text-[11px] text-muted-foreground">About 30 s and US$0.30 per change</span>
+          <Button type="submit" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
         </div>
       </form>
     </section>

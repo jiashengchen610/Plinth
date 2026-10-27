@@ -22,7 +22,10 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   The managed deploy workflow runs `npx -y github:jiashengchen610/Plinth#v<version> check`, so the tag must exist
   before any workspace publishes with that version.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
-- After changing `engine/` or `server/`, run `npm test` (20 tests).
+- The UI is four steps (Describe, Style, Components, Publish) in plain words: no token names in UI copy except the
+  small labels in the node graph. Presets the UI offers (palettes, fonts, corners, the component list) live in
+  `server/start.mjs`; style picks become ops in `engine/style.mjs`. Every page's main action goes in `<Cta>`.
+- After changing `engine/` or `server/`, run `npm test` (22 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (42 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
@@ -38,7 +41,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   allows them all; the prompt can come from stdin; a nested run works after deleting `CLAUDECODE` from the env;
   `--resume <session_id>` continues a session. On Windows `claude` is a native exe (spawn without a shell).
   `--allowedTools` with single tool names (`mcp__plugin_plinth_plinth__review_changes`) plus `--disallowedTools` for
-  the writing tools gives a read-only run (the review at publish).
+  the writing tools gives a read-only run (the review at publish). Without `--plugin-dir` and with the file tools
+  disallowed, `claude -p --model haiku` answers a JSON-only prompt in about 9 s for about US$0.004 (Describe's
+  suggestions).
 - shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
   `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,

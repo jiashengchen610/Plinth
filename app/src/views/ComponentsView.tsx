@@ -1,85 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, type Op, type State, type StoryEntry, type TokenRow } from "@/lib/api";
-import { chainDown, componentOf, isColor, label, remindersByToken, valueIn, type Graph, type Mode } from "@/lib/tokens";
-import { TokenEditor } from "@/views/TokenEditor";
+import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry } from "@/lib/api";
+import { Cta } from "@/lib/cta";
+import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
+import { buildGraph, componentOf, remindersByToken, targetIn, type Mode } from "@/lib/tokens";
+import { NodeGraph } from "@/views/NodeGraph";
+import { ModeSwitch } from "@/views/StyleView";
 
 type Props = {
-  state: State; brand: string; mode: "light" | "dark"; busy: boolean;
-  graph: Graph | null; onEdit: (op: Op) => void; onOpenToken: (key: string) => void;
-  onStartStorybook: () => void; onInstall: () => void;
+  state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
+  onEdit: (title: string, ops: Op[]) => void; onChanged: (r: Partial<ChangeResult>, fallback: string) => void; onError: (m: string) => void;
+  onAsk: (text: string) => void; onBack: () => void; onNext: () => void;
 };
 
-/**
- * One component: its live preview, and its tokens as the place to start changing it. The order of the steps is the
- * order of impact: this component only (its token), every component on a role (the role), every role on a palette
- * step (the palette, changed by pointing roles elsewhere).
- */
-function ComponentTokens({ g, state, brand, mode, component, onEdit, onOpenToken }: { g: Graph; state: State; brand: string; mode: Mode; component: string; onEdit: (op: Op) => void; onOpenToken: (key: string) => void }) {
-  const tokens = g.rows.filter((r) => componentOf(r) === component);
-  const reminders = useMemo(() => remindersByToken(state, brand, mode), [state, brand, mode]);
-  const [picked, setPicked] = useState<string | null>(null);
-  useEffect(() => setPicked(null), [component]);
-  const row = picked ? g.byKey.get(picked) ?? null : null;
-  const parts = [...new Set(tokens.map((t) => t.path.split("/").slice(1, -1).join(" ") || "all"))];
-
-  if (!tokens.length) {
-    return (
-      <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-        This component has no component tokens, so it uses roles directly. Ask Claude to give it its own tokens ("give the {component} component its own tokens"), then you can change it here without touching the others.
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-xl border bg-card p-4 text-sm">
-        <h3 className="font-medium">Change this component</h3>
-        <ol className="mt-1 flex list-decimal flex-col gap-0.5 pl-5 text-xs text-muted-foreground">
-          <li>Pick a token below and point it at another role: only <strong>{component}</strong> changes.</li>
-          <li>Or follow it to its <strong>role</strong> (the middle chip) to change every component on that role.</li>
-          <li>Or follow it to the <strong>palette</strong> to see every role on that color.</li>
-        </ol>
-        <div className="mt-3 flex flex-col gap-3">
-          {parts.map((part) => (
-            <section key={part} className="flex flex-col gap-1">
-              <h4 className="text-[11px] font-medium text-muted-foreground capitalize">{part}</h4>
-              {tokens.filter((t) => (t.path.split("/").slice(1, -1).join(" ") || "all") === part).map((t) => {
-                const chain = chainDown(g, t, mode);
-                const r = reminders.get(t.name);
-                return (
-                  <div key={t.path} className={`flex min-w-0 flex-wrap items-center gap-1 rounded-md px-1.5 py-1 ${picked === t.path ? "bg-accent" : "hover:bg-muted"}`}>
-                    <button type="button" onClick={() => setPicked(picked === t.path ? null : t.path)} className="min-w-0 truncate text-left font-mono text-xs font-medium" aria-pressed={picked === t.path}>
-                      {t.path.split("/").at(-1)}
-                    </button>
-                    {r?.length ? <span title={r.map((x) => x.text).join("\n")} className={`size-2 rounded-full ${r.some((x) => x.kind === "contrast") ? "bg-destructive" : "bg-warning"}`} /> : null}
-                    <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-                      {chain.slice(1).map((c, i) => (
-                        <span key={c.path} className="flex items-center gap-1">
-                          {i > 0 && <span aria-hidden="true" className="text-muted-foreground">→</span>}
-                          <button type="button" title={`Open ${label(c)} in the token graph`} onClick={() => onOpenToken(c.path)} className="inline-flex items-center gap-1 rounded border bg-background px-1 font-mono text-[10px] hover:bg-muted">
-                            {isColor(c) && <span className="size-2.5 rounded-sm border" style={{ background: valueIn(c, mode)?.resolved ?? "transparent" }} />}
-                            {label(c)}
-                          </button>
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                );
-              })}
-            </section>
-          ))}
-        </div>
-      </div>
-      {row && <TokenEditor g={g} state={state} brand={brand} mode={mode} row={row} reminders={reminders} onEdit={onEdit} onSelect={(k) => (componentOf(g.byKey.get(k) as TokenRow) === component ? setPicked(k) : onOpenToken(k))} />}
-      <p className="text-xs text-muted-foreground">Edits apply at once: the preview reloads with them. Undo takes the last one back.</p>
-    </div>
-  );
-}
-
-export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall, busy, graph, onEdit, onOpenToken }: Props) {
-  const [entries, setEntries] = useState<StoryEntry[]>([]);
+export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, onChanged, onError, onAsk, onBack, onNext }: Props) {
+  const g = useMemo(() => buildGraph(state, brand), [state, brand]);
+  const tmode: Mode = mode === "dark" ? "dark" : "default";
   const [selected, setSelected] = useState<string | null>(state.components[0]?.id ?? null);
-  const [view, setView] = useState<"preview" | "spec">("preview");
+  const [part, setPart] = useState<string | null>(null);
+  const [variant, setVariant] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [entries, setEntries] = useState<StoryEntry[]>([]);
+  const catalog = presets?.components;
 
   useEffect(() => {
     if (!state.storybook) return;
@@ -87,60 +30,126 @@ export function ComponentsView({ state, brand, mode, onStartStorybook, onInstall
   }, [state.storybook, state.rev]);
 
   const component = state.components.find((c) => c.id === selected) ?? state.components[0];
-  const docs = entries.find((e) => e.type === "docs" && e.importPath.includes(`/components/${component?.id}/`));
-  const firstStory = entries.find((e) => e.type === "story" && e.importPath.includes(`/components/${component?.id}/`));
+  useEffect(() => { setPart(null); setVariant(""); setConfirmRemove(false); }, [component?.id]);
+  const reminders = useMemo(() => remindersByToken(state, brand, tmode), [state, brand, tmode]);
+  if (!component) return <p className="text-muted-foreground">No components yet. Ask Claude to add one.</p>;
+
+  const tokens = g.rows.filter((r) => componentOf(r) === component.id);
+  const colorParts = tokens.filter((t) => t.type === "color");
+  const variants = [...new Set(colorParts.map((t) => variantOf(t.path)))];
+  const shown = variants.length > 1 ? colorParts.filter((t) => variantOf(t.path) === (variant || variants[0])) : colorParts;
+  const radius = tokens.find((t) => t.path === `${component.id}/radius`);
+  const roleNames = new Set(colorParts.map((p) => targetIn(g, p, tmode)?.name).filter(Boolean) as string[]);
+  const warns = [...new Set([...colorParts.map((p) => p.name), ...roleNames].flatMap((n) => (reminders.get(n) ?? []).filter((r) => r.kind === "contrast").map((r) => r.text)))];
+  const warnFor = (id: string) => g.rows.some((r) => componentOf(r) === id && (reminders.get(r.name) ?? []).some((x) => x.kind === "contrast"));
+
+  const docs = entries.find((e) => e.type === "docs" && e.importPath.includes(`/components/${component.id}/`));
+  const firstStory = entries.find((e) => e.type === "story" && e.importPath.includes(`/components/${component.id}/`));
   const target = docs ?? firstStory;
-  // Storybook renders the user's components in its own page: nothing from this UI leaks into it.
-  const src = state.storybook && target
-    ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}`
-    : null;
+  const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}` : null;
   const deps = state.deps;
+  const name = componentLabel(component.id, catalog);
+  const missing = (catalog ?? []).filter((c) => !c.ready && !state.components.some((x) => x.id === c.id));
+  const protectedBy = component.usedBy.length > 0;
+
+  const remove = async () => {
+    try { onChanged(await api.removeComponent(component.id), `Removed ${name}.`); setSelected(null); } catch (e) { onError((e as Error).message); }
+  };
 
   return (
-    <div className="flex flex-wrap items-start gap-4">
-      <nav aria-label="Components" className="flex min-w-0 flex-[1_1_160px] flex-col gap-1 md:max-w-48">
-        {state.components.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            aria-current={c.id === component?.id}
-            onClick={() => setSelected(c.id)}
-            className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted ${c.id === component?.id ? "bg-accent font-medium text-accent-foreground" : ""}`}
-          >
-            <span className="capitalize">{c.id}</span>
-            {!c.spec && <span className="text-xs text-muted-foreground">no spec</span>}
-          </button>
-        ))}
-        <p className="mt-2 px-3 text-xs text-muted-foreground">Want another one? Ask in the chat: "make a pricing card from this screenshot".</p>
-      </nav>
-      <section aria-label="Component preview" className="flex min-w-0 flex-[999_1_420px] flex-col gap-3">
-        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Preview or spec">
-          {(["preview", "spec"] as const).map((v) => (
-            <Button key={v} size="sm" variant={view === v ? "secondary" : "ghost"} role="tab" aria-selected={view === v} onClick={() => setView(v)}>
-              {v === "preview" ? "Preview" : "Spec"}
-            </Button>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-muted-foreground">Step 3 of 4</span>
+        <h1 className="text-2xl font-semibold tracking-tight">Components</h1>
+        <p className="text-muted-foreground">Check each component and fine-tune it. Changes here only affect the component you're looking at.</p>
+      </div>
+      <div className="flex flex-wrap items-start gap-5">
+        <nav aria-label="Your components" className="flex min-w-0 flex-[1_1_190px] flex-col gap-0.5 rounded-2xl border bg-background p-2 md:max-w-56">
+          <span className="px-2.5 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Your components</span>
+          {state.components.map((c) => (
+            <button key={c.id} type="button" aria-current={c.id === component.id ? "page" : undefined} onClick={() => setSelected(c.id)} className={`flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-left text-sm hover:bg-muted ${c.id === component.id ? "bg-muted font-semibold" : ""}`}>
+              <span className="flex-1">{componentLabel(c.id, catalog)}</span>
+              {warnFor(c.id) && <span title="Something to look at" className="size-2 rounded-full bg-warning" />}
+            </button>
           ))}
+          <button type="button" onClick={() => setAdding(!adding)} className="mt-1.5 flex min-h-11 items-center gap-2 rounded-lg border border-dashed px-2.5 text-sm font-medium">+ Add a component</button>
+        </nav>
+
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
+          {adding && (
+            <section className="flex flex-col gap-3 rounded-2xl border-2 border-foreground bg-background p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><h2 className="text-base font-semibold">Add a component</h2><p className="text-sm text-muted-foreground">Claude writes it in your style, with its own colors, a preview and a spec. A few minutes and about US$1.50 each.</p></div>
+                <Button variant="outline" onClick={() => setAdding(false)}>Close</Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {missing.map((c) => (
+                  <div key={c.id} className="flex flex-[1_1_240px] items-center gap-3 rounded-xl border py-2 pr-2 pl-3">
+                    <span className="flex flex-1 flex-col leading-tight"><span className="font-semibold">{c.name}</span><span className="text-sm text-muted-foreground">{c.hint}</span></span>
+                    <Button variant="outline" className="min-h-10" onClick={() => { onAsk(`Add a ${c.name.toLowerCase()} component (${c.id}) the Plinth way.`); setAdding(false); }}>Ask Claude</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+                <span className="flex-[1_1_260px] text-sm">Something else? Describe it to Claude, or paste a screenshot of one you like.</span>
+                <Button variant="outline" className="min-h-10" onClick={() => { onAsk("I need a component that "); setAdding(false); }}>Describe it in the chat</Button>
+              </div>
+            </section>
+          )}
+
+          <section className="flex flex-col gap-4 rounded-2xl border bg-background p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col"><h2 className="text-xl font-semibold">{name}</h2><p className="text-sm text-muted-foreground">{catalog?.find((c) => c.id === component.id)?.hint ?? component.spec?.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.slice(0, 120) ?? ""}</p></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <ModeSwitch mode={mode} onMode={onMode} />
+                <Button variant="outline" className="min-h-10 text-destructive" disabled={protectedBy} title={protectedBy ? `Used by ${component.usedBy.join(", ")}` : `Remove ${name}`} onClick={() => setConfirmRemove(true)}>Remove</Button>
+              </div>
+            </div>
+            {protectedBy && confirmRemove === false && <p className="-mt-2 text-xs text-muted-foreground">{name} can't be removed: the sample pages of your component site use it.</p>}
+            {confirmRemove && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-destructive/40 bg-destructive/5 py-2 pr-2 pl-3.5 text-sm">
+                <span className="flex-[1_1_260px]">Remove {name} from your design system? It leaves your component site the next time you publish. Undo brings it back.</span>
+                <Button variant="destructive" className="min-h-10" onClick={remove}>Remove</Button>
+                <Button variant="outline" className="min-h-10" onClick={() => setConfirmRemove(false)}>Keep it</Button>
+              </div>
+            )}
+            {src ? (
+              <iframe title={`${name} preview`} src={src} className="h-[420px] w-full rounded-xl border bg-white" />
+            ) : (
+              <div className="flex flex-col items-start gap-2.5 rounded-xl border border-dashed p-6">
+                <h3 className="font-semibold">{deps.installing ? "Getting the preview ready…" : state.storybook ? "No preview for this component yet" : deps.installed ? "The preview isn't running" : "The preview tools aren't installed"}</h3>
+                <p className="text-sm text-muted-foreground">{deps.installing ? "Installing the preview and tests; this takes a few minutes the first time." : state.storybook ? "Ask Claude to write a story for it." : "Components are previewed on your component site, running on this computer."}</p>
+                {!state.storybook && deps.installed && <Button onClick={() => api.startStorybook().catch((e) => onError(e.message))}>Start the preview</Button>}
+                {!deps.installed && !deps.installing && <Button onClick={() => api.install().catch((e) => onError(e.message))}>Install the preview tools</Button>}
+              </div>
+            )}
+            {warns.map((w) => (
+              <div key={w} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warning/50 bg-warning/10 py-2 pr-2 pl-3.5 text-sm">
+                <span className="flex-[1_1_220px]">Text in {name} is hard to read here ({w.split(":")[0].split(" on ").map((x) => roleName(x.trim().replace(/\/\d+$/, ""))).join(" on ")}).</span>
+                <Button className="min-h-10" onClick={async () => { try { onChanged(await api.fixContrast(), "Contrast fixed."); } catch (e) { onError((e as Error).message); } }}>Fix it</Button>
+                <Button variant="outline" className="min-h-10" onClick={() => onAsk(`Make the text in ${name} easier to read, but keep it on brand.`)}>Ask Claude</Button>
+              </div>
+            ))}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div>
+              <h2 className="text-base font-semibold">How {name} gets its colors</h2>
+              <p className="text-sm text-muted-foreground">Pick a part, then click one of your colors to connect it, or tell Claude in the chat. Base colors change with light and dark mode.</p>
+            </div>
+            {variants.length > 1 && (
+              <div role="group" aria-label="Kind" className="flex flex-wrap gap-1.5">
+                {variants.map((v) => (
+                  <button key={v} type="button" aria-pressed={(variant || variants[0]) === v} onClick={() => { setVariant(v); setPart(null); }} className={`min-h-9 rounded-full border-2 px-3 text-sm font-medium capitalize ${(variant || variants[0]) === v ? "border-foreground" : "border-border"}`}>{v || "Shared"}</button>
+                ))}
+              </div>
+            )}
+            <NodeGraph g={g} mode={tmode} parts={shown} selected={part} onSelect={setPart} onEdit={onEdit} />
+            {radius && <p className="text-sm text-muted-foreground">{partName(radius.path)} follow the corners you picked in Style.</p>}
+          </section>
         </div>
-        {view === "spec" ? (
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border bg-card p-5 text-sm">{component?.spec ?? "This component has no spec yet."}</pre>
-        ) : src ? (
-          <iframe title={`${component?.id} in Storybook`} src={src} className="h-[70vh] w-full rounded-xl border bg-white" />
-        ) : (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-8">
-            <h2 className="font-medium">{state.storybook ? "No stories for this component yet" : deps.installed ? "Storybook is not running" : "Dependencies are not installed"}</h2>
-            <p className="text-sm text-muted-foreground">
-              {state.storybook ? "Ask Claude to write stories for it." : deps.installed ? "Components are previewed in your design system's Storybook, in an isolated frame." : deps.installing ? "Installing now; this takes a few minutes. The preview starts after that." : "Previews and tests need the design system's dependencies (Storybook, the test browser)."}
-            </p>
-            {!state.storybook && deps.installed && <Button onClick={onStartStorybook} disabled={busy}>Start Storybook</Button>}
-            {!deps.installed && !deps.installing && <Button onClick={onInstall} disabled={busy}>Install dependencies</Button>}
-          </div>
-        )}
-      </section>
-      {graph && component && (
-        <aside aria-label="Component tokens" className="min-w-0 flex-[1_1_300px] xl:max-w-sm">
-          <ComponentTokens g={graph} state={state} brand={brand} mode={mode === "dark" ? "dark" : "default"} component={component.id} onEdit={onEdit} onOpenToken={onOpenToken} />
-        </aside>
-      )}
+      </div>
+      <Cta back={{ label: "← Style", onClick: onBack }} status={warns.length ? `${warns.length} thing${warns.length > 1 ? "s" : ""} to look at here` : `${state.components.length} components`} next={{ label: "Next: Publish →", onClick: onNext }} />
     </div>
   );
 }

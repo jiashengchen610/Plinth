@@ -389,6 +389,11 @@ function applyOp(root, op, files) {
       files.set(rel, op.content);
       break;
     }
+    case "remove": { // delete a file (a component's files, its token file); Undo brings it back
+      if (!existsSync(abs) && !files.has(rel)) throw new Error(`no file ${rel}`);
+      files.set(rel, null);
+      break;
+    }
     default:
       throw new Error(`unknown op ${op.op}`);
   }
@@ -434,10 +439,12 @@ export function tokenFiles(root) {
   return out;
 }
 
-const serialize = (content) => (typeof content === "string" ? content : JSON.stringify(content, null, 2) + "\n");
+// null content is a removed file.
+const serialize = (content) => (content === null ? null : typeof content === "string" ? content : JSON.stringify(content, null, 2) + "\n");
 function writeFiles(root, files) {
   for (const [rel, content] of files) {
     const abs = join(root, rel);
+    if (content === null) { rmSync(abs, { force: true }); continue; }
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, serialize(content));
   }
@@ -512,7 +519,7 @@ export function undo(root) {
   const touched = last.files.filter((f) => (readText(root, f.file) ?? null) !== f.after);
   if (touched.length) throw new Error(`${touched.map((f) => f.file).join(", ")} changed after "${last.title}". Undo would overwrite that edit; change it back yourself or restore a version.`);
   for (const f of last.files) {
-    if (f.before === null) rmSync(join(root, f.file), { force: true });
+    if (f.before === null || f.before === undefined) rmSync(join(root, f.file), { force: true });
     else { mkdirSync(dirname(join(root, f.file)), { recursive: true }); writeFileSync(join(root, f.file), f.before); }
   }
   saveUndo(root, list.slice(0, -1));
@@ -686,7 +693,40 @@ export function listComponents(root) {
       files: readdirSync(join(dir, n)),
       hasStories: existsSync(join(dir, n, `${n}.stories.tsx`)),
       spec: readText(root, `src/components/${n}/${n}.spec.md`),
+      usedBy: componentUsers(root, n),
     }));
+}
+
+/** Source files outside a component's folder that import it (the Foundations pages, the app shell, other components). */
+export function componentUsers(root, id) {
+  const src = join(root, "src");
+  if (!existsSync(src)) return [];
+  const pattern = new RegExp(`["'](@/components/${id}/|\\.\\./${id}/)`);
+  const out = [];
+  const walkDir = (abs, rel) => {
+    for (const f of readdirSync(abs)) {
+      const a = join(abs, f), r = `${rel}/${f}`;
+      if (statSync(a).isDirectory()) { if (r !== `src/components/${id}`) walkDir(a, r); }
+      else if (/\.(tsx?|mdx)$/.test(f) && pattern.test(readFileSync(a, "utf8"))) out.push(r);
+    }
+  };
+  walkDir(src, "src");
+  return out.sort();
+}
+
+/**
+ * Ops that remove a component: every file in its folder and its token file, as one change Undo can take back.
+ * Refuses a component other code imports, since removing it would break the build.
+ */
+export function removeComponentOps(root, id) {
+  if (!/^[a-z0-9-]+$/.test(String(id))) throw new Error(`not a component name: ${id}`);
+  const dir = join(root, "src", "components", id);
+  if (!existsSync(join(dir, `${id}.tsx`))) throw new Error(`no component ${id}`);
+  const users = componentUsers(root, id);
+  if (users.length) throw new Error(`${id} is used by ${users.join(", ")}; removing it would break the build.`);
+  const ops = readdirSync(dir).filter((f) => statSync(join(dir, f)).isFile()).map((f) => ({ op: "remove", file: `src/components/${id}/${f}` }));
+  if (existsSync(join(root, "tokens", "components", `${id}.tokens.json`))) ops.push({ op: "remove", file: `tokens/components/${id}.tokens.json` });
+  return ops;
 }
 
 export function summary(root) {
