@@ -7,7 +7,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - Data boundary: tool code (engine/, server/, app/) never enters the model context of a user session, and the user's
   repo (from template/) never contains tool code.
 - `engine/` and `server/` are zero-dependency Node ESM. Keep them that way: the plugin must run without `npm install`.
-- Prefer `process.exitCode` over `process.exit()` after `fetch` (Node 24 / Windows libuv assertion).
+- Node 24 / Windows aborts the process without an error in two cases we hit: `process.exit()` right after `fetch`, and
+  `fs.cpSync` into an existing folder directly under a drive root (`D:\demo`). So: no `fetch` in `server/` (use
+  `httpJson`), no `cpSync` (use `copyDir`; a test enforces it), and verify through an npx install in a `D:\` folder.
 - Anything the model could guess but a program can compute (contrast, CSS output, YAML) is computed in `engine/`.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
 - After changing `engine/` or `server/`, run `npm test`.

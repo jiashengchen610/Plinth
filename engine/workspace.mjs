@@ -1,7 +1,7 @@
 // Workspace operations: scaffold from the template, edit token files, keep a queue of proposed
 // changes, apply them as git commits, list versions and restore any of them. Zero dependencies
 // (shells out to git).
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, mkdtempSync, readdirSync, statSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync, mkdtempSync, readdirSync, statSync, renameSync } from "node:fs";
 import { join, resolve, relative, dirname, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -51,6 +51,21 @@ export function restore(root, sha) {
 
 // ---------------- scaffold ----------------
 /**
+ * Recursive copy in plain JavaScript. Not fs.cpSync: on Node 24 / Windows its native implementation aborts the
+ * whole process (exit 127, no error) when the destination is an existing folder directly under a drive root,
+ * e.g. D:\my-design-system. `skip(rel)` gets the path relative to `src`.
+ */
+export function copyDir(src, dest, skip = () => false, rel = "") {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const r = rel ? `${rel}/${entry.name}` : entry.name;
+    if (skip(r)) continue;
+    if (entry.isDirectory()) copyDir(join(src, entry.name), join(dest, entry.name), skip, r);
+    else if (entry.isFile()) copyFileSync(join(src, entry.name), join(dest, entry.name));
+  }
+}
+
+/**
  * Create a new workspace from the template. `brand` becomes the first brand id.
  * Does not install dependencies (see installDependencies).
  */
@@ -63,13 +78,12 @@ export function initWorkspace(root, { name = "my-design-system", brand = "defaul
   if (!existsSync(join(templateDir, "design-system.json"))) throw new Error(`template not found at ${templateDir}`);
   // Filter on the path inside the template: the install itself may live under a node_modules folder (npx).
   const skip = /(^|[\\/])(node_modules|storybook-static|dist)([\\/]|$)/;
-  cpSync(templateDir, root, { recursive: true, filter: (src) => !skip.test(relative(templateDir, src)) });
+  copyDir(templateDir, root, (rel) => skip.test(rel));
   // npm drops .gitignore files from packages, so the template ships it without the dot.
   if (existsSync(join(root, "gitignore"))) renameSync(join(root, "gitignore"), join(root, ".gitignore"));
   if (!existsSync(join(root, ".gitignore"))) throw new Error("template is missing its gitignore");
   if (brand !== "default") {
-    cpSync(join(root, "brands", "default"), join(root, "brands", brand), { recursive: true });
-    rmSync(join(root, "brands", "default"), { recursive: true, force: true });
+    renameSync(join(root, "brands", "default"), join(root, "brands", brand));
   }
   const cfgPath = join(root, "design-system.json");
   const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
@@ -232,7 +246,7 @@ export function previewOps(root, ops) {
   for (const op of ops) applyOp(root, op, files);
   const scratch = mkdtempSync(join(tmpdir(), "ds-preview-"));
   try {
-    for (const f of ["design-system.json", "tokens", "brands"]) if (existsSync(join(root, f))) cpSync(join(root, f), join(scratch, f), { recursive: true });
+    for (const f of ["design-system.json", "tokens", "brands"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
     writeFiles(scratch, files);
     const exceptions = loadConfig(root).exceptions ?? [];
     const before = checkContrast(root);
