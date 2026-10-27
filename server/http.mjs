@@ -8,10 +8,12 @@ import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks } from "../engine/checks.mjs";
-import { publishDefaults, makePublicAndDeploy, redeploy } from "./publish.mjs";
+import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./publish.mjs";
 import { toolByName } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 import { createSetup, presets, suggest } from "./start.mjs";
+import { draftVersionMessage } from "./quick.mjs";
+import { colorName } from "../engine/color-names.mjs";
 import { readStyle } from "../engine/style.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
@@ -42,6 +44,11 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
 
   // Creating the design system from the Describe step (start.mjs): the engine's part at once, Claude's in the chat.
   ctx.setup ??= createSetup(ctx, { bump });
+
+  // Template files Plinth shipped with a bug and the user never changed get the fix, as an undoable change.
+  if (existsSync(join(ctx.root, "design-system.json"))) {
+    try { const fix = ws.templateFixOps(ctx.root); if (fix.ops.length) ws.change(ctx.root, { title: fix.title, ops: fix.ops, by: "Plinth" }); } catch { /* the next start tries again */ }
+  }
 
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
@@ -92,6 +99,25 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
   const longOp = async (_url, start) => (start(), { started: true });
   const tool = (name, args = {}) => toolByName.get(name).run(args, ctx);
 
+  // What GitHub did with the last publish. Polled by the Publish page while GitHub works; a result that will not
+  // change (live, failed) is kept a minute, and anything that starts a new run forgets it.
+  let deployCache = { at: 0, value: null };
+  let rerunAt = 0;
+  const deploy = async () => {
+    const final = ["live", "failed"].includes(deployCache.value?.status);
+    if (Date.now() - deployCache.at < (final ? 60_000 : 8_000)) return deployCache.value;
+    // A rerun that has not shown up within 3 minutes is not coming (Actions off, or GitHub busy): report what is there.
+    if (rerunAt && Date.now() - rerunAt > 180_000) rerunAt = 0;
+    deployCache = { at: Date.now(), value: await deployStatus(ctx.root, { after: rerunAt }) };
+    return deployCache.value;
+  };
+  const fresh = (r) => { deployCache = { at: 0, value: null }; return r; };
+
+  // The description of the next version: the engine's draft at once, Claude's when it is ready. Asked once per set of
+  // changes; the user confirms or changes it before saving.
+  const drafts = new Map();
+  const draftKey = () => JSON.stringify(ws.changesSinceSave(ctx.root));
+
   const routes = {
     "GET /api/rev": () => ({ rev }),
     "GET /api/state": () => state(),
@@ -102,25 +128,35 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/tests": (_req, url) => { needsWorkspace(); return longOp(url, () => ctx.tests.run()); },
     "POST /api/storybook/start": () => { needsWorkspace(); return ctx.storybook.start(); },
     "GET /api/publish/defaults": () => { needsWorkspace(); return publishDefaults(ctx.root); },
-    "POST /api/publish/make-public": () => { needsWorkspace(); return makePublicAndDeploy(ctx.root); },
-    "POST /api/publish/redeploy": () => { needsWorkspace(); return redeploy(ctx.root); },
+    "POST /api/publish/make-public": () => { needsWorkspace(); rerunAt = Date.now(); return fresh(makePublicAndDeploy(ctx.root)); },
+    "POST /api/publish/redeploy": () => { needsWorkspace(); rerunAt = Date.now(); return fresh(redeploy(ctx.root)); },
+    "GET /api/deploy": async () => { needsWorkspace(); return { deploy: await deploy() }; },
     "POST /api/github/login": () => ctx.github.start(),
     "POST /api/github/cancel": () => ctx.github.cancel(),
-    "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts)); },
+    "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts).then((r) => { rerunAt = 0; return fresh(r); })); },
     // Edits made in the UI: written at once, like any change; Undo takes them back, Save version commits them.
     "POST /api/change": async (req) => { needsWorkspace(); const { title, ops } = await readJson(req); return ws.change(ctx.root, { title: title || "Edit in the token graph", ops, by: "you" }); },
     "POST /api/undo": () => { needsWorkspace(); return ws.undo(ctx.root); },
+    "GET /api/version-draft": () => { needsWorkspace(); const changes = ws.changesSinceSave(ctx.root); return { key: JSON.stringify(changes), text: ws.versionDraft(changes), by: "plinth" }; },
+    "POST /api/version-draft": async () => {
+      needsWorkspace();
+      const key = draftKey();
+      if (!drafts.has(key)) { drafts.clear(); drafts.set(key, draftVersionMessage(ctx.root)); }
+      return { key, ...(await drafts.get(key)) };
+    },
     "POST /api/save": async (req) => { needsWorkspace(); return ws.saveVersion(ctx.root, (await readJson(req)).message); },
     "POST /api/discard": () => { needsWorkspace(); return ws.discardUnsaved(ctx.root); },
     "POST /api/contrast-fixes": () => { needsWorkspace(); return tool("fix_contrast"); },
     "POST /api/exceptions": async (req) => { needsWorkspace(); return ws.acceptException(ctx.root, await readJson(req)); },
     "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return ws.removeException(ctx.root, await readJson(req)); },
+    // A name for a color the user is about to add, for them to confirm: the nearest color word the palette lacks.
+    "GET /api/color-name": (_req, url) => { needsWorkspace(); const st = readStyle(ctx.root, loadConfig(ctx.root).defaultBrand ?? listBrands(ctx.root)[0]); return { name: colorName(url.searchParams.get("color") ?? "#888888", [...st.hues, ...st.grays]) }; },
     "POST /api/palette": async (req) => { needsWorkspace(); return tool("add_palette_color", await readJson(req)); },
     "POST /api/upgrade": () => { needsWorkspace(); return tool("upgrade_to_layers"); },
     // The Describe step: presets, Claude's suggestions after the first answer, and creating from the answers.
     "GET /api/presets": () => presets(),
     "POST /api/suggest": async (req) => { const { product } = await readJson(req); if (!String(product ?? "").trim()) throw new Error("Say what you're making first."); return suggest(ctx, product); },
-    "POST /api/setup": async (req) => { const answers = await readJson(req); if (ctx.setup.state()?.running) throw new Error("Already setting up."); ctx.setup.start(answers).catch(() => {}); return { started: true }; },
+    "POST /api/setup": async (req) => { const answers = await readJson(req); const already = Boolean(ctx.setup.state()?.running); ctx.setup.start(answers).catch(() => {}); return { started: true, already }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/add-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("add_component", { name, by: "you" }); },
     "POST /api/remove-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("remove_component", { name, by: "you" }); },

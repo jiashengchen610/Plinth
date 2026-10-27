@@ -47,7 +47,7 @@ export type Presets = {
   palettes: { id: string; name: string; mood: string; main: string; gray: string; swatches: (string | null)[]; main600: string | null }[];
   corners: { id: string; name: string; control: string | null; container: string | null }[];
 };
-export type Suggestions = { name: string | null; kind: string; feels: string[]; palette: string; corners: string; font: string; components: string[]; question: string | null; by: "claude" | "fallback"; error?: string; seconds?: number; cost?: number | null };
+export type Suggestions = { name: string | null; kind: string; feels: string[]; palette: string; corners: string; font: string; components: string[]; question: string | null; answers?: string[]; by: "claude" | "fallback"; error?: string; seconds?: number; cost?: number | null };
 export type Answers = { product: string; name?: string; feel: string; kind: string; palette: string; brandColor?: string; corners: string; font: string; components: string[]; extraText: string };
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
@@ -67,6 +67,13 @@ export type PublishDefaults = {
   remote: string | null; repo: string | null; suggestedRepo: string;
   visibility: "PUBLIC" | "PRIVATE" | "INTERNAL" | null; pagesEnabled: boolean | null;
 };
+/** What GitHub did with the last publish (the workflow tests, then deploys). */
+export type Deploy = {
+  status: "waiting" | "running" | "live" | "failed" | "unknown"; sha: string; pushedAt?: string; actions: string;
+  run?: string; since?: string; site?: string | null; step?: string | null; failures?: string[]; errors?: string[]; error?: string;
+} | null;
+/** A description of the next version: the engine's at once, Claude's when it is ready. The user confirms or changes it. */
+export type VersionDraft = { key: string; text: string | null; by: "plinth" | "claude" | "none"; seconds?: number; cost?: number | null };
 export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
 export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
@@ -136,6 +143,10 @@ export const api = {
   style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick }),
   removeComponent: (name: string) => call<ChangeResult>("POST", "/api/remove-component", { name }),
   addComponent: (name: string) => call<ChangeResult>("POST", "/api/add-component", { name }),
+  deploy: () => call<{ deploy: Deploy }>("GET", "/api/deploy"),
+  versionDraft: () => call<VersionDraft>("GET", "/api/version-draft"),
+  versionDraftByClaude: () => call<VersionDraft>("POST", "/api/version-draft"),
+  colorName: (color: string) => call<{ name: string }>("GET", `/api/color-name?color=${encodeURIComponent(color)}`),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

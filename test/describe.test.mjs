@@ -86,7 +86,12 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.equal((await api("api/suggest", { product: " " })).status, 400);
 
   // Create: scaffold and style at once, the guidelines through the chat, then the first version is saved.
-  assert.equal((await api("api/setup", { product: "A budgeting app for young professionals", name: "Pocket", feel: "Warm and trustworthy", kind: "mobile-app", palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch"], extraText: "" })).json.started, true);
+  assert.equal((await api("api/setup", { product: "  " })).status, 400, "an empty answer is refused at once");
+  // A second click on Create while it starts is not an error: it just joins the run.
+  const answers = { product: "A budgeting app for young professionals", name: "Pocket", feel: "Warm and trustworthy", kind: "mobile-app", palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch"], extraText: "" };
+  const clicks = await Promise.all([api("api/setup", answers), api("api/setup", answers)]);
+  assert.deepEqual(clicks.map((c) => [c.status, c.json.started]), [[200, true], [200, true]]);
+  assert.deepEqual(clicks.map((c) => c.json.already).sort(), [false, true]);
   let s = await settled();
   assert.equal(s.exists, true);
   assert.equal(s.setup.error, null);
@@ -107,8 +112,18 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   const picked = (await api("api/style", { brand: "pocket", main: "rose" })).json;
   assert.equal(picked.style.main, "rose");
   assert.equal((await api("api/style", { brand: "pocket", main: "rose" })).json.unchanged, true);
+  // Drafts the user confirms: the description of the next version (at once from the change titles, then Claude's).
+  const engineDraft = (await api("api/version-draft")).json;
+  assert.equal(engineDraft.by, "plinth");
+  assert.match(engineDraft.text, /rose/i);
+  const claudeDraft = (await api("api/version-draft", {})).json;
+  assert.equal(claudeDraft.by, "claude");
+  assert.equal(claudeDraft.text, `Claude: ${engineDraft.text}`, "the stand-in echoes the first change it was given");
+  assert.equal(claudeDraft.key, engineDraft.key);
   await api("api/undo", {});
   assert.equal((await api("api/state")).json.style.pocket.main, "blue");
+  assert.equal((await api("api/version-draft")).json.text, null, "nothing left to describe");
+  assert.equal((await api("api/color-name?color=%23e2725b")).json.name, "terracotta");
 
   // Removing: refused for a component the Foundations pages use.
   const refused = await api("api/remove-component", { name: "button" });

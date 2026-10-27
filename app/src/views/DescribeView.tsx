@@ -7,6 +7,8 @@ type Props = {
   state: State; presets: Presets | null;
   /** True while answering again after the design system exists ("Start over with new answers"). */
   redo: boolean; onRedo: (on: boolean) => void;
+  /** True from the click on Create until the server answers: the button cannot be pressed twice. */
+  sending?: boolean;
   onCreate: (answers: Answers) => void; onNext: () => void; onAsk: (text: string) => void; onError: (m: string) => void;
 };
 
@@ -39,7 +41,7 @@ function Bubble({ who, children }: { who: "claude" | "you"; children: React.Reac
 
 const ring = (on: boolean) => (on ? "border-foreground" : "border-border");
 
-export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, onAsk, onError }: Props) {
+export function DescribeView({ state, presets, redo, onRedo, sending = false, onCreate, onNext, onAsk, onError }: Props) {
   const created = state.exists;
   const editable = !created || redo;
   const [mode, setMode] = useState<"questions" | "import">("questions");
@@ -115,7 +117,7 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
     if (step === "summary") {
       return <Cta back={{ label: "← Back", onClick: () => setAt(steps.length - 2) }} alt={redo ? { label: "Cancel", onClick: () => onRedo(false) } : undefined}
         status={`About a minute${newCount ? ` plus a few for your new component` : ""} · about US$${(0.35 + newCount * 1.5).toFixed(2)} of Claude usage`}
-        next={{ label: redo ? "Apply my new answers" : "Create my design system", onClick: () => onCreate(finalAnswers()) }} />;
+        next={{ label: sending ? "Starting…" : redo ? "Apply my new answers" : "Create my design system", disabled: sending, onClick: () => onCreate(finalAnswers()) }} />;
     }
     const n = steps.length - 1;
     return <Cta back={at > 0 ? { label: "← Back", onClick: () => setAt(at - 1) } : undefined}
@@ -189,7 +191,14 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
                 )}
                 {step === "followup" && (
                   <>
-                    <label htmlFor="iv-followup" className="text-sm font-semibold">Your answer</label>
+                    {(sugg?.answers?.length ?? 0) > 0 && (
+                      <div role="group" aria-label="Likely answers" className="flex flex-wrap gap-2">
+                        {sugg!.answers!.map((x) => (
+                          <button key={x} type="button" aria-pressed={a.followup === x} onClick={() => set({ followup: x })} className={`min-h-11 rounded-full border-[1.5px] px-4 text-sm font-medium ${a.followup === x ? "border-foreground bg-foreground text-background" : "border-border bg-background"}`}>{x}</button>
+                        ))}
+                      </div>
+                    )}
+                    <label htmlFor="iv-followup" className="text-sm font-semibold">{(sugg?.answers?.length ?? 0) > 0 ? "Or in your own words" : "Your answer"}</label>
                     <input id="iv-followup" value={a.followup} onChange={(e) => set({ followup: e.target.value })} className="h-11 w-full rounded-lg border bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring" />
                   </>
                 )}

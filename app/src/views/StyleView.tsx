@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, exceptionKey, type ChangeResult, type Presets, type State, type TokenRow } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from "@/lib/plain";
@@ -48,6 +48,13 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#ca8a04");
+  // The name follows the picked color (Plinth suggests one) until the user types their own.
+  const [ownName, setOwnName] = useState(false);
+  useEffect(() => {
+    if (!adding || ownName) return;
+    const t = window.setTimeout(() => { api.colorName(newColor).then((r) => setNewName(r.name)).catch(() => {}); }, 150);
+    return () => window.clearTimeout(t);
+  }, [newColor, ownName, adding]);
 
   const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
   const pick = async (p: { main?: string; gray?: string; corners?: string; font?: string }, label: string) => {
@@ -98,8 +105,8 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
               <button type="button" onClick={() => setAdding(!adding)} className="min-h-10 text-sm font-medium text-info underline underline-offset-2">Add your brand color</button>
             </div>
             {adding && (
-              <form className="flex flex-wrap items-end gap-2.5" onSubmit={async (e) => { e.preventDefault(); if (!newName.trim()) return; setBusy(true); try { const r = await api.addPaletteColor(newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"), newColor); onChanged(r, `Added ${r.name}.`); setAdding(false); setNewName(""); } catch (err) { onError((err as Error).message); } finally { setBusy(false); } }}>
-                <label className="flex flex-[1_1_160px] flex-col gap-1 text-sm font-semibold">Name<input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="For example: brand" className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
+              <form className="flex flex-wrap items-end gap-2.5" onSubmit={async (e) => { e.preventDefault(); if (!newName.trim()) return; setBusy(true); try { const r = await api.addPaletteColor(newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"), newColor); onChanged(r, `Added ${r.name}.`); setAdding(false); setNewName(""); setOwnName(false); } catch (err) { onError((err as Error).message); } finally { setBusy(false); } }}>
+                <label className="flex flex-[1_1_160px] flex-col gap-1 text-sm font-semibold">Name<input value={newName} onChange={(e) => { setNewName(e.target.value); setOwnName(true); }} placeholder="For example: terracotta" className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
                 <label className="flex flex-col gap-1 text-sm font-semibold">Color<input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="h-11 w-16 rounded-lg border bg-background p-0.5" /></label>
                 <button type="submit" disabled={busy || !newName.trim()} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add</button>
                 <p className="basis-full text-xs text-muted-foreground">Plinth makes lighter and darker versions of it. Then pick it above as your main color.</p>

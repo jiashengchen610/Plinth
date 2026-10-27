@@ -47,7 +47,9 @@ export const ShowAndClose: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(within(canvasElement).getByRole("button", { name: "Add expense" }));
-    await expect(await body.findByText("Expense added")).toBeVisible();
+    // It fades in: wait until it is fully shown, or a fast machine checks while it is still transparent.
+    const title = await body.findByText("Expense added");
+    await waitFor(() => expect(title).toBeVisible());
     await userEvent.click(body.getByRole("button", { name: "Close" }));
     // It animates out before it is removed.
     await waitFor(() => expect(body.queryByText("Expense added")).not.toBeInTheDocument());

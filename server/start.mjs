@@ -3,10 +3,9 @@
 // "Create" does what a program can at once (scaffold, palette color, style, the brief) and asks Claude in the UI
 // chat, where the user can watch, to write the guidelines and any extra components. Presets live here so the UI and
 // the suggestion run read the same list.
-import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
+import { quickClaude } from "./quick.mjs";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands } from "../engine/tokens.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
@@ -83,7 +82,7 @@ const slug = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[^a
 export function fallbackSuggestions(product) {
   const t = String(product ?? "").toLowerCase();
   const kind = /shop|store|sell|cart|commerce|購物|商店/.test(t) ? "e-commerce" : /dashboard|admin|internal|team|後台|管理/.test(t) ? "saas-dashboard" : /site|landing|marketing|官網|網站/.test(t) ? "marketing-site" : "mobile-app";
-  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: KIND_COMPONENTS[kind], question: null, by: "fallback" };
+  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: KIND_COMPONENTS[kind], question: null, answers: [], by: "fallback" };
 }
 
 const SUGGEST_PROMPT = (product) => `Suggest starting answers for a design system interview. Do not use any tools. Reply with one JSON object and nothing else.
@@ -98,7 +97,8 @@ JSON fields:
 - "corners": one of "square", "slight", "round", "pill"
 - "font": one of ${FONTS.map((f) => `"${f.family}" (${f.mood})`).join(", ")}
 - "components": ids this product will likely need beyond button, text field, label, card and badge, from ${COMPONENTS.filter((c) => !c.core).map((c) => `"${c.id}"`).join(", ")}
-- "question": null, or one short follow-up question if the description is too vague to design for`;
+- "question": null, or one short follow-up question if the description is too vague to design for
+- "answers": when you ask a question, 2 or 3 likely short answers to it (a few words each), else []`;
 
 function cleanSuggestions(raw, product) {
   const base = fallbackSuggestions(product);
@@ -113,44 +113,19 @@ function cleanSuggestions(raw, product) {
     font: pick(raw?.font, FONTS.map((f) => f.family)) ?? base.font,
     components: Array.isArray(raw?.components) ? raw.components.filter((c) => COMPONENTS.some((x) => x.id === c && !x.core)) : [],
     question: typeof raw?.question === "string" && raw.question.trim() ? raw.question.trim().slice(0, 200) : null,
+    answers: typeof raw?.question === "string" && Array.isArray(raw?.answers) ? raw.answers.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 3) : [],
     by: "claude",
   };
 }
 
 /** One headless run without tools that answers with JSON. Resolves to suggestions; falls back when Claude is unavailable. */
-export function suggest(ctx, product, { bin = process.env.PLINTH_CLAUDE_BIN || "claude", model = process.env.PLINTH_SUGGEST_MODEL || "haiku" } = {}) {
-  const started = Date.now();
-  return new Promise((resolveP) => {
-    const env = { ...process.env };
-    delete env.CLAUDECODE;
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-    const [cmd, pre] = /\.(mjs|cjs|js)$/i.test(bin) ? [process.execPath, [bin]] : [bin, []];
-    let proc;
-    try {
-      proc = spawn(cmd, [...pre, "-p", "--output-format", "stream-json", "--verbose", "--model", model,
-        "--disallowedTools", "Read", "Glob", "Grep", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch", "Task"],
-        { cwd: ctx.root, env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    } catch (e) { resolveP({ ...fallbackSuggestions(product), error: e.message }); return; }
-    let text = null, cost = null, failed = null;
-    const timer = setTimeout(() => { failed = "timed out"; proc.kill(); }, 90_000);
-    proc.stdin.end(SUGGEST_PROMPT(product));
-    createInterface({ input: proc.stdout }).on("line", (line) => {
-      let msg;
-      try { msg = JSON.parse(line); } catch { return; }
-      if (msg.type === "result") { cost = msg.total_cost_usd ?? null; if (msg.is_error) failed = msg.result || "error"; else text = msg.result ?? ""; }
-    });
-    const done = () => {
-      clearTimeout(timer);
-      const seconds = Math.round((Date.now() - started) / 100) / 10;
-      const json = text && /\{[\s\S]*\}/.exec(text)?.[0];
-      let raw = null;
-      try { raw = json ? JSON.parse(json) : null; } catch { /* not JSON: fall back */ }
-      if (!raw) resolveP({ ...fallbackSuggestions(product), error: failed ?? "Claude did not answer with suggestions", seconds, cost });
-      else resolveP({ ...cleanSuggestions(raw, product), seconds, cost, model });
-    };
-    proc.on("error", (e) => { failed = e.message; done(); });
-    proc.on("close", done);
-  });
+export async function suggest(ctx, product, { bin = process.env.PLINTH_CLAUDE_BIN || "claude", model = process.env.PLINTH_SUGGEST_MODEL || "haiku" } = {}) {
+  const r = await quickClaude(ctx.root, SUGGEST_PROMPT(product), { bin, model });
+  const json = r.text && /\{[\s\S]*\}/.exec(r.text)?.[0];
+  let raw = null;
+  try { raw = json ? JSON.parse(json) : null; } catch { /* not JSON: fall back */ }
+  if (!raw) return { ...fallbackSuggestions(product), error: r.error ?? "Claude did not answer with suggestions", seconds: r.seconds, cost: r.cost };
+  return { ...cleanSuggestions(raw, product), seconds: r.seconds, cost: r.cost, model };
 }
 
 const label = (list, id, key = "label") => list.find((x) => x.id === id)?.[key] ?? id;
@@ -184,8 +159,9 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
   const set = (id, status, detail) => { const s = cur.steps.find((x) => x.id === id); if (s) { s.status = status; if (detail) s.detail = detail; } bump(); };
   return {
     state() { return cur; },
-    async start(a) {
-      if (cur?.running) throw new Error("Already setting up. Wait for it to finish.");
+    /** Checks the answers and returns at once (a second click while it runs is not an error); the work runs after. */
+    start(a) {
+      if (cur?.running) return Promise.resolve(cur);
       const product = String(a?.product ?? "").trim();
       if (!product) throw new Error("Say what you're making first.");
       const exists = existsSync(join(ctx.root, "design-system.json"));
@@ -202,6 +178,11 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         ],
       };
       bump();
+      return this.run(a, { product, exists, picked, skipComponents });
+    },
+    async run(a, { product, exists, picked, skipComponents }) {
+      // Let the request that started it answer first: scaffolding blocks for a few seconds.
+      await new Promise((r) => setImmediate(r));
       try {
         const name = String(a.name ?? "").trim() || product.split(/[.,;:\n]/)[0].split(/\s+/).slice(0, 3).join(" ") || "My design system";
         if (!exists) {

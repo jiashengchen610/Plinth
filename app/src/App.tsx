@@ -42,10 +42,10 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [screen, setScreen] = useState<Screen>(() => fromHash() ?? "style");
   const [lastStep, setLastStep] = useState<Screen>("style");
-  const [visited, setVisited] = useState<Set<Screen>>(() => { try { return new Set(JSON.parse(localStorage.getItem("plinth-visited") ?? "[]")); } catch { return new Set(); } });
   const [brand, setBrand] = useState("");
   const [mode, setMode] = useState<"light" | "dark">("light");
   const [redo, setRedo] = useState(false);
+  const [sending, setSending] = useState(false);
   const [chatText, setChatText] = useState("");
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const rev = useRef(0);
@@ -68,10 +68,20 @@ export default function App() {
   const go = useCallback((s: Screen) => {
     setScreen(s);
     if (STEPS.some((x) => x.id === s)) setLastStep(s);
-    setVisited((v) => { const n = new Set(v); n.add(s); try { localStorage.setItem("plinth-visited", JSON.stringify([...n])); } catch { /* ignore */ } return n; });
     document.querySelector("main")?.scrollTo({ top: 0 });
   }, []);
   useEffect(() => { history.replaceState(null, "", `#${screen}`); }, [screen]);
+
+  // A step is checked once the user went through it with its Next button. Remembered per design system (a new one in
+  // the same folder, or new answers, start unchecked), in this browser only.
+  const stepsKey = state?.exists ? `plinth-steps:${state.workspace}:${state.config.brief?.answeredAt ?? ""}` : null;
+  const [confirmed, setConfirmed] = useState<Set<Screen>>(new Set());
+  useEffect(() => {
+    try { setConfirmed(new Set(stepsKey ? JSON.parse(localStorage.getItem(stepsKey) ?? "[]") : [])); } catch { setConfirmed(new Set()); }
+  }, [stepsKey]);
+  const confirmStep = useCallback((s: Screen) => {
+    setConfirmed((c) => { const n = new Set(c).add(s); try { if (stepsKey) localStorage.setItem(stepsKey, JSON.stringify([...n])); } catch { /* private window */ } return n; });
+  }, [stepsKey]);
 
   // Before a design system exists the only page is Describe; while one is being made, the progress page.
   const effective: Screen = !state ? screen : state.setup?.running ? "creating" : !state.exists ? "describe" : screen === "creating" && !state.setup ? "style" : screen;
@@ -94,7 +104,9 @@ export default function App() {
     document.getElementById("chat-input")?.scrollIntoView({ block: "nearest" });
   }, []);
   const create = async (answers: Answers) => {
-    try { await api.setup(answers); setRedo(false); setScreen("creating"); await load(); } catch (e) { onError((e as Error).message); }
+    if (sending) return;
+    setSending(true);
+    try { await api.setup(answers); setRedo(false); setScreen("creating"); await load(); } catch (e) { onError((e as Error).message); } finally { setSending(false); }
   };
 
   if (!state) return <main className="grid min-h-dvh place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
@@ -103,7 +115,7 @@ export default function App() {
   const chatOn = exists;
   const unsaved = state.unsaved?.length ?? 0;
   const everPublished = state.versions?.some((v) => v.published);
-  const done = (id: Screen) => (id === "describe" ? exists : id === "publish" ? everPublished : visited.has(id));
+  const done = (id: Screen) => (id === "describe" ? exists : id === "publish" ? everPublished : confirmed.has(id));
   const compName = componentLabel(state.components?.[0]?.id ?? "button", presets?.components);
   const tips = effective === "components" ? [`Make the ${compName.toLowerCase()} a bit bigger`, "Add a loading state to Button", "Add a date picker"] : TIPS[effective] ?? [];
   const placeholder = effective === "style" ? "Tell Claude how the style should change" : effective === "components" ? "Tell Claude what to change in a component" : effective === "publish" ? "Ask Claude about your changes" : "Tell Claude what to change";
@@ -167,10 +179,10 @@ export default function App() {
           <main className="min-h-0 flex-1 px-4 py-5 lg:overflow-y-auto">
             <CtaSlot.Provider value={slot}>
               <div className={`mx-auto ${effective === "describe" || effective === "creating" ? "max-w-3xl" : effective === "publish" || effective === "history" ? "max-w-4xl" : "max-w-6xl"}`}>
-                {effective === "describe" && <DescribeView key={`${exists}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} />}
+                {effective === "describe" && <DescribeView key={`${exists}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} sending={sending} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} />}
                 {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
-                {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => go("components")} onAsk={ask} />}
-                {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => go("publish")} />}
+                {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => { confirmStep("style"); go("components"); }} onAsk={ask} />}
+                {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => { confirmStep("components"); go("publish"); }} />}
                 {effective === "publish" && exists && <PublishView state={state} onError={onError} onAsk={ask} onBack={() => go("components")} onSaved={(m) => { setNotice(m); load(); }} />}
                 {effective === "history" && exists && (
                   <HistoryView state={state} busy={busy} backLabel={STEPS.find((s) => s.id === lastStep)?.label ?? "Style"} onBack={() => go(lastStep)}

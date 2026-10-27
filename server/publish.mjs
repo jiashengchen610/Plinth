@@ -1,7 +1,7 @@
 // Publish a workspace: checks → exports → commit → typecheck and story tests → push → GitHub Pages.
 // Uses git and the GitHub CLI (gh). Reports every step so the UI can show progress and where it stopped.
-import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync, execFile } from "node:child_process";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runChecks } from "../engine/checks.mjs";
 import { checkRepo } from "../engine/check.mjs";
@@ -12,6 +12,10 @@ import { findGh, githubStatus } from "./github.mjs";
 
 function gh(root, args) {
   return execFileSync(findGh() ?? "gh", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true }).trim();
+}
+/** gh without blocking the server: for status polled while the UI is open. */
+function ghAsync(root, args) {
+  return new Promise((resolve, reject) => execFile(findGh() ?? "gh", args, { cwd: root, encoding: "utf8", windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (e, out, err) => (e ? reject(Object.assign(e, { stderr: err })) : resolve(out.trim()))));
 }
 function hasGh() {
   return findGh() !== null;
@@ -183,6 +187,48 @@ export function makePublicAndDeploy(root) {
   const pages = enablePages(root, full);
   if (!pages.ok) throw new Error(pages.error);
   return redeploy(root, { full, pages });
+}
+
+/**
+ * What GitHub did with the last publish: the newest Storybook workflow run for the pushed commit. The push alone
+ * does not put anything online; the workflow tests first and deploys only if everything passes.
+ * { status: "waiting" | "running" | "live" | "failed" | "unknown", sha, run, site, step, failures, errors }
+ */
+export async function deployStatus(root, { after = 0 } = {}) {
+  let pub;
+  try { pub = JSON.parse(readFileSync(join(root, ".ds", "published.json"), "utf8")); } catch { return null; }
+  const full = repoFromUrl(remoteUrl(root));
+  if (!full) return null;
+  const base = { sha: pub.sha, pushedAt: pub.at, actions: `https://github.com/${full}/actions` };
+  let run;
+  try { run = JSON.parse(await ghAsync(root, ["run", "list", "-R", full, "--commit", pub.sha, "--workflow", "storybook.yml", "--limit", "1", "--json", "databaseId,status,conclusion,url,createdAt"]))[0]; }
+  catch (e) { return { ...base, status: "unknown", error: errText(e) }; }
+  // After "Try again" GitHub lists the old run as newest for a few seconds: until the new one shows, wait.
+  if (!run || (after && Date.parse(run.createdAt) < after - 30_000)) return { ...base, status: "waiting" };
+  const common = { ...base, run: run.url, runId: run.databaseId, since: run.createdAt };
+  if (run.status !== "completed") return { ...common, status: "running" };
+  if (run.conclusion === "success") {
+    let site = null;
+    try { site = JSON.parse(await ghAsync(root, ["api", `repos/${full}/pages`])).html_url ?? null; } catch { /* Pages off since */ }
+    return { ...common, status: "live", site };
+  }
+  let log = "";
+  try { log = await ghAsync(root, ["run", "view", String(run.databaseId), "-R", full, "--log-failed"]); } catch { /* summary without details */ }
+  return { ...common, status: "failed", conclusion: run.conclusion, ...failureSummary(log) };
+}
+
+/**
+ * The failing step and story tests of a failed run, from `gh run view --log-failed` (lines are
+ * "job<TAB>step<TAB>timestamp text"). Story test failures read "FAIL  storybook (chromium) src/… > Story name".
+ */
+export function failureSummary(log) {
+  // Color codes arrive as escape characters, or written out as "^[[31m" (gh on Windows).
+  const lines = String(log).replace(/(?:\x1b|\^\[)\[[0-9;]*m/g, "").split(/\r?\n/).map((l) => { const [, step, ...rest] = l.split("\t"); return { step, text: rest.join("\t").replace(/^\S+Z\s?/, "") }; });
+  const errorLine = lines.find((l) => /##\[error\]/.test(l.text));
+  const step = (errorLine ?? lines.find((l) => l.step))?.step ?? null;
+  const failures = [...new Set(lines.map((l) => /FAIL\s+(?:\S+\s+\([^)]+\)\s+)?(src\/\S+)\s+>\s+(.+?)\s*$/.exec(l.text)).filter(Boolean).map((m) => `${m[1]} › ${m[2]}`))];
+  const errors = [...new Set(lines.filter((l) => /##\[error\]/.test(l.text)).map((l) => l.text.replace(/^.*##\[error\]/, "").trim()).filter((t) => t && !/^Process completed with exit code/.test(t) && !/^Error:\s*$/.test(t)))].slice(0, 5);
+  return { step, failures: failures.slice(0, 10), errors };
 }
 
 /** Run the Storybook workflow again (after fixing Pages or a failed run). */

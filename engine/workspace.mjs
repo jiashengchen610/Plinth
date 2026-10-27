@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSyn
 import { join, resolve, relative, dirname, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { buildCss, loadConfig, listBrands, resolveBrand, cssName, TYPOGRAPHY_PARTS } from "./tokens.mjs";
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
@@ -97,7 +98,27 @@ export function saveVersion(root, message) {
   if (!text) throw new Error("A version needs a short description of what changed.");
   regenerate(root);
   const version = gitCommit(root, text);
+  if (version) { mkdirSync(join(root, ".ds"), { recursive: true }); writeFileSync(join(root, ".ds", "saved.json"), JSON.stringify({ at: new Date().toISOString(), version }) + "\n"); }
   return version ? { version } : { version: null, message: "Nothing to save: no changes since the last version." };
+}
+
+const generatedFile = (f) => GENERATED.some((g) => f === g || f.startsWith(`${g}/`)) || f.startsWith("exports/");
+/** What a new version would hold: the titles of the changes made since the last save, and the files that differ. */
+export function changesSinceSave(root) {
+  let since = null;
+  try { since = JSON.parse(readFileSync(join(root, ".ds", "saved.json"), "utf8")).at; } catch { since = versions(root, 1)[0]?.date ?? null; }
+  const after = since ? Date.parse(since) : 0;
+  return {
+    titles: undoStack(root).filter((e) => Date.parse(e.at) > after).map((e) => e.title),
+    files: unsavedChanges(root).map((c) => c.file).filter((f) => !generatedFile(f)),
+  };
+}
+
+/** A description of the next version made from the change titles, for when Claude can't write one. */
+export function versionDraft({ titles, files }) {
+  const list = [...new Set(titles)];
+  if (!list.length) return files.length ? `Edits to ${[...new Set(files.map((f) => f.split("/").at(-1)))].slice(0, 3).join(", ")}${files.length > 3 ? " and more" : ""}` : null;
+  return list.length <= 2 ? list.join("; ") : `${list.slice(0, 2).join("; ")} and ${list.length - 2} more change${list.length > 3 ? "s" : ""}`;
 }
 
 /** Throw unsaved work away: back to the last saved version. */
@@ -227,6 +248,18 @@ export function syncManaged(root, templateDir = TEMPLATE_DIR) {
   try { layered = Array.isArray(loadConfig(root).layers); } catch { /* no workspace yet */ }
   for (const rel of [...MANAGED, ...(layered ? MANAGED_LAYERED : [])]) walk(rel);
   return changed;
+}
+
+// Fixes to template files the user owns once copied (components and their stories). A file is replaced only while
+// it is exactly a version Plinth shipped, so the user's own edits are never overwritten; the fix is a change Undo
+// takes back. `was`: sha256 of the shipped content with LF line endings.
+const TEMPLATE_FIXES = [
+  { file: "src/components/toast/toast.stories.tsx", was: ["810cb871729011f6cac50bf3625bb63c583f421fe02d087c502db36854488acd"], title: "Fix the Toast test that stopped deploys on GitHub" },
+];
+const lfHash = (text) => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
+export function templateFixOps(root, templateDir = TEMPLATE_DIR) {
+  const fixes = TEMPLATE_FIXES.filter((f) => { const cur = readText(root, f.file); return cur !== null && f.was.includes(lfHash(cur)); });
+  return { title: fixes.map((f) => f.title).join("; "), ops: fixes.map((f) => ({ op: "write", file: f.file, content: readFileSync(join(templateDir, f.file), "utf8") })) };
 }
 
 // Until 0.4 Plinth shipped Claude Code deny rules that blocked direct edits to design files. Edits from anywhere

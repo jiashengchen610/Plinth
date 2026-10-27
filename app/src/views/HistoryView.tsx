@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { State } from "@/lib/api";
 import { Cta } from "@/lib/cta";
+import { useVersionDraft, VersionField } from "@/lib/draft";
 import { timeAgo } from "@/lib/format";
 import { fileName, isGenerated } from "@/lib/plain";
 
@@ -12,7 +13,7 @@ type Props = {
 
 /** What changed, what's saved, and going back. Saving a version is a git commit; nothing here goes online. */
 export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard, onRestore }: Props) {
-  const [message, setMessage] = useState("");
+  const draft = useVersionDraft(state);
   const [confirm, setConfirm] = useState(false);
   const unsaved = state.unsaved ?? [];
   const groups = [...new Set(unsaved.filter((u) => !isGenerated(u.file)).map((u) => fileName(u.file)))];
@@ -28,7 +29,7 @@ export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard,
         {!unsaved.length ? <p className="text-sm text-muted-foreground">Everything is in a version.</p> : (
           <>
             <p className="text-sm">{groups.join(", ")}{state.lastChange ? <span className="text-muted-foreground"> · last change: {state.lastChange.title}</span> : null}</p>
-            <label className="flex flex-col gap-1 text-sm font-semibold">Describe this version<input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={state.lastChange?.title ?? "For example: softer corners"} className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
+            <VersionField draft={draft} />
             {!confirm ? <button type="button" onClick={() => setConfirm(true)} className="min-h-11 self-start rounded-lg border px-3.5 text-sm font-medium text-destructive">Throw away these changes</button> : (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-destructive/40 bg-destructive/5 py-2 pr-2 pl-3.5 text-sm">
                 <span className="flex-[1_1_240px]">Throw away the changes since your last version? You can't get them back.</span>
@@ -53,7 +54,7 @@ export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard,
         {unsaved.length > 0 && state.versions.length > 1 && <p className="mt-2 text-xs text-muted-foreground">Save or throw away your changes before going back to an older version.</p>}
       </section>
       <Cta back={{ label: `← Back to ${backLabel}`, onClick: onBack }} status={unsaved.length ? `${groups.length} kind${groups.length > 1 ? "s" : ""} of change not in a version yet` : "Everything is saved"}
-        next={unsaved.length ? { label: "Save version", disabled: busy, onClick: () => { onSave(message.trim() || state.lastChange?.title || "Changes"); setMessage(""); } } : undefined} />
+        next={unsaved.length ? { label: "Save version", disabled: busy, onClick: () => onSave(draft.text.trim() || state.lastChange?.title || "Changes") } : undefined} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
 import { readStyle, styleOps, styleTitle } from "../engine/style.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
+import { deployStatus } from "./publish.mjs";
 
 /** Change titles use the name people see in the UI (Text box, Dropdown); components outside the catalog keep their id. */
 const componentName = (id) => COMPONENTS.find((c) => c.id === id)?.name ?? id;
@@ -313,6 +314,12 @@ export const TOOLS = [
       },
     },
     run: async (a, ctx) => { requireWorkspace(ctx.root); return ctx.publish.start(a); },
+  },
+  {
+    name: "deploy_status",
+    description: "What GitHub did with the last publish: the push only starts the deploy workflow, which runs plinth check, the typecheck and every story test on Linux, and puts Storybook online only if they pass. Returns status (waiting, running, live, failed), the failing step and story tests, and the run link. Call it after publishing, and before fixing a failed deploy: a story test can pass locally and fail on GitHub (timing during animations), so fix the cause, not only the local run.",
+    inputSchema: { type: "object", properties: {} },
+    run: async (_a, ctx) => { requireWorkspace(ctx.root); return (await deployStatus(ctx.root)) ?? { status: "not published", next: "Publish first." }; },
   },
 ];
 

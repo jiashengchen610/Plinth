@@ -24,6 +24,13 @@ if (/^Suggest starting answers/.test(prompt)) {
   out({ type: "result", subtype: "success", is_error: false, result: json, session_id: session, total_cost_usd: 0.002, num_turns: 1 });
   process.exit(0);
 }
+// The description of a version: one line, no tools. Echoes the first change it was given, so tests can tell.
+if (/^Describe a saved version/.test(prompt)) {
+  const first = (prompt.match(/\n- (.+)/) ?? [])[1] ?? "nothing";
+  const line = `"Claude: ${first}."`;
+  out({ type: "result", subtype: "success", is_error: false, result: line, session_id: session, total_cost_usd: 0.001, num_turns: 1 });
+  process.exit(0);
+}
 out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Let me look." }, { type: "tool_use", id: "t1", name: "mcp__plugin_plinth_plinth__status", input: {} }] } });
 out({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "{}" }] } });
 const reply = /image/i.test(prompt) ? `I read ${(prompt.match(/Attached image 1: (.+)/) ?? [])[1] ?? "no image"}.` : `Echo: ${prompt.split("\n")[0]}`;

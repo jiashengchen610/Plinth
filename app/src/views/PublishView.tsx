@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, exceptionKey, type PublishDefaults, type State } from "@/lib/api";
+import { api, exceptionKey, type Deploy, type PublishDefaults, type State } from "@/lib/api";
 import { Cta } from "@/lib/cta";
+import { useVersionDraft, VersionField } from "@/lib/draft";
 import { fileName, isGenerated, roleName } from "@/lib/plain";
 import { Reply } from "@/views/ChatPanel";
 
@@ -14,8 +15,12 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
   const [repo, setRepo] = useState("");
   const [visibility, setVisibility] = useState<"private" | "public">("public");
   const [started, setStarted] = useState(false);
-  const [message, setMessage] = useState("");
+  const draft = useVersionDraft(state);
   const [saving, setSaving] = useState(false);
+  const [deploy, setDeploy] = useState<Deploy>(null);
+  // When a publish ends, what GitHub does next is at the top of the page.
+  const resultAt = state.publish.result?.at;
+  useEffect(() => { if (started && resultAt) document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }); }, [started, resultAt]);
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState<{ storybook: string | null; actions: string; note: string } | null>(null);
   const publish = state.publish;
@@ -35,12 +40,18 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
   useEffect(() => { if (!asked && review && !review.running) ask(); }, [asked, review, ask]);
 
   const unsaved = state.unsaved ?? [];
-  const save = async () => {
-    setSaving(true);
-    try { await api.save(message.trim() || state.lastChange?.title || "Changes before publishing"); setMessage(""); onSaved("Saved a version."); } catch (e) { onError((e as Error).message); } finally { setSaving(false); }
-  };
+  // Unsaved changes are saved first, with the description Claude drafted (the user can change it): one click.
   const start = async () => {
-    try { setStarted(true); await api.publish(defaults?.remote ? {} : { repo, visibility }); } catch (e) { setStarted(false); onError((e as Error).message); }
+    try {
+      if (unsaved.length) {
+        setSaving(true);
+        await api.save(draft.text.trim() || state.lastChange?.title || "Changes before publishing");
+        setSaving(false);
+        onSaved("Saved a version.");
+      }
+      setStarted(true);
+      await api.publish(defaults?.remote ? {} : { repo, visibility });
+    } catch (e) { setSaving(false); setStarted(false); onError((e as Error).message); }
   };
   const makePublic = async () => { setFixing(true); try { setFixed(await api.makePublicAndDeploy()); refresh(); } catch (e) { onError((e as Error).message); } finally { setFixing(false); } };
 
@@ -51,7 +62,7 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
   const brokenRefs = state.checks.tokenIssues;
   const published = state.versions.some((v) => v.published);
   const sinceLast = published ? state.versions.slice(0, state.versions.findIndex((v) => v.published)) : state.versions;
-  const blocked = !connected ? "Connect GitHub first." : unsaved.length ? "Save your changes as a version first." : privateBlocked ? "Your GitHub plan can't put a private component site online." : brokenRefs.length ? "Some colors point at something that no longer exists. Ask Claude to fix it." : !defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo) ? "Pick a repository name." : "";
+  const blocked = !connected ? "Connect GitHub first." : privateBlocked ? "Your GitHub plan can't put a private component site online." : brokenRefs.length ? "Some colors point at something that no longer exists. Ask Claude to fix it." : !defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo) ? "Pick a repository name." : "";
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,13 +72,12 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
         <p className="text-muted-foreground">Publishing puts your saved versions on GitHub and updates your component site, so your team can use them. You can skip it and keep working on your computer.</p>
       </div>
 
+      {(defaults?.remote || result?.published) && <DeployStatus kick={`${result?.at ?? ""}${fixed ? "+fixed" : ""}`} onAsk={onAsk} onError={onError} onStatus={setDeploy} />}
+
       {unsaved.length > 0 && !started && (
-        <section className="flex flex-col gap-3 rounded-2xl border border-warning/60 bg-warning/10 p-5">
-          <div><h2 className="text-base font-semibold">Save your changes first</h2><p className="text-sm">{unsaved.length} file{unsaved.length > 1 ? "s" : ""} changed since your last version: {[...new Set(unsaved.filter((u) => !isGenerated(u.file)).map((u) => fileName(u.file)))].join(", ")}. Only saved versions can be published.</p></div>
-          <form className="flex flex-wrap items-end gap-2.5" onSubmit={(e) => { e.preventDefault(); save(); }}>
-            <label className="flex flex-[1_1_260px] flex-col gap-1 text-sm font-semibold">Describe this version<input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={state.lastChange?.title ?? "For example: softer corners"} className="h-11 rounded-lg border bg-background px-3 font-normal" /></label>
-            <Button type="submit" className="min-h-11" disabled={saving}>{saving ? "Saving…" : "Save version"}</Button>
-          </form>
+        <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+          <div><h2 className="text-base font-semibold">Your changes are saved as a version first</h2><p className="text-sm text-muted-foreground">Changed since your last version: {[...new Set(unsaved.filter((u) => !isGenerated(u.file)).map((u) => fileName(u.file)))].join(", ")}.</p></div>
+          <VersionField draft={draft} />
         </section>
       )}
 
@@ -155,12 +165,7 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
           </ol>
         )}
         {result?.published && (
-          <div className="flex flex-col gap-1 rounded-xl border border-success/50 bg-success/10 p-3.5 text-sm">
-            <strong>Published. Your team can see it now.</strong>
-            {result.storybook && <span>Component site: <a className="underline" href={result.storybook} target="_blank" rel="noreferrer">{result.storybook}</a></span>}
-            <span>On GitHub: <a className="underline" href={result.github} target="_blank" rel="noreferrer">{result.github}</a></span>
-            <span className="text-muted-foreground">{result.note}</span>
-          </div>
+          <p className="text-sm">Sent to GitHub: <a className="underline" href={result.github} target="_blank" rel="noreferrer">{result.github}</a></p>
         )}
         {result?.published && result.pagesBlocked === "plan" && !fixed && (
           <div className="flex flex-col gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3.5 text-sm">
@@ -180,8 +185,70 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
           </div>
         )}
       </section>
-      <Cta back={{ label: "← Components", onClick: onBack }} status={publish.running ? "Publishing… about a minute" : result?.published ? "Published" : blocked}
-        next={{ label: publish.running ? "Publishing…" : defaults?.remote ? "Publish" : "Create the repository and publish", disabled: Boolean(blocked) || publish.running, onClick: start }} />
+      <Cta back={{ label: "← Components", onClick: onBack }} status={publish.running ? "Publishing… about a minute" : blocked || (deploy?.status === "running" || deploy?.status === "waiting" ? "GitHub is testing, then putting it online" : deploy?.status === "failed" ? "GitHub stopped the last publish: see the top of the page" : deploy?.status === "live" ? "Your site is online" : "")}
+        next={{ label: saving ? "Saving…" : publish.running ? "Publishing…" : `${unsaved.length ? "Save and " : ""}${defaults?.remote ? "publish" : "create the repository and publish"}`.replace(/^./, (c) => c.toUpperCase()), disabled: Boolean(blocked) || publish.running || saving, onClick: start }} />
     </div>
   );
+}
+
+const STEP_PLAIN = (step: string) => /npm test|test/i.test(step) ? "testing every component" : /check/i.test(step) ? "Plinth's checks" : /typecheck|tsc/i.test(step) ? "checking the code" : /deploy|pages/i.test(step) ? "putting the site online" : /install|npm ci/i.test(step) ? "installing" : step;
+/** "src/components/radio-group/radio-group.stories.tsx › Keyboard" → "Radio group › Keyboard" */
+const testName = (f: string) => f.replace(/^src\/components\/([^/]+)\/\S+ › /, (_m, id: string) => `${id[0].toUpperCase()}${id.slice(1).replace(/-/g, " ")} › `);
+
+/**
+ * What GitHub did after the push: it tests every component, then puts the site online, or stops and leaves the
+ * last good version online. Checked every 10 seconds while GitHub works.
+ */
+function DeployStatus({ kick, onAsk, onError, onStatus }: { kick: string; onAsk: (text: string) => void; onError: (m: string) => void; onStatus: (d: Deploy) => void }) {
+  const [d, setD] = useState<Deploy>(null);
+  const [again, setAgain] = useState(0);
+  useEffect(() => {
+    let off = false;
+    let timer: number | undefined;
+    const tick = async () => {
+      try {
+        const r = await api.deploy();
+        if (off) return;
+        setD(r.deploy);
+        onStatus(r.deploy);
+        if (r.deploy && ["waiting", "running", "unknown"].includes(r.deploy.status)) timer = window.setTimeout(tick, 10_000);
+      } catch { if (!off) timer = window.setTimeout(tick, 15_000); }
+    };
+    tick();
+    return () => { off = true; window.clearTimeout(timer); };
+  }, [kick, again]);
+  if (!d) return null;
+  const details = <a className="underline" href={d.run ?? d.actions} target="_blank" rel="noreferrer">Details on GitHub</a>;
+  if (d.status === "waiting" || d.status === "running") {
+    return (
+      <div role="status" className="flex flex-col gap-1 rounded-xl border border-info/40 bg-info/5 p-3.5 text-sm">
+        <span className="flex items-center gap-2 font-semibold"><span aria-hidden="true" className="size-2.5 animate-pulse rounded-full bg-info" />GitHub is testing every component, then putting your site online</span>
+        <span className="text-muted-foreground">Usually 2 to 3 minutes. Your team keeps seeing the last version until then. {details}</span>
+      </div>
+    );
+  }
+  if (d.status === "live") {
+    return (
+      <div role="status" className="flex flex-col gap-1 rounded-xl border border-success/50 bg-success/10 p-3.5 text-sm">
+        <strong>Your component site is online with this version.</strong>
+        {d.site && <a className="self-start underline" href={d.site} target="_blank" rel="noreferrer">{d.site}</a>}
+      </div>
+    );
+  }
+  if (d.status === "failed") {
+    const what = d.failures?.length ? d.failures.map(testName) : d.errors?.length ? d.errors : [];
+    const ask = `GitHub stopped before putting my component site online, at ${d.step ? STEP_PLAIN(d.step) : "one of its steps"}.${what.length ? ` What failed: ${what.join("; ")}.` : ""} Find out why and fix it, then tell me when I can publish again.`;
+    return (
+      <div role="status" className="flex flex-col gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3.5 text-sm">
+        <strong>GitHub stopped before putting your site online{d.step ? `, while ${STEP_PLAIN(d.step)}` : ""}.</strong>
+        {what.length > 0 && <ul className="list-disc pl-5">{what.map((w) => <li key={w}>{w}</li>)}</ul>}
+        <span className="text-muted-foreground">Nothing new went online. {details}</span>
+        <div className="flex flex-wrap gap-2">
+          <Button className="min-h-10" onClick={() => onAsk(ask)}>Ask Claude to fix it</Button>
+          <Button variant="outline" className="min-h-10" onClick={async () => { try { await api.redeploy(); setD({ ...d, status: "waiting" }); setAgain((n) => n + 1); } catch (e) { onError((e as Error).message); } }}>Try again</Button>
+        </div>
+      </div>
+    );
+  }
+  return <p className="text-sm text-muted-foreground">Couldn't check what GitHub did{d.error ? `: ${d.error}` : ""}. {details}</p>;
 }

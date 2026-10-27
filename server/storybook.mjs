@@ -33,14 +33,26 @@ export function httpJson(url, { method = "GET", headers = {}, body, timeout = 0 
 
 const isWin = process.platform === "win32";
 
-export function freePort(start) {
-  return new Promise((resolve) => {
-    const tryPort = (p) => {
-      const srv = createServer().once("error", () => tryPort(p + 1)).once("listening", () => srv.close(() => resolve(p)));
-      srv.listen(p, "127.0.0.1");
-    };
-    tryPort(start);
+/**
+ * A port nothing listens on, over IPv4 and IPv6. Storybook listens on "::"; on Windows a check on 127.0.0.1 alone
+ * passes on a port another Storybook holds, and the new one then moves to another port on its own.
+ */
+export async function freePort(start) {
+  const freeOn = (port, host) => new Promise((resolve) => {
+    const srv = createServer();
+    // No IPv6 on this machine (EAFNOSUPPORT, EADDRNOTAVAIL) means nothing can hold the port there.
+    srv.once("error", (e) => resolve(e.code !== "EADDRINUSE" && e.code !== "EACCES"));
+    srv.once("listening", () => srv.close(() => resolve(true)));
+    srv.listen(port, host);
   });
+  for (let p = start; p < start + 100; p++) if ((await freeOn(p, "127.0.0.1")) && (await freeOn(p, "::"))) return p;
+  return start;
+}
+
+/** The address Storybook says it serves ("Local: http://localhost:6008/"), which is not always the one asked for. */
+export function storybookUrl(log) {
+  const m = /Local:\s+(https?:\/\/[^\s│|]+)/.exec(String(log).replace(/\x1b\[[0-9;]*m/g, ""));
+  return m ? m[1].replace(/\/+$/, "") : null;
 }
 
 /** Run a command to completion; resolves with the exit code and the last lines of output. */
@@ -114,14 +126,16 @@ export function createStorybook(root, deps, bump = () => {}) {
           const timer = setTimeout(() => resolve(false), 120000);
           const onData = (d) => {
             log += d;
-            if (/Storybook ready|Local:/.test(String(d))) { clearTimeout(timer); resolve(true); }
+            if (storybookUrl(log) || /Storybook ready/.test(log)) { clearTimeout(timer); resolve(true); }
           };
           child.stdout.on("data", onData);
           child.stderr.on("data", onData);
           child.on("exit", () => { clearTimeout(timer); resolve(false); });
         });
         if (!ready) { kill(child); return { started: false, error: "Storybook did not start within 2 minutes.", log: log.trim().split("\n").slice(-15).join("\n") }; }
-        url = `http://localhost:${port}`;
+        // Trust what Storybook printed: if the port was taken after all, it moved, and the asked-for port serves
+        // someone else's Storybook.
+        url = storybookUrl(log) ?? `http://localhost:${port}`;
         return { started: true, url };
       })().then((r) => { starting = null; bump(); return r; });
       return starting;

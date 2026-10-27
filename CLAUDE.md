@@ -27,7 +27,12 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - The UI is four steps (Describe, Style, Components, Publish) in plain words: no token names in UI copy except the
   small labels in the node graph. Presets the UI offers (palettes, fonts, corners, the component list) live in
   `server/start.mjs`; style picks become ops in `engine/style.mjs`. Every page's main action goes in `<Cta>`.
-- After changing `engine/` or `server/`, run `npm test` (25 tests).
+- AI drafts, the user confirms: text the user would otherwise write is drafted and shown in an editable field (prose
+  by Claude through `server/quick.mjs`, names and values by the engine), never left empty. Status tells the truth: after
+  a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
+- A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
+  is still exactly the shipped one get the fix as an undoable change when Plinth starts.
+- After changing `engine/` or `server/`, run `npm test` (29 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (83 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
@@ -46,6 +51,12 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   the writing tools gives a read-only run (the review at publish). Without `--plugin-dir` and with the file tools
   disallowed, `claude -p --model haiku` answers a JSON-only prompt in about 9 s for about US$0.004 (Describe's
   suggestions).
+- Storybook 10 moves to another port by itself when the one passed with `-p` is taken, and listens on `::`; a free-port
+  check on 127.0.0.1 alone passes on a port another Storybook holds (Windows). Read the URL from its "Local:" line.
+- `gh run view --log-failed` prints "job<TAB>step<TAB>timestamp text" lines; on Windows the color codes arrive written out
+  as "^[[31m". Story tests that check visibility during a fade-in pass on Windows and fail on GitHub's Linux runner:
+  wait for it (`waitFor`) or check the text.
+- Version descriptions by Haiku (one run, no tools): about 7 s, US$0.004.
 - shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
   `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,

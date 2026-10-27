@@ -8,7 +8,7 @@ steps in one UI, with Claude in a chat beside them: Describe → Style → Compo
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.6).** Tested by `npm test` (25 tests), by the 83 story tests in a generated workspace, and
+> **Status: early (0.6.1).** Tested by `npm test` (29 tests), by the 83 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -115,17 +115,18 @@ its main button in the bar at the bottom of the screen:
    roles at palette steps the engine chooses for readable text. **Things to look at** lists text that is hard to read
    and colors that look alike, with **Fix it** or **That's on purpose**.
 3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
-   (roles) → base colors (palette). Click a part, then a color, to connect them. Add components (Claude writes them)
-   or remove ones nothing else uses.
-4. **Publish** (optional). Save your changes as a version first; Claude's review appears (suggestions only). The first
-   time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
+   (roles) → base colors (palette). Click a part, then a color, to connect them. Add ready-made components (free,
+   at once), ask Claude for others, or remove ones nothing else uses.
+4. **Publish** (optional). Claude drafts the description of your changes (change it if you like) and **Save and
+   publish** saves and publishes in one step; Claude's review appears (suggestions only). The first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
-   does not work for private repositories there.
+   does not work for private repositories there. After the push, the top of the page shows what GitHub does: testing,
+   online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
 
 The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
 kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
 for the page you're on. **Undo** at the top takes the last change back, whoever made it; **History** lists what isn't
-in a version yet, saves a version, throws changes away, and restores any saved version.
+in a version yet, saves a version (with a description Claude drafted), throws changes away, and restores any saved version.
 
 Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup`. If Plinth already runs
 for the folder, the command opens that one instead of starting a second.
@@ -277,6 +278,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `export_design_md` | The complete DESIGN.md for one brand, with lint |
 | `start_storybook`, `open_ui` | Previews and the UI link |
 | `publish` | The full publish (or `dryRun`) |
+| `deploy_status` | What GitHub did with the last publish: testing, live, or the step and story tests that stopped it |
 
 Changes may only touch token files, guideline files, `design-system.json` and `src/components/`. Everything else
 is refused.
@@ -302,6 +304,7 @@ design-system folder.
 | `PLINTH_MODEL` | Claude Code's default | Model for the UI chat, e.g. `sonnet` |
 | `PLINTH_REVIEW_MODEL` | `haiku` | Model for the review at publish |
 | `PLINTH_SUGGEST_MODEL` | `haiku` | Model for the suggestions after the first answer in Describe (one run, no tools) |
+| `PLINTH_DRAFT_MODEL` | `haiku` | Model that drafts the description of a version for you to confirm (one run, no tools) |
 | `PLINTH_NO_INSTALL` | unset | Set it to stop Create from installing dependencies (tests, CI) |
 | `PLINTH_CLAUDE_BIN` | `claude` | Claude Code executable |
 
@@ -339,7 +342,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 25 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 29 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319
