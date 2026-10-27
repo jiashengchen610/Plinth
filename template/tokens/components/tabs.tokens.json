@@ -1,0 +1,35 @@
+{
+  "tabs": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "$type": "color",
+    "list": {
+      "background": {
+        "$value": "{color.muted}"
+      },
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      }
+    },
+    "trigger": {
+      "active-background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "active-foreground": {
+        "$value": "{color.foreground}"
+      }
+    }
+  }
+}

@@ -202,12 +202,14 @@ test("MCP server: create, change at once, undo, save, restore, fix contrast, exp
 
   // Exceptions: a failing check the user accepts stops counting, is listed, and is a change like any other.
   await s.call("change", { title: "Low-contrast muted text", ops: [{ op: "set", file: "brands/kids/tokens.json", path: "color/muted-foreground", value: "oklch(0.8 0 0)" }] });
+  // Component pairs that point at the role fail with it (the tabs list uses muted text), and are accepted separately.
   const failing = (await s.call("run_checks")).contrastFailures;
-  assert.ok(failing.length >= 2 && failing.every((f) => f.fg === "muted-foreground"), JSON.stringify(failing));
+  const muted = failing.filter((f) => f.fg === "muted-foreground");
+  assert.ok(muted.length >= 2 && failing.every((f) => f.fg === "muted-foreground" || f.fg === "tabs-list-foreground"), JSON.stringify(failing));
   assert.equal((await api("api/exceptions", { check: "contrast", key: "*|*|*|muted-foreground", reason: "decorative text" })).status, 200);
   const after = await s.call("run_checks");
   assert.equal(after.exceptions.length, 1);
-  assert.equal(after.summary.contrast.accepted, failing.length);
+  assert.equal(after.summary.contrast.accepted, muted.length);
   st = await (await api("api/state")).json();
   assert.ok(st.checks.contrast.some((c) => c.accepted && c.exceptionReason === "decorative text"));
   assert.equal(st.lastChange.title, "Accept exception: contrast *|*|*|muted-foreground (decorative text)");

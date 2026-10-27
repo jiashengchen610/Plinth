@@ -1,0 +1,43 @@
+{
+  "dialog": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}"
+    },
+    "shadow": {
+      "$type": "shadow",
+      "$value": "{shadow.overlay}"
+    },
+    "$type": "color",
+    "overlay": {
+      "$value": "{color.foreground}",
+      "$extensions": {
+        "plinth": {
+          "modes": {
+            "dark": "{color.background}"
+          },
+          "alpha": {
+            "default": 0.5,
+            "dark": 0.8
+          }
+        }
+      }
+    },
+    "content": {
+      "background": {
+        "$value": "{color.background}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      }
+    },
+    "description": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      }
+    }
+  }
+}

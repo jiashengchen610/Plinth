@@ -13,7 +13,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - Anything the model could guess but a program can compute (contrast, CSS output, YAML, palette scales, contrast fixes)
   is computed in `engine/`.
 - Tokens are layered (design-system.json → layers): palette (Tailwind, regenerate with `scripts/tailwind-primitives.mjs`),
-  roles, component tokens. Template components use only component tokens. Fixes never edit the palette.
+  roles, component tokens. Template components use only component tokens, and icons only from `@/icons` (SVGs in
+  `icons/`; the shipped Lucide set is `engine/icon-sets/lucide.json`, regenerate with `scripts/lucide-icons.mjs`).
+  Catalog components may import only the five core ones (a test enforces it). Fixes never edit the palette.
 - One Plinth per folder (`server/owner.mjs`): whichever process starts first serves the UI and runs every write;
   others forward tool calls to it. Writes go through `engine/workspace.mjs` `change` (validated, undoable); the user
   saves versions. Nothing restricts direct edits: checks run on the state, and `plinth check` (`engine/check.mjs`)
@@ -25,9 +27,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - The UI is four steps (Describe, Style, Components, Publish) in plain words: no token names in UI copy except the
   small labels in the node graph. Presets the UI offers (palettes, fonts, corners, the component list) live in
   `server/start.mjs`; style picks become ops in `engine/style.mjs`. Every page's main action goes in `<Cta>`.
-- After changing `engine/` or `server/`, run `npm test` (22 tests).
+- After changing `engine/` or `server/`, run `npm test` (25 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
-  (42 story tests).
+  (83 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
   Write/Edit tools.
 

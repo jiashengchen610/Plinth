@@ -30,6 +30,7 @@ const DEFAULTS = {
     "**/index.css",
     "**/tokens.css",
     "**/fonts.css",
+    "**/src/icons/**",
     "**/tokens/**",
     "**/brands/**",
     "**/*.tokens.json",

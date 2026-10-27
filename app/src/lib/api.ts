@@ -42,7 +42,8 @@ export type SetupStep = { id: string; label: string; who: string; status: "waiti
 export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
 export type Presets = {
   kinds: { id: string; label: string }[]; feels: string[]; fonts: { family: string; mood: string }[];
-  components: { id: string; name: string; hint: string; ready?: boolean }[];
+  components: { id: string; name: string; hint: string; ready?: boolean; core?: boolean }[];
+  kindComponents: Record<string, string[]>;
   palettes: { id: string; name: string; mood: string; main: string; gray: string; swatches: (string | null)[]; main600: string | null }[];
   corners: { id: string; name: string; control: string | null; container: string | null }[];
 };
@@ -134,6 +135,7 @@ export const api = {
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
   style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick }),
   removeComponent: (name: string) => call<ChangeResult>("POST", "/api/remove-component", { name }),
+  addComponent: (name: string) => call<ChangeResult>("POST", "/api/add-component", { name }),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

@@ -355,5 +355,9 @@ export function buildCss(root, config = loadConfig(root)) {
   }
   const theme = themeEntries(resolved.find((r) => r.brand === defaultBrand).tokens);
   if (theme.length) out.push("@theme inline {", ...theme, "}", "");
+  // Reduced motion: every duration becomes 0, so anything animated with the motion tokens just appears.
+  const motion = [...new Set(resolved.flatMap((r) => r.tokens.filter((t) => t.type === "duration" || t.type === "transition").map((t) => t.name)))].sort();
+  // !important: the brand and mode blocks above are more specific than :root.
+  if (motion.length) out.push("@media (prefers-reduced-motion: reduce) {", "  :root {", ...motion.map((n) => `    --${n}: 0ms !important;`), "  }", "}", "");
   return { css: out.join("\n"), brands, defaultBrand, issues };
 }

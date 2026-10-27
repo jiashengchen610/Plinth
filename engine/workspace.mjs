@@ -10,12 +10,13 @@ import { buildCss, loadConfig, listBrands, resolveBrand, cssName, TYPOGRAPHY_PAR
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { hueFamily, staleMentions } from "./prose.mjs";
+import { iconsModule } from "./icons.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const TEMPLATE_DIR = resolve(here, "..", "template");
 
 // Files a change may touch. Anything else is refused.
-const EDITABLE = [/^tokens\/(components\/|layers\/)?[^/]+\.json$/, /^brands\/[a-z0-9-]+\/(tokens\.json|DESIGN\.md|WRITING\.md)$/, /^(DESIGN|WRITING)\.md$/, /^design-system\.json$/, /^src\/components\/[a-z0-9-]+\/[^/]+$/];
+const EDITABLE = [/^tokens\/(components\/|layers\/)?[^/]+\.json$/, /^brands\/[a-z0-9-]+\/(tokens\.json|DESIGN\.md|WRITING\.md)$/, /^(DESIGN|WRITING)\.md$/, /^design-system\.json$/, /^src\/components\/[a-z0-9-]+\/[^/]+$/, /^icons\/[a-z0-9-]+\.svg$/];
 
 // ---------------- git ----------------
 export function git(root, args, opts = {}) {
@@ -37,7 +38,7 @@ export function gitCommit(root, message, paths = null) {
 }
 
 /** Paths regenerate writes. */
-export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md", "src/index.css"];
+export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/icons", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md", "src/index.css"];
 
 /** Saved versions, newest first. `published`: already in the last published version. */
 export function versions(root, limit = 50) {
@@ -145,7 +146,7 @@ export function copyDir(src, dest, skip = () => false, rel = "") {
  * Create a new workspace from the template. `brand` becomes the first brand id.
  * Does not install dependencies (see installDependencies).
  */
-export function initWorkspace(root, { name = "my-design-system", brand = "default", context = "saas-dashboard", naming = "shadcn", templateDir = TEMPLATE_DIR } = {}) {
+export function initWorkspace(root, { name = "my-design-system", brand = "default", context = "saas-dashboard", naming = "shadcn", templateDir = TEMPLATE_DIR, skipComponents = [] } = {}) {
   if (existsSync(join(root, "design-system.json"))) throw new Error(`${root} already contains a design system`);
   mkdirSync(root, { recursive: true });
   // Hidden entries (.git, .claude, .mcp.json, .vscode …) are editor or tool settings, not content.
@@ -154,7 +155,9 @@ export function initWorkspace(root, { name = "my-design-system", brand = "defaul
   if (!existsSync(join(templateDir, "design-system.json"))) throw new Error(`template not found at ${templateDir}`);
   // Filter on the path inside the template: the install itself may live under a node_modules folder (npx).
   const skip = /(^|[\\/])(node_modules|storybook-static|dist)([\\/]|$)/;
-  copyDir(templateDir, root, (rel) => skip.test(rel));
+  // Catalog components the user did not pick stay out of the repo (they can be added later, free).
+  const left = new Set(skipComponents.flatMap((id) => [`src/components/${id}`, `tokens/components/${id}.tokens.json`]));
+  copyDir(templateDir, root, (rel) => skip.test(rel) || left.has(rel));
   // npm drops .gitignore files from packages, so the template ships it without the dot.
   if (existsSync(join(root, "gitignore"))) renameSync(join(root, "gitignore"), join(root, ".gitignore"));
   if (!existsSync(join(root, ".gitignore"))) throw new Error("template is missing its gitignore");
@@ -186,6 +189,8 @@ export function regenerate(root) {
   mkdirSync(styles, { recursive: true });
   writeFileSync(join(styles, "tokens.css"), css);
   writeFileSync(join(styles, "fonts.css"), fontsCss(fontsToLoad(root, config)));
+  mkdirSync(join(root, "src", "icons"), { recursive: true });
+  writeFileSync(join(root, "src", "icons", "index.tsx"), iconsModule(root));
   syncManaged(root);
   writeFoundationsData(root, config);
   return issues;
@@ -695,6 +700,45 @@ export function listComponents(root) {
       spec: readText(root, `src/components/${n}/${n}.spec.md`),
       usedBy: componentUsers(root, n),
     }));
+}
+
+/** Components the template ships: the catalog. Each is copied as-is; its looks come from tokens. */
+export function catalogComponents(templateDir = TEMPLATE_DIR) {
+  return listComponents(templateDir).map((c) => c.id);
+}
+
+/**
+ * Ops that add a catalog component to a workspace: its folder, its token file, the icons it uses, and any base
+ * roles it needs that an older workspace lacks (small corners, motion, stacking order). One undoable change.
+ */
+export function catalogComponentOps(root, id, templateDir = TEMPLATE_DIR) {
+  if (!catalogComponents(templateDir).includes(id)) throw new Error(`${id} is not in the component catalog. Ask Claude to write it.`);
+  if (existsSync(join(root, "src", "components", id, `${id}.tsx`))) throw new Error(`${id} is already in this design system.`);
+  const ops = [];
+  const dir = join(templateDir, "src", "components", id);
+  const icons = new Set();
+  for (const f of readdirSync(dir).filter((f) => statSync(join(dir, f)).isFile())) {
+    const content = readFileSync(join(dir, f), "utf8");
+    ops.push({ op: "write", file: `src/components/${id}/${f}`, content });
+    for (const m of content.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']@\/icons["']/g)) {
+      for (const name of m[1].split(",").map((s) => s.trim()).filter(Boolean)) icons.add(name.replace(/Icon$/, "").replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([A-Za-z])(\d)/g, "$1-$2").toLowerCase());
+    }
+  }
+  const tokens = join(templateDir, "tokens", "components", `${id}.tokens.json`);
+  if (existsSync(tokens)) ops.push({ op: "write", file: `tokens/components/${id}.tokens.json`, content: readFileSync(tokens, "utf8") });
+  for (const name of icons) {
+    const from = join(templateDir, "icons", `${name}.svg`);
+    if (existsSync(from) && !existsSync(join(root, "icons", `${name}.svg`))) ops.push({ op: "write", file: `icons/${name}.svg`, content: readFileSync(from, "utf8") });
+  }
+  // Base roles added after a workspace was made: copy the template's, so references and CSS variables resolve.
+  const base = JSON.parse(readFileSync(join(root, "tokens", "base.tokens.json"), "utf8"));
+  const tpl = JSON.parse(readFileSync(join(templateDir, "tokens", "base.tokens.json"), "utf8"));
+  const missing = [];
+  if (tpl.radius?.small && !base.radius?.small) missing.push(["radius/small", tpl.radius.small, "dimension"]);
+  for (const group of ["duration", "layer"]) if (tpl[group] && !base[group]) for (const [k, v] of Object.entries(tpl[group])) if (!k.startsWith("$")) missing.push([`${group}/${k}`, v, tpl[group].$type]);
+  for (const k of ["enter", "exit"]) if (tpl.ease?.[k] && !base.ease?.[k]) missing.push([`ease/${k}`, tpl.ease[k], "cubicBezier"]);
+  for (const [path, t, type] of missing) ops.push({ op: "set", file: "tokens/base.tokens.json", path, value: t.$value, type, ...(t.$description ? { description: t.$description } : {}) });
+  return ops;
 }
 
 /** Source files outside a component's folder that import it (the Foundations pages, the app shell, other components). */

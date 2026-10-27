@@ -9,7 +9,9 @@ import { buildCss, loadConfig } from "./tokens.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { runChecks } from "./checks.mjs";
 import { listComponents, foundationsData, FOUNDATIONS_DATA } from "./workspace.mjs";
+import { iconsModule } from "./icons.mjs";
 
+const ICON_PACKAGE = /from\s+["'](lucide-react|@heroicons\/react[^"']*|react-icons[^"']*|@phosphor-icons\/react|@tabler\/icons-react|@radix-ui\/react-icons)["']/;
 const read = (root, rel) => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), "utf8").replace(/\r\n/g, "\n") : null);
 const slash = (p) => p.replace(/\\/g, "/");
 
@@ -25,7 +27,7 @@ export function checkRepo(root) {
   for (const issue of issues) blocking.push({ kind: "token", detail: issue });
 
   // 2. Generated files match the tokens (someone edited a token file and committed without regenerating)
-  const generated = { "src/styles/tokens.css": css, "src/styles/fonts.css": fontsCss(fontsToLoad(root, config)), [FOUNDATIONS_DATA]: foundationsData(root, config) };
+  const generated = { "src/styles/tokens.css": css, "src/styles/fonts.css": fontsCss(fontsToLoad(root, config)), "src/icons/index.tsx": iconsModule(root), [FOUNDATIONS_DATA]: foundationsData(root, config) };
   for (const [file, want] of Object.entries(generated)) {
     if (read(root, file) !== want) blocking.push({ kind: "generated", detail: `${file} does not match the tokens: it was not regenerated after a token edit. Open the folder in Plinth (it regenerates on its own), save a version and push again.` });
   }
@@ -36,6 +38,13 @@ export function checkRepo(root) {
   for (const c of listComponents(root)) {
     if (!c.hasStories) blocking.push({ kind: "component", detail: `${c.id}: no ${c.id}.stories.tsx in src/components/${c.id}. Every component has a story, so its tests run.` });
     if (layered && !existsSync(join(root, "tokens", "components", `${c.id}.tokens.json`))) blocking.push({ kind: "component", detail: `${c.id}: no component tokens (tokens/components/${c.id}.tokens.json). Add the component through Plinth so it gets them.` });
+  }
+  // Icons come from icons/ through src/icons; an icon package would bypass the repo's own set.
+  for (const c of listComponents(root)) {
+    for (const file of c.files.filter((f) => /\.(tsx?|jsx?)$/.test(f))) {
+      const m = ICON_PACKAGE.exec(read(root, `src/components/${c.id}/${file}`) ?? "");
+      if (m) blocking.push({ kind: "icons", detail: `src/components/${c.id}/${file} imports icons from ${m[1]}. Use the design system's own icons (import from "@/icons"; add missing ones through Plinth).` });
+    }
   }
   for (const f of checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/"))) {
     blocking.push({ kind: "hardcoded", detail: `${slash(f.file)}:${f.line} ${f.match} (${f.rule}). Use a token, or accept it as an exception in Plinth.` });

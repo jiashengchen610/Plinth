@@ -1,0 +1,8 @@
+{
+  "separator": {
+    "$type": "color",
+    "line": {
+      "$value": "{color.border}"
+    }
+  }
+}

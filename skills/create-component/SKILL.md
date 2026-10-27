@@ -1,14 +1,21 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.3.0
+version: 0.4.0
 ---
 
 # Create a component
 
 A component is three files in `src/components/<name>/`: `<name>.spec.md`, `<name>.tsx`, `<name>.stories.tsx`, plus its
 tokens in `tokens/components/<name>.tokens.json`. GitHub refuses to deploy a component without its tokens or story, or
-with hardcoded values (`plinth check`). The spec comes before any code.
+with hardcoded values or an icon package (`plinth check`). The spec comes before any code.
+
+## 0. Ready-made first
+
+Plinth ships a catalog: button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast,
+tooltip, card, tabs, dialog, separator. If the user asks for one of these and `list_components` does not have it,
+call `add_component` (free, instant, one undoable change, in the system's style at once) instead of writing it. Then
+adjust it like any existing component (tier 1).
 
 ## 1. Classify the request
 
@@ -18,7 +25,7 @@ with hardcoded values (`plinth check`). The spec comes before any code.
 |---|---|---|
 | 1. Exists | An existing component in a new variant or state | Extend it (new variant in its cva, new story) |
 | 2. Composition | Built from existing components (pricing card, login form, stat tile) | New component that imports `@/components/<x>/<x>` only |
-| 3. Known pattern | Has an established accessible behavior (date picker, combobox, tree, slider, tabs, dialog) | Build on a Radix primitive from `radix-ui`; follow the WAI-ARIA pattern for keyboard and roles |
+| 3. Known pattern | Has an established accessible behavior (date picker, combobox, tree, slider, popover) | Build on a Radix primitive from `radix-ui`; follow the WAI-ARIA pattern for keyboard and roles |
 | 4. Novel | No established pattern (custom visualisation, timeline scrubber) | Not supported yet: say so, and offer the closest tier 2–3 version |
 
 ## 2. Spec (one change)
@@ -45,10 +52,14 @@ contrast automatically). Opacity: `"$extensions": { "plinth": { "alpha": 0.1 } }
 the inner components' tokens and adds tokens only for what it styles itself.
 
 Component rules:
-- Imports: `@/components/<x>/<x>`, `@/lib/utils` (`cn`), `radix-ui`, `class-variance-authority`, `lucide-react`.
+- Imports: `@/components/<x>/<x>`, `@/lib/utils` (`cn`), `radix-ui`, `class-variance-authority`, and icons from
+  `@/icons` only (`icons/check.svg` → `CheckIcon`). Missing icons: `find_icons`, then `add_icons`. Never import an
+  icon package (`lucide-react` and the like): the deploy refuses it.
 - Styling: the component's own tokens as theme utilities (`bg-<name>-container-background`,
   `text-<name>-container-foreground`, `rounded-<name>`), spacing from Tailwind's scale (`p-4`, `gap-2`). Focus rings
-  and invalid states may use roles (`ring-ring`, `border-destructive`). No hex, `oklch()`, arbitrary values
+  and invalid states may use roles (`ring-ring`, `border-destructive`). Elevation, motion and stacking come from the
+  base roles: `shadow-card`, `shadow-overlay`, `duration-(--duration-fast)`, `ease-enter`, `ease-exit`,
+  `z-(--layer-dialog)` (layers: sticky, dropdown, dialog, toast, tooltip). No hex, `oklch()`, arbitrary values
   (`p-[13px]`), inline styles or magic pixel values.
 - Variants with `cva`; `data-slot` on the root; forward `className`; type props explicitly.
 - Copy follows WRITING.md (verbs on buttons, sentence case, specific errors).

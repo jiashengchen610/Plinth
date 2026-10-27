@@ -10,6 +10,11 @@ import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
 import { readStyle, styleOps, styleTitle } from "../engine/style.mjs";
+import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
+import { COMPONENTS } from "./start.mjs";
+
+/** Change titles use the name people see in the UI (Text box, Dropdown); components outside the catalog keep their id. */
+const componentName = (id) => COMPONENTS.find((c) => c.id === id)?.name ?? id;
 
 const requireWorkspace = (root) => {
   if (!existsSync(join(root, "design-system.json"))) throw new Error(`No design system in ${root}. Call create_design_system first.`);
@@ -167,12 +172,41 @@ export const TOOLS = [
     },
   },
   {
+    name: "add_component",
+    description: "Add a component from Plinth's ready-made catalog (button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast, tooltip, card, tabs, dialog, separator): its code, story, spec, component tokens and the icons it uses, in the design system's style at once, as one undoable change. Free and instant: always prefer this over writing a component the catalog has.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "Catalog id, e.g. dialog" } }, required: ["name"] },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      return write(ctx, { title: `Add ${componentName(a.name)}`, ops: ws.catalogComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
+    },
+  },
+  {
+    name: "find_icons",
+    description: "Search the icon set Plinth ships (Lucide, about 1,900 icons) by words, e.g. \"calendar\", \"arrow left\", \"warning\". Local, no network. Returns icon names and which ones the design system already has.",
+    inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    run: (a, ctx) => {
+      const have = new Set(existsSync(join(ctx.root, "design-system.json")) ? listIcons(ctx.root) : []);
+      return { set: iconSet().name, results: findIcons(a.query).map((name) => ({ name, inDesignSystem: have.has(name), import: `${name.split("-").map((s) => s[0].toUpperCase() + s.slice(1)).join("")}Icon` })) };
+    },
+  },
+  {
+    name: "add_icons",
+    description: "Add icons from the shipped set to the design system's icons/ folder; components then import them from \"@/icons\" (check.svg → CheckIcon). Never import an icon package in a component. Written at once; undoable.",
+    inputSchema: { type: "object", properties: { names: { type: "array", items: { type: "string" }, description: "Icon names from find_icons, e.g. [\"calendar\", \"arrow-left\"]" } }, required: ["names"] },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const ops = addIconOps(ctx.root, a.names ?? []);
+      if (!ops.length) return { title: "Add icons", files: [], unchanged: true, note: "They are already in icons/." };
+      return write(ctx, { title: `Add icon${ops.length > 1 ? "s" : ""}: ${ops.map((o) => o.file.replace(/^icons\/|\.svg$/g, "")).join(", ")}`, ops, by: a.by ?? "claude" });
+    },
+  },
+  {
     name: "remove_component",
     description: "Remove a component: its folder (code, story, spec) and its token file, as one change Undo can take back. Refused for a component that other code imports (the Foundations pages, other components). Ask the user before removing.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Component folder name, e.g. date-picker" } }, required: ["name"] },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
-      return write(ctx, { title: `Remove ${a.name}`, ops: ws.removeComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
+      return write(ctx, { title: `Remove ${componentName(a.name)}`, ops: ws.removeComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
     },
   },
   {

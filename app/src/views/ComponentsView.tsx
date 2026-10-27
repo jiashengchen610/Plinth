@@ -49,7 +49,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}` : null;
   const deps = state.deps;
   const name = componentLabel(component.id, catalog);
-  const missing = (catalog ?? []).filter((c) => !c.ready && !state.components.some((x) => x.id === c.id));
+  const missing = (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id));
   const protectedBy = component.usedBy.length > 0;
 
   const remove = async () => {
@@ -79,19 +79,21 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
           {adding && (
             <section className="flex flex-col gap-3 rounded-2xl border-2 border-foreground bg-background p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div><h2 className="text-base font-semibold">Add a component</h2><p className="text-sm text-muted-foreground">Claude writes it in your style, with its own colors, a preview and a spec. A few minutes and about US$1.50 each.</p></div>
+                <div><h2 className="text-base font-semibold">Add a component</h2><p className="text-sm text-muted-foreground">Ready-made components come in your style at once: free, and Undo takes them back.</p></div>
                 <Button variant="outline" onClick={() => setAdding(false)}>Close</Button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {missing.map((c) => (
-                  <div key={c.id} className="flex flex-[1_1_240px] items-center gap-3 rounded-xl border py-2 pr-2 pl-3">
-                    <span className="flex flex-1 flex-col leading-tight"><span className="font-semibold">{c.name}</span><span className="text-sm text-muted-foreground">{c.hint}</span></span>
-                    <Button variant="outline" className="min-h-10" onClick={() => { onAsk(`Add a ${c.name.toLowerCase()} component (${c.id}) the Plinth way.`); setAdding(false); }}>Ask Claude</Button>
-                  </div>
-                ))}
-              </div>
+              {missing.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {missing.map((c) => (
+                    <div key={c.id} className="flex flex-[1_1_240px] items-center gap-3 rounded-xl border py-2 pr-2 pl-3">
+                      <span className="flex flex-1 flex-col leading-tight"><span className="font-semibold">{c.name}</span><span className="text-sm text-muted-foreground">{c.hint}</span></span>
+                      <Button variant="outline" className="min-h-10" onClick={async () => { try { onChanged(await api.addComponent(c.id), `Added ${c.name}.`); setSelected(c.id); setAdding(false); } catch (e) { onError((e as Error).message); } }}>Add</Button>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm">You have every ready-made component.</p>}
               <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-                <span className="flex-[1_1_260px] text-sm">Something else? Describe it to Claude, or paste a screenshot of one you like.</span>
+                <span className="flex-[1_1_260px] text-sm">Something else? Describe it to Claude, or paste a screenshot of one you like. A new component takes a few minutes and about US$1.50.</span>
                 <Button variant="outline" className="min-h-10" onClick={() => { onAsk("I need a component that "); setAdding(false); }}>Describe it in the chat</Button>
               </div>
             </section>

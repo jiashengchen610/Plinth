@@ -1,0 +1,15 @@
+{
+  "tooltip": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.small}"
+    },
+    "$type": "color",
+    "background": {
+      "$value": "{color.foreground}"
+    },
+    "foreground": {
+      "$value": "{color.background}"
+    }
+  }
+}

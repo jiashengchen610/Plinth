@@ -1,0 +1,34 @@
+{
+  "textarea": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "$type": "color",
+    "field": {
+      "background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "default": 0,
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.input}"
+      },
+      "placeholder": {
+        "$value": "{color.muted-foreground}"
+      }
+    }
+  }
+}

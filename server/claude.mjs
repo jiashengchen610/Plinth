@@ -42,7 +42,7 @@ export const RESTRICTED_TOOLS = [
 ];
 // The review reads; it does not get the tools that write.
 const READ_TOOLS = ["review_changes", "get_guidelines", "get_tokens", "list_components"];
-const WRITE_TOOLS = ["change", "undo", "set_style", "remove_component", "add_palette_color", "upgrade_to_layers", "link_to_palette", "fix_contrast", "save_version", "restore_version", "publish", "create_design_system", "install_dependencies"];
+const WRITE_TOOLS = ["change", "undo", "set_style", "add_component", "add_icons", "remove_component", "add_palette_color", "upgrade_to_layers", "link_to_palette", "fix_contrast", "save_version", "restore_version", "publish", "create_design_system", "install_dependencies"];
 const REVIEW_TOOLS = [
   "--allowedTools", ...READ_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),
   "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch", ...WRITE_TOOLS.flatMap((t) => [`mcp__plugin_plinth_plinth__${t}`, `mcp__plinth__${t}`]),

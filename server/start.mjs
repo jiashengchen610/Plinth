@@ -34,25 +34,36 @@ export const FONTS = [
   { family: "Geist", mood: "Crisp and technical" },
 ];
 export const FEELS = ["Warm and trustworthy", "Calm and professional", "Bright and playful", "Simple and focused"];
-/** Ready-made components ship with the template; the others Claude writes when asked (a few minutes each). */
+/**
+ * The component catalog: every one ships with the template, ready-made, styled by tokens. `core` ones are always
+ * included (the component site's sample pages use them); the others are picked, and the rest stay out of the repo.
+ * Anything not here Claude writes when asked (a few minutes each).
+ */
 export const COMPONENTS = [
-  { id: "button", name: "Button", hint: "Main actions, like Save or Pay", ready: true },
-  { id: "input", name: "Text field", hint: "One line of typing, like an email", ready: true },
-  { id: "label", name: "Label", hint: "The name above a field", ready: true },
-  { id: "card", name: "Card", hint: "A box that groups related things", ready: true },
-  { id: "badge", name: "Badge", hint: "A small tag, like “New”", ready: true },
-  { id: "textarea", name: "Text box", hint: "Several lines of typing" },
-  { id: "checkbox", name: "Checkbox", hint: "Tick one or more options" },
-  { id: "radio-group", name: "Radio buttons", hint: "Pick exactly one option" },
-  { id: "select", name: "Dropdown", hint: "Pick from a list" },
-  { id: "switch", name: "Switch", hint: "Turn a setting on or off" },
-  { id: "alert", name: "Alert", hint: "A message that stays on the page" },
-  { id: "toast", name: "Toast", hint: "A short message that goes away" },
-  { id: "tooltip", name: "Tooltip", hint: "A hint when you point at something" },
-  { id: "tabs", name: "Tabs", hint: "Switch between views" },
-  { id: "dialog", name: "Dialog", hint: "A window that asks for a decision" },
-  { id: "separator", name: "Divider", hint: "A line between sections" },
+  { id: "button", name: "Button", hint: "Main actions, like Save or Pay", ready: true, core: true },
+  { id: "input", name: "Text field", hint: "One line of typing, like an email", ready: true, core: true },
+  { id: "label", name: "Label", hint: "The name above a field", ready: true, core: true },
+  { id: "card", name: "Card", hint: "A box that groups related things", ready: true, core: true },
+  { id: "badge", name: "Badge", hint: "A small tag, like “New”", ready: true, core: true },
+  { id: "textarea", name: "Text box", hint: "Several lines of typing", ready: true },
+  { id: "checkbox", name: "Checkbox", hint: "Tick one or more options", ready: true },
+  { id: "radio-group", name: "Radio buttons", hint: "Pick exactly one option", ready: true },
+  { id: "select", name: "Dropdown", hint: "Pick from a list", ready: true },
+  { id: "switch", name: "Switch", hint: "Turn a setting on or off", ready: true },
+  { id: "alert", name: "Alert", hint: "A message that stays on the page", ready: true },
+  { id: "toast", name: "Toast", hint: "A short message that goes away", ready: true },
+  { id: "tooltip", name: "Tooltip", hint: "A hint when you point at something", ready: true },
+  { id: "tabs", name: "Tabs", hint: "Switch between views", ready: true },
+  { id: "dialog", name: "Dialog", hint: "A window that asks for a decision", ready: true },
+  { id: "separator", name: "Divider", hint: "A line between sections", ready: true },
 ];
+/** What each kind of product usually needs beyond the core five; the starting selection in Describe. */
+export const KIND_COMPONENTS = {
+  "mobile-app": ["checkbox", "switch", "alert", "toast", "tabs", "dialog"],
+  "saas-dashboard": ["textarea", "checkbox", "radio-group", "select", "switch", "alert", "toast", "tooltip", "tabs", "dialog", "separator"],
+  "e-commerce": ["checkbox", "radio-group", "select", "alert", "toast", "tabs", "dialog"],
+  "marketing-site": ["textarea", "tabs", "dialog", "separator"],
+};
 
 /** Presets with the colors and sizes they resolve to in the template, so the UI can preview them before a workspace exists. */
 export function presets() {
@@ -60,7 +71,7 @@ export function presets() {
   const c = (fam, step) => prim.color?.[fam]?.[step]?.$value ?? null;
   const r = (step) => { const v = prim.radius?.[step]?.$value; return v && typeof v === "object" ? `${v.value}${v.unit}` : null; };
   return {
-    kinds: KINDS, feels: FEELS, fonts: FONTS, components: COMPONENTS,
+    kinds: KINDS, feels: FEELS, fonts: FONTS, components: COMPONENTS, kindComponents: KIND_COMPONENTS,
     palettes: PALETTES.map((p) => ({ ...p, swatches: [c(p.main, "700"), c(p.main, "100"), c(p.gray, "50"), c(p.gray, "400"), c(p.gray, "900")], main600: c(p.main, "700") })),
     corners: Object.entries(CORNERS).map(([id, s]) => ({ id, name: { square: "Square", slight: "Slightly rounded", round: "Rounded", pill: "Pill" }[id], control: r(s.control), container: r(s.container) })),
   };
@@ -72,7 +83,7 @@ const slug = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[^a
 export function fallbackSuggestions(product) {
   const t = String(product ?? "").toLowerCase();
   const kind = /shop|store|sell|cart|commerce|購物|商店/.test(t) ? "e-commerce" : /dashboard|admin|internal|team|後台|管理/.test(t) ? "saas-dashboard" : /site|landing|marketing|官網|網站/.test(t) ? "marketing-site" : "mobile-app";
-  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: [], question: null, by: "fallback" };
+  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: KIND_COMPONENTS[kind], question: null, by: "fallback" };
 }
 
 const SUGGEST_PROMPT = (product) => `Suggest starting answers for a design system interview. Do not use any tools. Reply with one JSON object and nothing else.
@@ -86,7 +97,7 @@ JSON fields:
 - "palette": one of ${PALETTES.map((p) => `"${p.id}" (${p.mood})`).join(", ")}
 - "corners": one of "square", "slight", "round", "pill"
 - "font": one of ${FONTS.map((f) => `"${f.family}" (${f.mood})`).join(", ")}
-- "components": ids this product will likely need beyond button, text field, label, card and badge, at most 4, from ${COMPONENTS.filter((c) => !c.ready).map((c) => `"${c.id}"`).join(", ")}
+- "components": ids this product will likely need beyond button, text field, label, card and badge, from ${COMPONENTS.filter((c) => !c.core).map((c) => `"${c.id}"`).join(", ")}
 - "question": null, or one short follow-up question if the description is too vague to design for`;
 
 function cleanSuggestions(raw, product) {
@@ -100,7 +111,7 @@ function cleanSuggestions(raw, product) {
     palette: pick(raw?.palette, PALETTES.map((p) => p.id)) ?? base.palette,
     corners: pick(raw?.corners, Object.keys(CORNERS)) ?? base.corners,
     font: pick(raw?.font, FONTS.map((f) => f.family)) ?? base.font,
-    components: Array.isArray(raw?.components) ? raw.components.filter((c) => COMPONENTS.some((x) => x.id === c && !x.ready)).slice(0, 4) : [],
+    components: Array.isArray(raw?.components) ? raw.components.filter((c) => COMPONENTS.some((x) => x.id === c && !x.core)) : [],
     question: typeof raw?.question === "string" && raw.question.trim() ? raw.question.trim().slice(0, 200) : null,
     by: "claude",
   };
@@ -146,7 +157,6 @@ const label = (list, id, key = "label") => list.find((x) => x.id === id)?.[key] 
 
 /** What the user sees as their own message in the chat, and what Claude acts on. */
 function setupPrompt(a, style, fresh) {
-  const extras = (a.components ?? []).map((id) => label(COMPONENTS, id, "name"));
   const lines = [
     fresh ? "Set up my new design system from my answers:" : "I answered the questions again. Change my design system to match:",
     `- What it's for: ${a.product}`,
@@ -158,7 +168,7 @@ function setupPrompt(a, style, fresh) {
   if (a.corners === "claude") lines.push("- Corners: I let you choose; change them with set_style if another preset fits better.");
   if (a.font === "claude") lines.push("- Font: I let you choose; change it with set_style if another family fits better.");
   lines.push("", "Please:", `1. ${fresh ? "Write" : "Rewrite"} the brand's DESIGN.md and the shared WRITING.md for this product and feel. Keep the applied style unless it contradicts the feel.`);
-  if (extras.length || a.extraText?.trim()) lines.push(`2. Add ${[extras.join(", "), a.extraText?.trim()].filter(Boolean).join(", and: ")} as components the Plinth way (component tokens, a story, a spec).`);
+  if (a.extraText?.trim()) lines.push(`2. The ready-made components I picked are already there. Also add this, which the catalog doesn't have, as a component the Plinth way (component tokens, a story, a spec): ${a.extraText.trim()}`);
   lines.push(fresh ? "Don't save a version: Plinth saves it when you're done." : "Don't save a version: I'll decide when.");
   return lines.join("\n");
 }
@@ -179,13 +189,15 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
       const product = String(a?.product ?? "").trim();
       if (!product) throw new Error("Say what you're making first.");
       const exists = existsSync(join(ctx.root, "design-system.json"));
-      const extras = (a.components ?? []).filter((id) => COMPONENTS.some((c) => c.id === id && !c.ready));
+      const picked = (a.components ?? []).filter((id) => COMPONENTS.some((c) => c.id === id && !c.core));
+      const skipComponents = COMPONENTS.filter((c) => !c.core && !picked.includes(c.id)).map((c) => c.id);
+      const custom = a.extraText?.trim() ? 1 : 0;
       cur = {
         running: true, fresh: !exists, startedAt: new Date().toISOString(), finishedAt: null, error: null, cost: null,
         steps: [
           step("scaffold", exists ? "Keeping your components and history" : "Setting up your design system", "Automatic"),
           step("style", "Applying your colors, corners and font", "Automatic"),
-          step("claude", extras.length || a.extraText?.trim() ? `Writing your style guide and ${extras.length + (a.extraText?.trim() ? 1 : 0)} new component${extras.length + (a.extraText?.trim() ? 1 : 0) === 1 ? "" : "s"}` : "Writing your style guide", "Claude"),
+          step("claude", custom ? "Writing your style guide and your new component" : "Writing your style guide", "Claude"),
           step("deps", "Installing the preview and tests", "Automatic"),
         ],
       };
@@ -194,7 +206,12 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         const name = String(a.name ?? "").trim() || product.split(/[.,;:\n]/)[0].split(/\s+/).slice(0, 3).join(" ") || "My design system";
         if (!exists) {
           set("scaffold", "active");
-          ws.initWorkspace(ctx.root, { name, brand: slug(a.brandId ?? name) || "main", context: KINDS.some((k) => k.id === a.kind) ? a.kind : "saas-dashboard" });
+          ws.initWorkspace(ctx.root, { name, brand: slug(a.brandId ?? name) || "main", context: KINDS.some((k) => k.id === a.kind) ? a.kind : "saas-dashboard", skipComponents });
+        } else {
+          // Answering again adds picked components that are missing; it never removes any (Remove does that).
+          const have = new Set(ws.listComponents(ctx.root).map((c) => c.id));
+          const add = picked.filter((id) => !have.has(id));
+          if (add.length) ws.change(ctx.root, { title: `Add ${add.map((id) => COMPONENTS.find((c) => c.id === id)?.name ?? id).join(", ")}`, ops: add.flatMap((id) => ws.catalogComponentOps(ctx.root, id)), by: "engine" });
         }
         set("scaffold", "done");
         set("style", "active");
@@ -211,7 +228,7 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         const font = FONTS.some((f) => f.family === a.font) ? a.font : "Inter";
         const ops = styleOps(ctx.root, brand, { main, gray, corners, font });
         const cfg = JSON.parse(readFileSync(join(ctx.root, "design-system.json"), "utf8"));
-        const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: extras, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
+        const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
         cfg.brief = brief;
         if (!exists) cfg.context = KINDS.some((k) => k.id === a.kind) ? a.kind : cfg.context;
         ops.push({ op: "write", file: "design-system.json", content: JSON.stringify(cfg, null, 2) + "\n" });

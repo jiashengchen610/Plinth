@@ -45,7 +45,7 @@ const preview: Preview = {
     // are reminders in Plinth. Interaction tests still fail on errors.
     a11y: { test: "todo" },
     options: {
-      storySort: { order: ["Introduction", "Foundations", ["Palette", "Colors", "Typography", "Shape and elevation", "Component tokens"], "Guidelines", ["Design", "Writing"], "Components", "Patterns"] },
+      storySort: { order: ["Introduction", "Foundations", ["Palette", "Colors", "Typography", "Shape and elevation", "Icons", "Component tokens"], "Guidelines", ["Design", "Writing"], "Components", "Patterns"] },
     },
   },
 };

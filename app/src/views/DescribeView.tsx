@@ -24,7 +24,7 @@ const QUESTIONS: Record<Exclude<StepId, "summary">, [string, string]> = {
   palette: ["Pick a starting palette.", "You can fine-tune every color later in Style."],
   corners: ["How round should buttons, fields and cards be?", "You can change this later in Style."],
   font: ["Which font fits best?", "Used for headings and text."],
-  components: ["Which components do you need?", "The first five come ready-made and free. Claude writes the others for you."],
+  components: ["Which components do you need?", "All of these are ready-made and free. I picked the usual ones for what you're making."],
 };
 
 function Bubble({ who, children }: { who: "claude" | "you"; children: React.ReactNode }) {
@@ -62,8 +62,9 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
   const palettes = presets?.palettes ?? [];
   const fonts = presets?.fonts ?? [];
   const href = fontsHref(fonts.map((f) => f.family));
-  const extras = (presets?.components ?? []).filter((c) => !c.ready);
-  const ready = (presets?.components ?? []).filter((c) => c.ready);
+  const extras = (presets?.components ?? []).filter((c) => !c.core);
+  const ready = (presets?.components ?? []).filter((c) => c.core);
+  const kindPreset = (kind: string, s: Suggestions | null) => [...new Set([...(presets?.kindComponents[kind] ?? []), ...(s?.components ?? [])])];
   const main = palettes.find((p) => p.id === a.palette)?.main600 ?? (a.palette === "brand" ? a.brandColor : null) ?? palettes[0]?.main600 ?? "#0f766e";
 
   const answerProduct = async () => {
@@ -75,6 +76,7 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
       setA((x) => ({
         ...x, name: x.name || s.name || "", kind: s.kind,
         feel: x.feel || s.feels[0] || "", palette: x.palette || s.palette, corners: x.corners || s.corners, font: x.font || s.font,
+        components: x.components.length ? x.components : kindPreset(s.kind, s),
       }));
       go(1);
     } catch (e) { onError((e as Error).message); } finally { setThinking(false); }
@@ -92,13 +94,12 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
     if (id === "corners") return !a.corners || a.corners === "claude" ? "Let Claude choose" : CORNER_NAMES[a.corners] ?? a.corners;
     if (id === "font") return !a.font || a.font === "claude" ? "Let Claude choose" : a.font;
     if (id === "components") {
-      const names = a.components.map((id) => extras.find((c) => c.id === id)?.name ?? id);
-      const more = [...names, a.extraText.trim()].filter(Boolean);
-      return `${ready.length} ready-made${more.length ? `, plus ${more.join(", ")} written by Claude` : ""}`;
+      const names = [...ready, ...extras.filter((c) => a.components.includes(c.id))].map((c) => c.name);
+      return `${names.join(", ")}${a.extraText.trim() ? `; plus one Claude writes: ${a.extraText.trim()}` : ""}`;
     }
     return "";
   };
-  const newCount = a.components.length + (a.extraText.trim() ? 1 : 0);
+  const newCount = a.extraText.trim() ? 1 : 0;
   const finalAnswers = (): Answers => ({
     product: [a.product.trim(), a.followup.trim()].filter(Boolean).join("\n"), name: a.name || undefined,
     feel: a.feel === "claude" ? "" : a.feel, kind: a.kind, palette: a.palette || "claude", brandColor: a.palette === "brand" ? a.brandColor : undefined,
@@ -113,7 +114,7 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
     if (mode === "import") return <Cta status="Starting from what you have comes in a later version." next={{ label: "Answer the questions instead", onClick: () => setMode("questions") }} />;
     if (step === "summary") {
       return <Cta back={{ label: "← Back", onClick: () => setAt(steps.length - 2) }} alt={redo ? { label: "Cancel", onClick: () => onRedo(false) } : undefined}
-        status={`About 2 minutes${newCount ? ` plus a few per new component` : ""} · about US$${(0.5 + newCount * 1.5).toFixed(2)} of Claude usage`}
+        status={`About a minute${newCount ? ` plus a few for your new component` : ""} · about US$${(0.35 + newCount * 1.5).toFixed(2)} of Claude usage`}
         next={{ label: redo ? "Apply my new answers" : "Create my design system", onClick: () => onCreate(finalAnswers()) }} />;
     }
     const n = steps.length - 1;
@@ -268,18 +269,18 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
                       <span className="text-sm font-semibold">Built for</span>
                       <div className="flex flex-wrap gap-1.5">
                         {(presets?.kinds ?? []).map((k) => (
-                          <button key={k.id} type="button" aria-pressed={a.kind === k.id} onClick={() => set({ kind: k.id })} className={`min-h-10 rounded-full border-2 px-3.5 text-sm font-medium ${ring(a.kind === k.id)}`}>{k.label}</button>
+                          <button key={k.id} type="button" aria-pressed={a.kind === k.id} onClick={() => set({ kind: k.id, components: kindPreset(k.id, sugg) })} className={`min-h-10 rounded-full border-2 px-3.5 text-sm font-medium ${ring(a.kind === k.id)}`}>{k.label}</button>
                         ))}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-semibold">Ready-made, included</span>
+                      <span className="text-sm font-semibold">Always included</span>
                       <div className="flex flex-wrap gap-1.5">
                         {ready.map((c) => <span key={c.id} title={c.hint} className="inline-flex min-h-10 items-center rounded-full border bg-muted/50 px-3.5 text-sm">✓&nbsp;{c.name}</span>)}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-semibold">Claude writes these for you <span className="font-normal text-muted-foreground">· a few minutes and about US$1.50 each</span></span>
+                      <span className="text-sm font-semibold">Pick what you need <span className="font-normal text-muted-foreground">· all ready-made and free; you can add or remove them later</span></span>
                       <div className="flex flex-wrap gap-1.5">
                         {extras.map((c) => {
                           const on = a.components.includes(c.id);
@@ -309,10 +310,10 @@ export function DescribeView({ state, presets, redo, onRedo, onCreate, onNext, o
               <section className="flex flex-col gap-2.5 rounded-2xl border-2 border-foreground bg-background p-5">
                 <h2 className="text-base font-semibold">{redo ? "Ready to apply" : "Ready to create"}</h2>
                 <div className="flex flex-col gap-1.5 text-sm">
-                  <div className="flex flex-wrap justify-between gap-x-3"><span>{ready.length} ready-made components</span><span className="text-muted-foreground">Free · a few seconds</span></div>
+                  <div className="flex flex-wrap justify-between gap-x-3"><span>{ready.length + a.components.length} ready-made components, in your style</span><span className="text-muted-foreground">Free · instant</span></div>
                   <div className="flex flex-wrap justify-between gap-x-3"><span>Your colors, corners and font</span><span className="text-muted-foreground">Free · instant</span></div>
-                  <div className="flex flex-wrap justify-between gap-x-3"><span>Your style guide, written by Claude</span><span className="text-muted-foreground">About 2 minutes · about US$0.50</span></div>
-                  {newCount > 0 && <div className="flex flex-wrap justify-between gap-x-3"><span>{newCount} new component{newCount > 1 ? "s" : ""}, written by Claude</span><span className="text-muted-foreground">A few minutes each · about US${(newCount * 1.5).toFixed(2)}</span></div>}
+                  <div className="flex flex-wrap justify-between gap-x-3"><span>Your style guide, written by Claude</span><span className="text-muted-foreground">About a minute · about US$0.35</span></div>
+                  {newCount > 0 && <div className="flex flex-wrap justify-between gap-x-3"><span>Your new component, written by Claude</span><span className="text-muted-foreground">A few minutes · about US$1.50</span></div>}
                 </div>
                 <p className="text-xs text-muted-foreground">Claude usage comes from your own Claude plan. Nothing leaves your computer until you publish.</p>
               </section>

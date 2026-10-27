@@ -1,0 +1,38 @@
+{
+  "switch": {
+    "$type": "color",
+    "track": {
+      "on": {
+        "$value": "{color.primary}"
+      },
+      "off": {
+        "$value": "{color.input}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "dark": 0.8
+            }
+          }
+        }
+      }
+    },
+    "thumb": {
+      "on": {
+        "$value": "{color.primary-foreground}"
+      },
+      "off": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.foreground}"
+            }
+          }
+        }
+      }
+    }
+  }
+}

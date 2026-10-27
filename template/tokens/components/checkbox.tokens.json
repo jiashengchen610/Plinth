@@ -1,0 +1,37 @@
+{
+  "checkbox": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.small}"
+    },
+    "$type": "color",
+    "box": {
+      "background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "default": 0,
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "border": {
+        "$value": "{color.input}"
+      },
+      "checked-background": {
+        "$value": "{color.primary}"
+      },
+      "checked-foreground": {
+        "$value": "{color.primary-foreground}"
+      },
+      "checked-border": {
+        "$value": "{color.primary}"
+      }
+    }
+  }
+}

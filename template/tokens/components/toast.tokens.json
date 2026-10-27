@@ -1,0 +1,41 @@
+{
+  "toast": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}"
+    },
+    "shadow": {
+      "$type": "shadow",
+      "$value": "{shadow.overlay}"
+    },
+    "$type": "color",
+    "default": {
+      "background": {
+        "$value": "{color.popover}"
+      },
+      "foreground": {
+        "$value": "{color.popover-foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      },
+      "description": {
+        "$value": "{color.muted-foreground}"
+      }
+    },
+    "destructive": {
+      "background": {
+        "$value": "{color.destructive}"
+      },
+      "foreground": {
+        "$value": "{color.background}"
+      },
+      "border": {
+        "$value": "{color.destructive}"
+      },
+      "description": {
+        "$value": "{color.background}"
+      }
+    }
+  }
+}

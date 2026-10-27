@@ -28,6 +28,8 @@ export function contrastPairs(colorNames, config = {}) {
     if (n.endsWith("-background")) add(n, n.replace(/-background$/, "-foreground"));
   }
   if (set.has("muted-foreground")) add("background", "muted-foreground");
+  // The focus ring is not text, but people must see it: 3:1 against the page (WCAG 1.4.11).
+  if (set.has("ring")) add("background", "ring", 3);
   if (set.has("on-surface-variant") && set.has("surface")) add("surface", "on-surface-variant");
   for (const [bg, fg, min] of config.contrastPairs ?? []) add(bg, fg, min ?? 4.5);
   return pairs;

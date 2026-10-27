@@ -1,0 +1,27 @@
+{
+  "radio-group": {
+    "$type": "color",
+    "item": {
+      "background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "default": 0,
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "border": {
+        "$value": "{color.input}"
+      },
+      "checked": {
+        "$value": "{color.primary}"
+      }
+    }
+  }
+}

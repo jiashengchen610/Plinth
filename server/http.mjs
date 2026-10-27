@@ -122,6 +122,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/suggest": async (req) => { const { product } = await readJson(req); if (!String(product ?? "").trim()) throw new Error("Say what you're making first."); return suggest(ctx, product); },
     "POST /api/setup": async (req) => { const answers = await readJson(req); if (ctx.setup.state()?.running) throw new Error("Already setting up."); ctx.setup.start(answers).catch(() => {}); return { started: true }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
+    "POST /api/add-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("add_component", { name, by: "you" }); },
     "POST /api/remove-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("remove_component", { name, by: "you" }); },
     "POST /api/link-palette": () => { needsWorkspace(); return tool("link_to_palette"); },
     // The AI review at publish: one short headless run over everything since the last publish.

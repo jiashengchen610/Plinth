@@ -76,7 +76,8 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.equal(presets.palettes.length, 6);
   assert.ok(presets.palettes.every((p) => p.swatches.every(Boolean)), "every preset palette resolves in the template");
   assert.deepEqual(presets.corners.map((c) => c.id), ["square", "slight", "round", "pill"]);
-  assert.deepEqual(presets.components.filter((c) => c.ready).map((c) => c.id), ["button", "input", "label", "card", "badge"]);
+  assert.deepEqual(presets.components.filter((c) => c.core).map((c) => c.id), ["button", "input", "label", "card", "badge"]);
+  assert.ok(presets.components.every((c) => c.ready), "every catalog component is ready-made");
 
   const sugg = (await api("api/suggest", { product: "A budgeting app for young professionals" })).json;
   assert.equal(sugg.by, "claude");
@@ -95,7 +96,10 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.deepEqual(s.style.pocket, { ...s.style.pocket, main: "blue", gray: "slate", corners: "pill", font: "Nunito" });
   const ask = s.chat.messages.find((m) => m.role === "user");
   assert.match(ask.text, /^Set up my new design system from my answers:/);
-  assert.match(ask.text, /Switch as components the Plinth way/);
+  assert.doesNotMatch(ask.text, /Switch/, "ready-made components are copied, not written by Claude");
+  const ids = s.components.map((c) => c.id);
+  assert.ok(ids.includes("switch") && ids.includes("button"), ids.join());
+  assert.ok(!ids.includes("tooltip") && !existsSync(join(ws, "tokens/components/tooltip.tokens.json")), "components not picked stay out");
   assert.equal(s.unsaved.length, 0, "the creation is saved as a version");
   assert.match(s.versions[0].subject, /Style and guidelines for Pocket/);
 
@@ -111,6 +115,20 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.equal(refused.status, 400);
   assert.match(refused.json.error, /used by/);
   assert.deepEqual((await api("api/state")).json.components.find((c) => c.id === "button").usedBy.includes("src/foundations/blocks.tsx"), true);
+
+  // Adding from the catalog is one change: free, at once, undoable. Icons come from the shipped set.
+  const added = await api("api/add-component", { name: "tooltip" });
+  assert.equal(added.status, 200, JSON.stringify(added.json));
+  assert.ok((await api("api/state")).json.components.some((c) => c.id === "tooltip"));
+  assert.match((await api("api/add-component", { name: "tooltip" })).json.error, /already/);
+  await api("api/undo", {});
+  assert.ok(!(await api("api/state")).json.components.some((c) => c.id === "tooltip"), "Undo takes the component back");
+  const tool = async (name, args) => JSON.parse((await request("tools/call", { name, arguments: args })).result.content[0].text);
+  const found = await tool("find_icons", { query: "calendar" });
+  assert.ok(found.results.some((r) => r.name === "calendar" && r.inDesignSystem && r.import === "CalendarIcon"), JSON.stringify(found.results.slice(0, 3)));
+  const iconsAdded = await tool("add_icons", { names: ["heart"] });
+  assert.ok(iconsAdded.files.includes("icons/heart.svg"), JSON.stringify(iconsAdded));
+  assert.match(readFileSync(join(ws, "src/icons/index.tsx"), "utf8"), /export function HeartIcon/);
 
   // Answering again keeps the workspace; the new style is applied and left for the user to save.
   await api("api/setup", { product: "A budgeting app for students", feel: "Bright and playful", kind: "mobile-app", palette: "orange-stone", corners: "round", font: "Inter", components: [], extraText: "" });

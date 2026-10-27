@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { MoreHorizontal } from "lucide-react";
+import { EllipsisIcon } from "@/icons";
 
 import { Badge } from "@/components/badge/badge";
 import { Button } from "@/components/button/button";
@@ -88,7 +88,7 @@ export const WithAction: Story = {
         <CardDescription>Created 3 weeks ago · last used today</CardDescription>
         <CardAction>
           <Button variant="ghost" size="icon-sm" aria-label="More options">
-            <MoreHorizontal />
+            <EllipsisIcon />
           </Button>
         </CardAction>
       </CardHeader>

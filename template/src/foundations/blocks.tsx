@@ -11,6 +11,7 @@ import { Button } from "@/components/button/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/card/card";
 import { Input } from "@/components/input/input";
 import { Label } from "@/components/label/label";
+import { icons } from "@/icons";
 import data from "./tokens.generated.json";
 
 type Value = { raw: unknown; css: string | null; resolved: string | null; alpha?: number };
@@ -211,6 +212,27 @@ export function ShapeScale() {
           {motion.map((t) => <code key={t.name} className="text-xs">--{t.name}: {valueIn(t, mode).resolved ?? show(valueIn(t, mode))}</code>)}
         </section>
       )}
+    </Surface>
+  );
+}
+
+// ---------------------------------------------------------------- icons
+
+/** Every icon in icons/, by the name components import it under (check.svg → CheckIcon from "@/icons"). */
+export function IconGallery() {
+  const list = Object.entries(icons);
+  const pascal = (n: string) => n.split("-").map((s) => s[0].toUpperCase() + s.slice(1)).join("") + "Icon";
+  return (
+    <Surface className="flex flex-col gap-4">
+      <Note>{list.length} icons. They inherit the text color and scale with the text; add more by asking Plinth, or put your own SVG files in <code>icons/</code>.</Note>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        {list.map(([name, Icon]) => (
+          <div key={name} className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center">
+            <Icon className="size-6" />
+            <code className="text-xs break-all">{pascal(name)}</code>
+          </div>
+        ))}
+      </div>
     </Surface>
   );
 }

@@ -10,10 +10,10 @@ const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "9
 export const GRAYS = ["slate", "gray", "zinc", "neutral", "stone", "mauve", "olive", "mist", "taupe"];
 /** Corner presets: radius roles → steps of the radius scale. "round" is the template's default. */
 export const CORNERS = {
-  square: { control: "none", container: "none", pill: "none" },
-  slight: { control: "sm", container: "md", pill: "sm" },
-  round: { control: "lg", container: "xl", pill: "full" },
-  pill: { control: "full", container: "2xl", pill: "full" },
+  square: { control: "none", container: "none", pill: "none", small: "none" },
+  slight: { control: "sm", container: "md", pill: "sm", small: "xs" },
+  round: { control: "lg", container: "xl", pill: "full", small: "sm" },
+  pill: { control: "full", container: "2xl", pill: "full", small: "md" },
 };
 const BASE = "tokens/base.tokens.json";
 const PRIMITIVES = "tokens/primitives.tokens.json";
@@ -114,7 +114,7 @@ export function styleOps(root, brand, { main, gray, corners, font } = {}) {
     if (GRAYS.includes(main)) {
       set("primary", "default", `{color.${main}.900}`); set("primary", "dark", `{color.${main}.200}`);
       set("primary-foreground", "default", `{color.${main}.50}`); set("primary-foreground", "dark", `{color.${main}.900}`);
-      set("ring", "default", `{color.${main}.400}`); set("ring", "dark", `{color.${main}.500}`);
+      set("ring", "default", `{color.${main}.500}`); set("ring", "dark", `{color.${main}.500}`);
     } else {
       const light = readable(steps, ["600", "700", "800"], "#ffffff");
       const dark = readable(steps, ["400", "300", "500"], steps["950"] ?? "#000000");

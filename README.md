@@ -8,7 +8,7 @@ steps in one UI, with Claude in a chat beside them: Describe → Style → Compo
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.5).** Tested by `npm test` (22 tests), by the 42 story tests in a generated workspace, and
+> **Status: early (0.6).** Tested by `npm test` (25 tests), by the 83 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -166,6 +166,7 @@ my-design-system/
 ├── brands/<id>/
 │   ├── tokens.json                the brand's color roles, light and dark, pointing at the palette
 │   └── DESIGN.md                  the brand's style, intent, do's and don'ts
+├── icons/<name>.svg               the icons components use (from the Lucide set Plinth ships, or your own)
 ├── DESIGN.md                      guidelines shared by all brands
 ├── WRITING.md                     voice, tone, interface copy rules, terminology
 ├── design-system.json             name, context, brands, accepted exceptions
@@ -173,6 +174,7 @@ my-design-system/
 ├── src/
 │   ├── styles/tokens.css          generated: CSS variables per brand × mode + Tailwind v4 @theme
 │   ├── styles/fonts.css           generated: Google Fonts imports for the font tokens
+│   ├── icons/index.tsx            generated: one React component per SVG in icons/
 │   └── components/<name>/         <name>.tsx, <name>.stories.tsx, <name>.spec.md
 │   └── foundations/               Storybook pages: Introduction, Colors, Typography, Shape, Guidelines
 ├── exports/<brand>/DESIGN.md      written at publish: complete DESIGN.md per brand (Google format)
@@ -180,8 +182,13 @@ my-design-system/
 └── .github/workflows/storybook.yml   plinth check, typecheck, story tests, then deploy to GitHub Pages
 ```
 
-- **Starting point**: Button, Input, Card, Badge and Label from shadcn/ui; semantic colors from shadcn plus
-  `success`, `warning` and `info` (each with a `-foreground`).
+- **Starting point**: Button, Input, Label, Card and Badge always; Textarea, Checkbox, Radio group, Select, Switch,
+  Alert, Toast, Tooltip, Tabs, Dialog and Separator when you pick them (all from shadcn/ui, rewritten to use only
+  component tokens; add the others later with one click, free). Semantic colors from shadcn plus `success`,
+  `warning` and `info` (each with a `-foreground`). Shared roles for elevation (shadows per mode), motion (durations,
+  easing, reduced motion), stacking layers and spacing.
+- **Icons**: SVG files in `icons/`; components import them from `@/icons` and never from an icon package (the deploy
+  refuses it).
 - **Modes**: a token's `$value` is light; other modes live in `$extensions.plinth.modes.<mode>`.
 - **New components** are written spec first (`<name>.spec.md`: parts, states, props, tokens, accessibility); Claude
   summarises the spec and asks before writing the code. Each component has its tokens in
@@ -258,7 +265,9 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
 | `undo` | Take back the newest change |
 | `set_style` | Main color, grays, corners, font in one step (what the Style step does): roles re-pointed at readable palette steps |
+| `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
+| `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |
 | `add_palette_color` | Add a color to the palette as a 50–950 scale |
 | `upgrade_to_layers`, `link_to_palette` | Move a design system made before layers onto them; point fixed colors at the palette |
 | `run_checks`, `fix_contrast` | Deterministic checks; computed contrast fixes, applied |
@@ -302,8 +311,8 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Limitations and known issues
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
-- Decided but not built yet (PRD, "下一版"): a built-in catalog of about 16 ready-made components (today five come
-  ready-made and Claude writes the others, about US$1.50 each), starting from something you have (a Storybook, a
+- Decided but not built yet (PRD, "下一版"): glass effects with a tuning tool, and a Chart component with computed
+  data-visualization palettes (phase 2b); starting from something you have (a Storybook, a
   website, a GitHub repo; the Describe step shows the option as coming later), and a shadcn registry plus
   `plinth connect` so product repos get components and ask Plinth for new ones.
 - The five template components can't be removed: the Foundations pages of the component site use them.
@@ -330,7 +339,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 22 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 25 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319
@@ -340,7 +349,7 @@ claude --plugin-dir .           # the plugin from this checkout in a Claude Code
 ```
 
 Before a release, also: create a workspace from `template/` and run `npm ci && npm run typecheck && npm test`
-(42 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
+(83 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
 showed up only in that setup. Then tag the release (`v<version>` from `package.json`) and push the tag: the deploy
 workflow of every published design system runs `plinth check` from that tag.
 

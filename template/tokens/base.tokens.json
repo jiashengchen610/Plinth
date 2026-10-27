@@ -12,6 +12,10 @@
     "pill": {
       "$value": "{radius.full}",
       "$description": "Badges and tags"
+    },
+    "small": {
+      "$value": "{radius.sm}",
+      "$description": "Checkboxes, tooltips and other small marks"
     }
   },
   "font": {
@@ -62,11 +66,124 @@
     "$type": "shadow",
     "card": {
       "$value": "{shadow.xs}",
-      "$description": "Resting surfaces"
+      "$description": "Resting surfaces. Dark mode: a deeper shadow plus a faint top highlight, since shadows alone barely show on dark.",
+      "$extensions": {
+        "plinth": {
+          "modes": {
+            "dark": [
+              {
+                "offsetX": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "offsetY": {
+                  "value": 1,
+                  "unit": "px"
+                },
+                "blur": {
+                  "value": 2,
+                  "unit": "px"
+                },
+                "spread": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "color": "oklch(0 0 0 / 0.5)"
+              },
+              {
+                "offsetX": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "offsetY": {
+                  "value": 1,
+                  "unit": "px"
+                },
+                "blur": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "spread": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "color": "oklch(1 0 0 / 0.06)",
+                "inset": true
+              }
+            ]
+          }
+        }
+      }
     },
     "overlay": {
       "$value": "{shadow.lg}",
-      "$description": "Menus, popovers, dialogs"
+      "$description": "Menus, pop-ups, dialogs, toasts. Dark mode: deeper, with a faint top highlight.",
+      "$extensions": {
+        "plinth": {
+          "modes": {
+            "dark": [
+              {
+                "offsetX": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "offsetY": {
+                  "value": 10,
+                  "unit": "px"
+                },
+                "blur": {
+                  "value": 24,
+                  "unit": "px"
+                },
+                "spread": {
+                  "value": -4,
+                  "unit": "px"
+                },
+                "color": "oklch(0 0 0 / 0.6)"
+              },
+              {
+                "offsetX": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "offsetY": {
+                  "value": 4,
+                  "unit": "px"
+                },
+                "blur": {
+                  "value": 8,
+                  "unit": "px"
+                },
+                "spread": {
+                  "value": -4,
+                  "unit": "px"
+                },
+                "color": "oklch(0 0 0 / 0.5)"
+              },
+              {
+                "offsetX": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "offsetY": {
+                  "value": 1,
+                  "unit": "px"
+                },
+                "blur": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "spread": {
+                  "value": 0,
+                  "unit": "px"
+                },
+                "color": "oklch(1 0 0 / 0.08)",
+                "inset": true
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "ease": {
@@ -78,6 +195,24 @@
         0,
         1
       ]
+    },
+    "enter": {
+      "$value": [
+        0,
+        0,
+        0.2,
+        1
+      ],
+      "$description": "Things appearing: fast start, gentle stop"
+    },
+    "exit": {
+      "$value": [
+        0.4,
+        0,
+        1,
+        1
+      ],
+      "$description": "Things leaving: gentle start, fast end"
     }
   },
   "motion": {
@@ -91,5 +226,59 @@
         "timingFunction": "{ease.standard}"
       }
     }
+  },
+  "duration": {
+    "$type": "duration",
+    "$description": "How long movement takes. Set to 0 when the system asks for reduced motion.",
+    "fast": {
+      "$value": {
+        "value": 120,
+        "unit": "ms"
+      },
+      "$description": "Hover, press, small toggles"
+    },
+    "normal": {
+      "$value": {
+        "value": 200,
+        "unit": "ms"
+      },
+      "$description": "Menus, tooltips, toasts"
+    },
+    "slow": {
+      "$value": {
+        "value": 300,
+        "unit": "ms"
+      },
+      "$description": "Dialogs and large panels"
+    }
+  },
+  "layer": {
+    "$type": "number",
+    "$description": "Stacking order of floating things (z-index)",
+    "sticky": {
+      "$value": 10
+    },
+    "dropdown": {
+      "$value": 50,
+      "$description": "Menus, select lists, pop-overs"
+    },
+    "dialog": {
+      "$value": 60,
+      "$description": "Dialogs and their backdrop"
+    },
+    "toast": {
+      "$value": 70
+    },
+    "tooltip": {
+      "$value": 80
+    }
+  },
+  "spacing": {
+    "$type": "dimension",
+    "$value": {
+      "value": 0.25,
+      "unit": "rem"
+    },
+    "$description": "Density: the step every padding, gap and margin is a multiple of (p-4 = 4 steps)."
   }
 }

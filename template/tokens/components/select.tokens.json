@@ -1,0 +1,60 @@
+{
+  "select": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "shadow": {
+      "$type": "shadow",
+      "$value": "{shadow.overlay}"
+    },
+    "$type": "color",
+    "trigger": {
+      "background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "default": 0,
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.input}"
+      },
+      "placeholder": {
+        "$value": "{color.muted-foreground}"
+      }
+    },
+    "content": {
+      "background": {
+        "$value": "{color.popover}"
+      },
+      "foreground": {
+        "$value": "{color.popover-foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      }
+    },
+    "item": {
+      "highlight-background": {
+        "$value": "{color.accent}"
+      },
+      "highlight-foreground": {
+        "$value": "{color.accent-foreground}"
+      },
+      "label": {
+        "$value": "{color.muted-foreground}"
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
-import { ArrowRight, Loader2, Plus } from "lucide-react";
+import { ArrowRightIcon, LoaderCircleIcon, PlusIcon } from "@/icons";
 
 import { Button } from "@/components/button/button";
 
@@ -87,7 +87,7 @@ export const Large: Story = {
 
 /** Icon-only button. Always provide an accessible name via `aria-label`. */
 export const Icon: Story = {
-  args: { size: "icon", "aria-label": "Add item", children: <Plus /> },
+  args: { size: "icon", "aria-label": "Add item", children: <PlusIcon /> },
 };
 
 /** Leading or trailing icon with text. Icons inherit the size scale automatically. */
@@ -96,7 +96,7 @@ export const WithIcon: Story = {
     children: (
       <>
         Continue
-        <ArrowRight data-icon="inline-end" />
+        <ArrowRightIcon data-icon="inline-end" />
       </>
     ),
   },
@@ -109,7 +109,7 @@ export const Loading: Story = {
     "aria-busy": true,
     children: (
       <>
-        <Loader2 className="animate-spin" data-icon="inline-start" />
+        <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
         Saving
       </>
     ),

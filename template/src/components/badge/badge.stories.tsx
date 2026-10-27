@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { CheckCircle2, Clock3 } from "lucide-react";
+import { CircleCheckIcon, Clock3Icon } from "@/icons";
 
 import { Badge } from "@/components/badge/badge";
 
@@ -83,7 +83,7 @@ export const WithIcon: Story = {
   args: {
     children: (
       <>
-        <CheckCircle2 data-icon="inline-start" />
+        <CircleCheckIcon data-icon="inline-start" />
         Verified
       </>
     ),
@@ -95,11 +95,11 @@ export const StatusSet: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
       <Badge>
-        <CheckCircle2 data-icon="inline-start" />
+        <CircleCheckIcon data-icon="inline-start" />
         Active
       </Badge>
       <Badge variant="secondary">
-        <Clock3 data-icon="inline-start" />
+        <Clock3Icon data-icon="inline-start" />
         Pending
       </Badge>
       <Badge variant="success">Paid</Badge>
