@@ -1,12 +1,12 @@
 // Publish a workspace: checks → exports → commit → typecheck and story tests → push → GitHub Pages.
 // Uses git and the GitHub CLI (gh). Reports every step so the UI can show progress and where it stopped.
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { writeFileSync, mkdirSync, existsSync, readFileSync, copyFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { runChecks } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
-import { git, regenerate } from "../engine/workspace.mjs";
+import { git, regenerate, TEMPLATE_DIR } from "../engine/workspace.mjs";
 import { findGh, githubStatus } from "./github.mjs";
 
 function gh(root, args) {
@@ -35,10 +35,21 @@ export function publishDefaults(root) {
   const freePlan = s.plan === "free";
   return {
     ghInstalled: s.installed, ghAuthed: s.authed, scopesOk: s.scopesOk, missingScopes: s.missingScopes, user: s.user, plan: s.plan,
+    // GitHub does not always report the plan (null); then Pages on a private repository may not work, so suggest public.
     privatePagesAllowed: s.plan === null ? null : !freePlan,
-    suggestedVisibility: freePlan ? "public" : "private",
+    suggestedVisibility: s.plan && !freePlan ? "private" : "public",
     remote, repo: repoFromUrl(remote), suggestedRepo: s.user ? `${s.user}/${name}` : name,
+    ...remoteInfo(root, repoFromUrl(remote), s.authed),
   };
+}
+
+/** For a repository that already exists: its visibility and whether Pages is on (null when unknown). */
+function remoteInfo(root, full, authed) {
+  if (!full || !authed) return { visibility: null, pagesEnabled: null };
+  let visibility = null, pagesEnabled = null;
+  try { visibility = JSON.parse(gh(root, ["repo", "view", full, "--json", "visibility"])).visibility ?? null; } catch { /* offline */ }
+  try { gh(root, ["api", `repos/${full}/pages`]); pagesEnabled = true; } catch (e) { pagesEnabled = /Not Found|404/.test(errText(e)) ? false : null; }
+  return { visibility, pagesEnabled };
 }
 
 /**
@@ -70,7 +81,16 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   }
   step("exports", { files: Object.keys(lint).map((b) => `exports/${b}/DESIGN.md`), lint });
 
-  // 3. Commit anything outstanding (exports, regenerated CSS)
+  // The deploy workflow is Plinth's, not the user's design: keep it current so fixes reach published repositories.
+  const managed = join(TEMPLATE_DIR, ".github", "workflows", "storybook.yml");
+  const target = join(root, ".github", "workflows", "storybook.yml");
+  if (existsSync(managed) && (!existsSync(target) || readFileSync(target, "utf8") !== readFileSync(managed, "utf8"))) {
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(managed, target);
+    step("workflow", "updated .github/workflows/storybook.yml");
+  }
+
+  // 3. Commit anything outstanding (exports, regenerated CSS, workflow)
   git(root, ["add", "-A"]);
   if (git(root, ["status", "--porcelain"])) {
     git(root, ["-c", "user.name=Design System", "-c", "user.email=design-system@localhost", "commit", "-q", "-m", "Publish: update exports"]);
@@ -96,33 +116,77 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   const scope = githubStatus();
   if (!scope.scopesOk) return stop("github", { error: `The GitHub sign-in is missing permission: ${scope.missingScopes.join(", ")} (needed to push the Storybook workflow).`, next: "Press Connect GitHub in the Publish dialog to grant it." });
 
+  // 6. Repository, then Pages, then the push: the push starts the workflow, which can only deploy once Pages is on.
   let url = remoteUrl(root);
+  let created = false;
   try {
     if (!url) {
       if (!repo) return stop("github", { error: "No GitHub repository yet.", next: "Publish again with repo: \"<owner>/<name>\"." });
-      gh(root, ["repo", "create", repo, `--${visibility}`, "--source", ".", "--remote", "origin", "--push"]);
+      gh(root, ["repo", "create", repo, `--${visibility}`, "--source", ".", "--remote", "origin"]);
       url = remoteUrl(root);
-      step("create repository", { repo });
-    } else {
-      git(root, ["push", "-u", "origin", "HEAD"]);
-      step("push", { remote: url });
+      created = true;
+      step("create repository", { repo, visibility });
     }
   } catch (e) {
-    step("push", e.stderr?.toString().trim() || e.message, false);
-    return stop("github", { error: (e.stderr?.toString().trim() || e.message).split("\n").slice(-3).join(" "), next: "Check the repository name and your GitHub access, then publish again." });
+    const msg = errText(e);
+    step("create repository", msg, false);
+    return stop("github", { error: msg, next: "Check the repository name (it may already exist on your account) and publish again." });
   }
   const full = repoFromUrl(url);
 
-  // 6. GitHub Pages via Actions (idempotent: ignore "already enabled")
-  let pagesUrl = null;
+  const pages = enablePages(root, full);
+  if (pages.ok) step("pages", { url: pages.url });
+  else step("pages", pages.error, false);
+
   try {
-    gh(root, ["api", "--method", "POST", `repos/${full}/pages`, "-f", "build_type=workflow"]);
-  } catch { /* already enabled, or no permission: reported below */ }
-  try {
-    pagesUrl = JSON.parse(gh(root, ["api", `repos/${full}/pages`])).html_url ?? null;
-    step("pages", { url: pagesUrl });
-  } catch {
-    step("pages", "Could not enable GitHub Pages. In the repository settings, set Pages → Source to GitHub Actions.", false);
+    git(root, ["push", "-u", "origin", "HEAD"]);
+    step("push", { remote: url, created });
+  } catch (e) {
+    const msg = errText(e);
+    step("push", msg, false);
+    return stop("github", { error: msg, next: "Check your GitHub access, then publish again. Local work is unaffected." });
   }
-  return { published: true, version: head, github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions`, storybook: pagesUrl, steps, note: "Storybook deploys through GitHub Actions after the tests pass there; it is live a few minutes after the push." };
+
+  const result = { published: true, version: head, repo: full, github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions`, storybook: pages.url ?? null, steps };
+  if (pages.ok) return { ...result, note: "Storybook deploys through GitHub Actions after the tests pass there; it is live a few minutes after the push." };
+  return { ...result, pagesBlocked: pages.blocked, note: pages.blocked === "plan" ? "The code is on GitHub, but your GitHub plan does not serve Pages for private repositories, so Storybook is not online. Make the repository public to deploy it, or keep it private without a Storybook site." : `The code is on GitHub, but Storybook could not be deployed: ${pages.error}` };
+}
+
+const errText = (e) => (e.stderr?.toString().trim() || e.message).split("\n").filter(Boolean).slice(-3).join(" ").replace(/^gh: /, "");
+
+/** Turn on GitHub Pages with GitHub Actions as the source. Idempotent. */
+function enablePages(root, full) {
+  let createError = null;
+  try { gh(root, ["api", "--method", "POST", `repos/${full}/pages`, "-f", "build_type=workflow"]); }
+  catch (e) { createError = errText(e); }
+  try {
+    const p = JSON.parse(gh(root, ["api", `repos/${full}/pages`]));
+    // An older site may build from a branch; the workflow needs the Actions source.
+    if (p.build_type !== "workflow") gh(root, ["api", "--method", "PUT", `repos/${full}/pages`, "-f", "build_type=workflow"]);
+    return { ok: true, url: p.html_url ?? null };
+  } catch {
+    const blocked = /plan does not support GitHub Pages/i.test(createError ?? "") ? "plan" : null;
+    return { ok: false, blocked, url: null, error: createError ?? "GitHub Pages is not available for this repository." };
+  }
+}
+
+/**
+ * After a publish that could not deploy because the repository is private on a plan without private Pages: make it
+ * public, turn Pages on and run the Storybook workflow again. Nothing is pushed.
+ */
+export function makePublicAndDeploy(root) {
+  const full = repoFromUrl(remoteUrl(root));
+  if (!full) throw new Error("This design system has not been published to GitHub yet.");
+  gh(root, ["repo", "edit", full, "--visibility", "public", "--accept-visibility-change-consequences"]);
+  const pages = enablePages(root, full);
+  if (!pages.ok) throw new Error(pages.error);
+  return redeploy(root, { full, pages });
+}
+
+/** Run the Storybook workflow again (after fixing Pages or a failed run). */
+export function redeploy(root, { full = repoFromUrl(remoteUrl(root)), pages } = {}) {
+  if (!full) throw new Error("This design system has not been published to GitHub yet.");
+  gh(root, ["workflow", "run", "storybook.yml", "-R", full, "--ref", "main"]);
+  const url = pages?.url ?? (() => { try { return JSON.parse(gh(root, ["api", `repos/${full}/pages`])).html_url ?? null; } catch { return null; } })();
+  return { github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions`, storybook: url, note: "Storybook is building on GitHub Actions; it is live in a few minutes." };
 }

@@ -34,13 +34,14 @@ export type TestResult = {
 export type PublishStep = { name: string; ok: boolean; detail: unknown };
 export type PublishResult = {
   published: boolean; dryRun?: boolean; stoppedAt?: string; error?: string; next?: string; note?: string; version?: string; at?: string;
-  github?: string; actions?: string; storybook?: string | null; steps: PublishStep[]; tests?: TestResult;
+  github?: string; actions?: string; storybook?: string | null; steps: PublishStep[]; tests?: TestResult; pagesBlocked?: "plan" | null; repo?: string;
 };
 export type PublishState = { running: boolean; steps: PublishStep[]; result: PublishResult | null; startedAt: string | null };
 export type PublishDefaults = {
   ghInstalled: boolean; ghAuthed: boolean; scopesOk: boolean; missingScopes: string[]; user: string | null; plan: string | null;
   privatePagesAllowed: boolean | null; suggestedVisibility: "private" | "public";
   remote: string | null; repo: string | null; suggestedRepo: string;
+  visibility: "PUBLIC" | "PRIVATE" | "INTERNAL" | null; pagesEnabled: boolean | null;
 };
 export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
@@ -90,6 +91,8 @@ export const api = {
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
   publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
+  makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
+  redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

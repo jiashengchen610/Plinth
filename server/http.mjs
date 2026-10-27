@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
-import { publishDefaults } from "./publish.mjs";
+import { publishDefaults, makePublicAndDeploy, redeploy } from "./publish.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
@@ -84,6 +84,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/tests": (_req, url) => { needsWorkspace(); return longOp(url, () => ctx.tests.run()); },
     "POST /api/storybook/start": () => { needsWorkspace(); return ctx.storybook.start(); },
     "GET /api/publish/defaults": () => { needsWorkspace(); return publishDefaults(ctx.root); },
+    "POST /api/publish/make-public": () => { needsWorkspace(); return makePublicAndDeploy(ctx.root); },
+    "POST /api/publish/redeploy": () => { needsWorkspace(); return redeploy(ctx.root); },
     "POST /api/github/login": () => ctx.github.start(),
     "POST /api/github/cancel": () => ctx.github.cancel(),
     "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts)); },

@@ -59,6 +59,16 @@ export function PublishDialog({ state, onClose, onError }: Props) {
   const gate = state.checks.gate;
   const privateBlocked = visibility === "private" && defaults?.privatePagesAllowed === false;
   const [copied, setCopied] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [fixed, setFixed] = useState<{ storybook: string | null; actions: string; note: string } | null>(null);
+  const makePublic = async () => {
+    setFixing(true);
+    try { setFixed(await api.makePublicAndDeploy()); refresh(); } catch (e) { onError((e as Error).message); } finally { setFixing(false); }
+  };
+  const redeploy = async () => {
+    setFixing(true);
+    try { setFixed(await api.redeploy()); } catch (e) { onError((e as Error).message); } finally { setFixing(false); }
+  };
   const copyCode = async () => { try { await navigator.clipboard.writeText(login.code ?? ""); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the code is selectable */ } };
 
   return (
@@ -121,7 +131,17 @@ export function PublishDialog({ state, onClose, onError }: Props) {
           <section aria-labelledby="repo-step" className="flex flex-col gap-3 rounded-lg border p-4 text-sm">
             <h3 id="repo-step" className="font-medium">2. Repository</h3>
             {defaults.remote ? (
-              <p>Pushes to <code>{defaults.repo ?? defaults.remote}</code>.</p>
+              <>
+                <p>Pushes to <code>{defaults.repo ?? defaults.remote}</code>{defaults.visibility ? <span className="text-muted-foreground"> · {defaults.visibility.toLowerCase()}</span> : null}.</p>
+                {defaults.pagesEnabled === false && defaults.visibility === "PRIVATE" && !fixed && (
+                  <div className="flex flex-col gap-2 rounded-md border border-warning/60 bg-warning/10 p-2">
+                    <p>Storybook is not online: GitHub Pages is not available for this private repository on your plan.</p>
+                    <div><Button size="sm" onClick={makePublic} disabled={fixing || !connected}>{fixing ? "Making it public…" : "Make public and deploy Storybook"}</Button></div>
+                  </div>
+                )}
+                {defaults.pagesEnabled && !fixed && <div><Button size="sm" variant="outline" onClick={redeploy} disabled={fixing || !connected}>Deploy Storybook again (no push)</Button></div>}
+                {fixed && <p>Deploying. {fixed.storybook && <a className="underline" href={fixed.storybook} target="_blank" rel="noreferrer">{fixed.storybook}</a>} <a className="underline" href={fixed.actions} target="_blank" rel="noreferrer">Progress</a></p>}
+              </>
             ) : (
               <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); start(); }}>
                 <label className="flex flex-col gap-1">
@@ -147,6 +167,23 @@ export function PublishDialog({ state, onClose, onError }: Props) {
             <p><a className="underline" href={result.github} target="_blank" rel="noreferrer">{result.github}</a></p>
             {result.storybook && <p>Storybook: <a className="underline" href={result.storybook} target="_blank" rel="noreferrer">{result.storybook}</a></p>}
             <p className="text-muted-foreground">{result.note} Progress: <a className="underline" href={result.actions} target="_blank" rel="noreferrer">GitHub Actions</a>.</p>
+          </div>
+        )}
+        {result && result.published && result.pagesBlocked === "plan" && !fixed && (
+          <div className="flex flex-col gap-2 rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm">
+            <p className="font-medium">Storybook is not online yet.</p>
+            <p>The repository is private, and your GitHub plan does not serve GitHub Pages for private repositories. Make it public to deploy Storybook, or keep it private without a Storybook site.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={makePublic} disabled={fixing}>{fixing ? "Making it public…" : "Make public and deploy Storybook"}</Button>
+              <Button size="sm" variant="ghost" onClick={onClose}>Keep it private</Button>
+            </div>
+          </div>
+        )}
+        {fixed && (
+          <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
+            <p className="font-medium">Deploying Storybook.</p>
+            {fixed.storybook && <p>Storybook: <a className="underline" href={fixed.storybook} target="_blank" rel="noreferrer">{fixed.storybook}</a></p>}
+            <p className="text-muted-foreground">{fixed.note} Progress: <a className="underline" href={fixed.actions} target="_blank" rel="noreferrer">GitHub Actions</a>.</p>
           </div>
         )}
         {result && !result.published && !result.dryRun && (

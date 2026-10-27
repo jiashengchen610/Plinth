@@ -1,3 +1,4 @@
+# Managed by Plinth: rewritten on every publish so fixes reach published repositories. Edits here are replaced.
 name: Storybook
 
 on:
@@ -26,7 +27,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Not `npm ci`: a lockfile written on Windows or macOS can miss Linux-only optional packages (npm/cli#4828),
+      # which makes `npm ci` refuse to install. `npm install` keeps the locked versions and fills those in.
+      - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       # Quality gate: type errors or a failing story (interaction or accessibility) stop the deploy.
       - run: npm run typecheck
