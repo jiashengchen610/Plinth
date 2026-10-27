@@ -39,6 +39,42 @@ export function githubStatus() {
   return { installed: true, authed: true, user, scopesOk: missingScopes.length === 0, missingScopes, plan };
 }
 
+/**
+ * Device login in the launcher's terminal. gh is run without a terminal on stdin, so it asks nothing ("Authenticate
+ * Git?", "Press Enter to open…"): we show its output, open the browser ourselves when the code appears, and return
+ * as soon as the user has authorized. Git credentials are set up afterwards with `gh auth setup-git`.
+ */
+export function loginInTerminal({ refresh = false } = {}) {
+  const gh = findGh();
+  if (!gh) return Promise.resolve(false);
+  const args = refresh
+    ? ["auth", "refresh", "--hostname", "github.com", "--scopes", REQUIRED_SCOPES.join(",")]
+    : ["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https", "--scopes", REQUIRED_SCOPES.join(",")];
+  return new Promise((resolve) => {
+    const child = spawn(gh, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let shown = false;
+    const onData = (d) => {
+      out += d;
+      const code = out.match(/code[^A-Z0-9]*\(?([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1];
+      const url = out.match(/https:\/\/github\.com\/login\/device\S*/)?.[0];
+      if (code && url && !shown) {
+        shown = true;
+        process.stdout.write(`\n    Your one-time code: ${code}  (copied to the clipboard)\n    Opening ${url} … enter the code there and press Authorize.\n    Waiting for GitHub…`);
+        openBrowser(url);
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => {
+      process.stdout.write(code === 0 ? " done.\n" : `\n    GitHub sign-in did not finish: ${out.trim().split("\n").slice(-2).join(" ")}\n`);
+      if (code === 0) ghSync(["auth", "setup-git", "--hostname", "github.com"]);
+      resolve(code === 0);
+    });
+  });
+}
+
 function openBrowser(url) {
   if (process.env.PLINTH_NO_BROWSER) return;
   const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];

@@ -4,7 +4,7 @@
 // also be connected later from the Publish dialog.
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { findGh, ghSync, githubStatus, REQUIRED_SCOPES } from "./github.mjs";
+import { findGh, githubStatus, loginInTerminal } from "./github.mjs";
 
 const isWin = process.platform === "win32";
 const ok = (m) => console.log(`  ✔ ${m}`);
@@ -105,11 +105,7 @@ export async function setup({ prompt = process.stdin.isTTY && process.stdout.isT
     else {
       bad(s.authed ? `GitHub is connected but cannot push the Storybook workflow yet (missing: ${s.missingScopes.join(", ")}).` : "GitHub is not connected (only needed to publish).");
       if (await ask(s.authed ? "Grant the missing permission now? A browser window opens." : "Connect GitHub now? A browser window opens; enter the code shown here.")) {
-        const args = s.authed
-          ? ["auth", "refresh", "--hostname", "github.com", "--scopes", REQUIRED_SCOPES.join(",")]
-          : ["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https", "--scopes", REQUIRED_SCOPES.join(",")];
-        interactive(findGh(), args);
-        ghSync(["auth", "setup-git", "--hostname", "github.com"]);
+        await loginInTerminal({ refresh: s.authed });
         s = githubStatus();
       }
       if (s.authed && s.scopesOk) { ok(`GitHub, connected as ${s.user ?? "your account"}${s.plan ? ` (${s.plan} plan)` : ""}`); github = true; }
