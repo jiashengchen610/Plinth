@@ -1,12 +1,12 @@
 // Publish a workspace: checks → exports → commit → typecheck and story tests → push → GitHub Pages.
 // Uses git and the GitHub CLI (gh). Reports every step so the UI can show progress and where it stopped.
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdirSync, existsSync, readFileSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { runChecks } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
-import { git, regenerate, TEMPLATE_DIR } from "../engine/workspace.mjs";
+import { git, regenerate, outsideChanges, gitCommit, GENERATED } from "../engine/workspace.mjs";
 import { findGh, githubStatus } from "./github.mjs";
 
 function gh(root, args) {
@@ -61,6 +61,13 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   const step = (name, detail, ok = true) => { const s = { name, ok, detail }; steps.push(s); onStep(s); return s; };
   const stop = (stoppedAt, extra) => ({ published: false, stoppedAt, steps, ...extra });
 
+  // 0. Only reviewed work is published: edits made outside Plinth are recorded or discarded first.
+  const outside = outsideChanges(root);
+  if (outside.length) {
+    step("outside edits", outside.map((o) => o.file), false);
+    return stop("outside edits", { outside, error: `${outside.length} file(s) changed outside Plinth.`, next: "Record them as a version (they are checked like any change) or discard them, then publish again." });
+  }
+
   // 1. Deterministic checks
   regenerate(root);
   const checks = runChecks(root);
@@ -81,20 +88,8 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   }
   step("exports", { files: Object.keys(lint).map((b) => `exports/${b}/DESIGN.md`), lint });
 
-  // The deploy workflow is Plinth's, not the user's design: keep it current so fixes reach published repositories.
-  const managed = join(TEMPLATE_DIR, ".github", "workflows", "storybook.yml");
-  const target = join(root, ".github", "workflows", "storybook.yml");
-  if (existsSync(managed) && (!existsSync(target) || readFileSync(target, "utf8") !== readFileSync(managed, "utf8"))) {
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(managed, target);
-    step("workflow", "updated .github/workflows/storybook.yml");
-  }
-
-  // 3. Commit anything outstanding (exports, regenerated CSS, workflow)
-  git(root, ["add", "-A"]);
-  if (git(root, ["status", "--porcelain"])) {
-    git(root, ["-c", "user.name=Design System", "-c", "user.email=design-system@localhost", "commit", "-q", "-m", "Publish: update exports"]);
-  }
+  // 3. Commit what publishing wrote: exports and regenerated or Plinth-managed files.
+  gitCommit(root, "Publish: update exports", ["exports", ...GENERATED]);
   const head = git(root, ["rev-parse", "--short", "HEAD"]);
   step("commit", { version: head });
 

@@ -22,23 +22,81 @@ const EDITABLE = [/^tokens\/[^/]+\.json$/, /^brands\/[a-z0-9-]+\/(tokens\.json|D
 export function git(root, args, opts = {}) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
 }
-function gitCommit(root, message) {
-  git(root, ["add", "-A"]);
-  const dirty = git(root, ["status", "--porcelain"]);
-  if (!dirty) return null;
-  git(root, ["-c", "user.name=Design System", "-c", "user.email=design-system@localhost", "commit", "-q", "-m", message]);
+/**
+ * Commit. With `paths`, only those paths (added, changed or deleted) go into the commit, so edits made outside
+ * Plinth stay out of a version they do not belong to. Without, everything in the working tree.
+ */
+export function gitCommit(root, message, paths = null) {
+  // Only paths that actually changed: git refuses a pathspec that matches nothing.
+  const under = (f, p) => f === p || f.startsWith(p.endsWith("/") ? p : `${p}/`);
+  const sel = paths ? outsideChanges(root).map((c) => c.file).filter((f) => paths.some((p) => under(f, p))) : ["."];
+  if (!sel.length) return null;
+  git(root, ["add", "-A", "--", ...sel]);
+  if (!git(root, ["diff", "--cached", "--name-only", "--", ...sel])) return null;
+  git(root, ["-c", "user.name=Design System", "-c", "user.email=design-system@localhost", "commit", "-q", "-m", message, "--", ...sel]);
   return git(root, ["rev-parse", "--short", "HEAD"]);
 }
+
+/** Paths regenerate writes: committed together with the change that caused them. */
+export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md"];
 
 export function versions(root, limit = 50) {
   if (!existsSync(join(root, ".git"))) return [];
   const out = git(root, ["log", `-${limit}`, "--pretty=format:%h%x1f%H%x1f%cI%x1f%s"]);
-  return out ? out.split("\n").map((l) => { const [short, sha, date, subject] = l.split("\x1f"); return { short, sha, date, subject }; }) : [];
+  return out ? out.split("\n").map((l) => { const [short, sha, date, subject] = l.split("\x1f"); return { short, sha, date, subject, outside: subject.startsWith(OUTSIDE_PREFIX) }; }) : [];
+}
+
+// ---------------- edits made outside Plinth ----------------
+const OUTSIDE_PREFIX = "Outside edits";
+
+/**
+ * Uncommitted changes in the working tree: edits made by hand, by another tool, or by a Claude Code session with
+ * full permissions. Plinth commits every change it makes right away, so anything here came from elsewhere.
+ * @returns {Array<{ file: string, status: "modified" | "added" | "deleted" }>}
+ */
+export function outsideChanges(root) {
+  if (!existsSync(join(root, ".git"))) return [];
+  // Raw -z output: not git() (it trims, which eats the leading space of " M file"), no quoting of odd names.
+  const out = execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const entries = out.split("\0");
+  const changes = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (e.length < 4) continue;
+    const code = e.slice(0, 2);
+    changes.push({ file: e.slice(3), status: code.includes("D") ? "deleted" : code === "??" || code.includes("A") ? "added" : "modified" });
+    if (code[0] === "R" || code[0] === "C") i++; // the next entry is the original path of a rename or copy
+  }
+  return changes;
+}
+const requireNoOutside = (root, action) => {
+  const out = outsideChanges(root);
+  if (out.length) throw new Error(`${out.length} file(s) changed outside Plinth (${out.slice(0, 3).map((o) => o.file).join(", ")}${out.length > 3 ? ", …" : ""}). Record them as a version or discard them before you ${action}.`);
+};
+
+/** Keep outside edits: regenerate from them and save them as one version, so History shows where they came from. */
+export function recordOutside(root, note = "") {
+  const out = outsideChanges(root);
+  if (!out.length) return { version: null };
+  regenerate(root);
+  const names = out.map((o) => o.file);
+  return { version: gitCommit(root, `${OUTSIDE_PREFIX}: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}${note ? ` (${note})` : ""}`), files: names };
+}
+
+/** Throw outside edits away: back to the last version. */
+export function discardOutside(root) {
+  const out = outsideChanges(root);
+  for (const o of out) {
+    if (o.status === "added") rmSync(join(root, o.file), { force: true });
+    else git(root, ["checkout", "HEAD", "--", o.file]);
+  }
+  return { discarded: out.map((o) => o.file) };
 }
 
 /** Restore the working tree to a previous version as a NEW commit (history is never rewritten). */
 export function restore(root, sha) {
   if (!/^[0-9a-f]{4,40}$/i.test(sha)) throw new Error("invalid version id");
+  requireNoOutside(root, "restore a version");
   git(root, ["rev-parse", "--verify", `${sha}^{commit}`]);
   git(root, ["checkout", sha, "--", "."]);
   // Files added after that version still exist: remove those that the target version does not track.
@@ -116,7 +174,7 @@ export function regenerate(root) {
 }
 
 /** Files that belong to Plinth, not to the user's design: kept identical to the template. */
-const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations"];
+const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations", ".claude/settings.json", "CLAUDE.md"];
 export function syncManaged(root, templateDir = TEMPLATE_DIR) {
   const changed = [];
   const syncFile = (rel) => {
@@ -375,9 +433,12 @@ export function apply(root, idOrChange) {
   if (!change) throw new Error(`no pending change ${idOrChange}`);
   const files = new Map();
   for (const op of change.ops) applyOp(root, op, files);
+  // An outside edit to a file this change rewrites would end up in this version unreviewed: ask first.
+  const overlap = outsideChanges(root).filter((o) => files.has(o.file));
+  if (overlap.length) throw new Error(`${overlap.map((o) => o.file).join(", ")} changed outside Plinth. Record or discard that edit before applying this change.`);
   writeFiles(root, files);
   const issues = regenerate(root);
-  const sha = gitCommit(root, change.title);
+  const sha = gitCommit(root, change.title, [...files.keys(), ...GENERATED]);
   if (typeof idOrChange === "string") savePending(root, list.filter((c) => c.id !== change.id));
   return { version: sha, issues };
 }
@@ -395,14 +456,14 @@ export function acceptException(root, { check, key, reason = "" }) {
   cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
   cfg.exceptions.push({ check, key, reason, at: new Date().toISOString() });
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
-  return gitCommit(root, `Accept exception: ${check} ${key}${reason ? ` (${reason})` : ""}`);
+  return gitCommit(root, `Accept exception: ${check} ${key}${reason ? ` (${reason})` : ""}`, ["design-system.json"]);
 }
 export function removeException(root, { check, key }) {
   const cfgPath = join(root, "design-system.json");
   const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
   cfg.exceptions = (cfg.exceptions ?? []).filter((e) => !(e.check === check && e.key === key));
   writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
-  return gitCommit(root, `Remove exception: ${check} ${key}`);
+  return gitCommit(root, `Remove exception: ${check} ${key}`, ["design-system.json"]);
 }
 
 // ---------------- reading ----------------

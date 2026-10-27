@@ -64,6 +64,7 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
   const elapsed = chat?.activity ? Math.round((Date.now() - chat.activity.since) / 1000) : 0;
   const activity = chat?.activity?.tool ? ACTIVITY[chat.activity.tool] ?? `Working: ${chat.activity.tool}` : "Thinking";
   const cannotStart = chat?.error && /Could not start Claude Code/.test(chat.error);
+  const inTerminal = Boolean(chat?.terminal);
 
   return (
     <section aria-label="Chat with Claude" className={`flex min-h-0 flex-col rounded-xl border bg-card ${className}`}>
@@ -104,6 +105,13 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
         )}
       </ol>
 
+      {inTerminal && (
+        <div className="mx-4 mb-3 rounded-lg border border-dashed p-3 text-xs">
+          <p className="font-medium">This conversation is open in a terminal.</p>
+          <p className="mt-1 text-muted-foreground">Keep talking there (<code>plinth --terminal</code>); proposals still appear in Changes. Close it to chat here again, with the conversation intact.</p>
+        </div>
+      )}
+
       {cannotStart && (
         <div className="mx-4 mb-3 rounded-lg border border-dashed p-3 text-xs">
           <p className="font-medium">Claude Code is not available.</p>
@@ -141,7 +149,7 @@ export function ChatPanel({ chat, onError, className = "" }: Props) {
         <div className="flex items-center justify-between gap-2">
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
           <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Attach image</Button>
-          <Button type="submit" size="sm" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
+          <Button type="submit" size="sm" disabled={sending || working || inTerminal || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
         </div>
       </form>
     </section>

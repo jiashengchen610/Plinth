@@ -49,7 +49,8 @@ export const TOOLS = [
       if (!existsSync(join(ctx.root, "design-system.json"))) return { workspace: ctx.root, exists: false, next: "Call create_design_system to scaffold a new design system here.", ui: ctx.ui.url };
       const checks = runChecks(ctx.root);
       if (ctx.storybook.refresh) await ctx.storybook.refresh();
-      return { exists: true, ...ws.summary(ctx.root), gate: checks.gate, checks: checks.summary, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
+      const outside = ws.outsideChanges(ctx.root);
+      return { exists: true, ...ws.summary(ctx.root), gate: checks.gate, checks: checks.summary, outsideEdits: outside.length ? { files: outside, next: "Files changed outside Plinth. Tell the user; they record or discard them (UI banner, or record_outside_edits when they ask). Publish and restore wait until then." } : null, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
     },
   },
   {
@@ -131,6 +132,12 @@ export const TOOLS = [
     description: "Drop a pending change.",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     run: (a, ctx) => { ws.discard(ctx.root, a.id); ctx.notify(); return { discarded: a.id }; },
+  },
+  {
+    name: "record_outside_edits",
+    description: "Save files changed outside Plinth (by hand, another tool, or a Claude Code session with full permissions) as one version, after regenerating from them. Only when the user asks; they can also discard them in the UI. Run run_checks afterwards.",
+    inputSchema: { type: "object", properties: { note: { type: "string", description: "Why, in a few words; added to the version name" } } },
+    run: (a, ctx) => { requireWorkspace(ctx.root); const r = ws.recordOutside(ctx.root, a.note ?? ""); ctx.notify(); return r; },
   },
   {
     name: "run_checks",

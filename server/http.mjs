@@ -47,6 +47,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       components: ws.listComponents(ctx.root),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },
       pending: ws.listPending(ctx.root),
+      outside: ws.outsideChanges(ctx.root),
       versions: ws.versions(ctx.root, 40),
       storybook: ctx.storybook.url,
     };
@@ -97,6 +98,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       return { id: c.id };
     },
     "POST /api/exceptions": async (req) => { needsWorkspace(); return { version: ws.acceptException(ctx.root, await readJson(req)) }; },
+    "POST /api/outside/record": async (req) => { needsWorkspace(); return ws.recordOutside(ctx.root, (await readJson(req)).note ?? ""); },
+    "POST /api/outside/discard": () => { needsWorkspace(); return ws.discardOutside(ctx.root); },
     "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return { version: ws.removeException(ctx.root, await readJson(req)) }; },
     // Storybook's index, proxied so the UI needs no cross-origin access. Lists story ids per component.
     "GET /api/storybook/index": async () => {

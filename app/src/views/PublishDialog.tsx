@@ -5,7 +5,7 @@ import { api, type PublishDefaults, type PublishState, type State } from "@/lib/
 
 type Props = { state: State; onClose: () => void; onError: (message: string) => void };
 
-const STEP_LABEL: Record<string, string> = { checks: "Checks", exports: "DESIGN.md exports", commit: "Commit", tests: "Tests", "create repository": "Create GitHub repository", push: "Push to GitHub", pages: "GitHub Pages" };
+const STEP_LABEL: Record<string, string> = { "outside edits": "Outside edits", checks: "Checks", exports: "DESIGN.md exports", commit: "Commit", tests: "Tests", "create repository": "Create GitHub repository", push: "Push to GitHub", pages: "GitHub Pages" };
 
 function Steps({ publish }: { publish: PublishState }) {
   if (!publish.steps.length) return null;
@@ -192,6 +192,7 @@ export function PublishDialog({ state, onClose, onError }: Props) {
             {result.error && <p>{result.error}</p>}
             {result.next && <p className="text-muted-foreground">{result.next}</p>}
             {result.stoppedAt === "checks" && <p className="text-muted-foreground">See the <strong>Checks</strong> tab.</p>}
+            {result.stoppedAt === "outside edits" && <p className="text-muted-foreground">Use the banner at the top of the page: save them as a version or discard them.</p>}
             {result.tests?.tests?.failures?.length ? <ul className="list-disc pl-5">{result.tests.tests.failures.map((f) => <li key={f}>{f}</li>)}</ul> : null}
           </div>
         )}

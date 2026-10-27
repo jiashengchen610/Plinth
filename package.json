@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/engine.test.mjs test/scaffold.test.mjs test/mcp.test.mjs test/chat.test.mjs test/setup.test.mjs",
+    "test": "node --test test/engine.test.mjs test/scaffold.test.mjs test/mcp.test.mjs test/chat.test.mjs test/setup.test.mjs test/outside.test.mjs test/terminal.test.mjs",
     "build:app": "cd app && npm install && npm run build",
     "dev:app": "cd app && npm run dev",
     "start": "node server/cli.mjs"

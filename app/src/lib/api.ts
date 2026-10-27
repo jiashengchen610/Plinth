@@ -24,7 +24,8 @@ export type Change = {
   id: string; title: string; rationale: string; by: string; createdAt: string; ops: Op[];
   preview: { files: string[]; failingAfter: number; issues: string[]; notes?: string[]; distinctFailures?: DistinctResult[]; contrastChanges: (ContrastResult & { before: number | null })[] };
 };
-export type Version = { short: string; sha: string; date: string; subject: string };
+export type Version = { short: string; sha: string; date: string; subject: string; outside?: boolean };
+export type OutsideChange = { file: string; status: "modified" | "added" | "deleted" };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null };
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
@@ -45,7 +46,7 @@ export type PublishDefaults = {
 };
 export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
-export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
+export type ChatState = { messages: ChatMessage[]; working: boolean; terminal?: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
 export type ChatImage = { type: string; data: string; name: string };
 export type State = {
   rev: number; exists: boolean; workspace: string;
@@ -66,6 +67,7 @@ export type State = {
   components: Component[];
   guidelines: { shared: string | null; writing: string | null; brands: Record<string, string | null> };
   pending: Change[];
+  outside: OutsideChange[];
   versions: Version[];
   storybook: string | null;
 };
@@ -93,6 +95,8 @@ export const api = {
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
+  recordOutside: (note: string) => call<{ version: string | null }>("POST", "/api/outside/record", { note }),
+  discardOutside: () => call<{ discarded: string[] }>("POST", "/api/outside/discard"),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
   githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };

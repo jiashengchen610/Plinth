@@ -11,6 +11,7 @@ import { ChecksView } from "@/views/ChecksView";
 import { HistoryView } from "@/views/HistoryView";
 import { ChatPanel } from "@/views/ChatPanel";
 import { PublishDialog } from "@/views/PublishDialog";
+import { OutsideBanner } from "@/views/OutsideBanner";
 
 const TABS = ["chat", "tokens", "components", "guidelines", "changes", "checks", "history"] as const;
 type Tab = (typeof TABS)[number];
@@ -141,6 +142,8 @@ export default function App() {
           {!deps.installing && <Button size="sm" variant="outline" onClick={() => act(() => api.install(), "Installing dependencies.")} disabled={busy}>{deps.error ? "Retry install" : "Install dependencies"}</Button>}
         </div>
       )}
+
+      <OutsideBanner outside={state.outside ?? []} busy={busy} onError={onError} onDone={(m) => { setNotice(m); load(); }} />
 
       {(error || notice) && (
         <div role="status" className={`mx-4 mt-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-2 text-sm sm:mx-6 ${error ? "border-destructive/40 text-destructive" : ""}`}>

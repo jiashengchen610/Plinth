@@ -27,13 +27,47 @@ Rules:
 - When a proposal's preview reports contrast failures, distinct-color failures or prose notes, resolve them in the same or a follow-up proposal and tell the user.
 - The user can install dependencies, start Storybook, run tests, accept exceptions and publish from the UI; you can also do these with the tools when asked.`;
 
+const TERMINAL_PROMPT = `You are working with someone in a Claude Code terminal on a Plinth design system. The Plinth UI may also be open in their browser, showing the same pending changes (Changes tab), checks and history.
+
+Rules:
+- Change tokens, guidelines and components only through the Plinth tools (propose_change). Direct edits to those files are blocked in this folder.
+- After proposing, show the user what changes (old → new values, contrast before → after, any look-alike roles or guideline notes) and ask. Call apply_change only when they say to apply (here, or by pressing Apply in the UI).
+- Files changed outside Plinth are listed by status as outsideEdits; mention them, and record them only when the user asks.`;
+
+/** Tool restrictions of the UI chat: Plinth's tools and read-only file tools, nothing that writes. */
+export const RESTRICTED_TOOLS = [
+  "--allowedTools", "mcp__plugin_plinth_plinth", "mcp__plinth", "Read", "Glob", "Grep",
+  "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch",
+];
+
+/** The conversation the UI chat and `plinth --terminal` share. */
+export const sessionFile = (root) => join(root, ".ds", "claude-session.json");
+export const terminalLock = (root) => join(root, ".ds", "terminal.json");
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
+/** A `plinth --terminal` session holding the conversation, or null. */
+export function terminalHolder(root) {
+  try { const l = JSON.parse(readFileSync(terminalLock(root), "utf8")); return pidAlive(l.pid) ? l : null; } catch { return null; }
+}
+
+/**
+ * Arguments for an interactive Claude Code session in the terminal. Strict (default) has the UI chat's
+ * restrictions; full keeps every tool, with the workspace's .claude/settings.json still blocking direct edits
+ * to design files.
+ */
+export function terminalArgs({ full = false, resume = null } = {}) {
+  const args = ["--plugin-dir", PLUGIN_ROOT, ...(full ? [] : RESTRICTED_TOOLS), "--append-system-prompt", TERMINAL_PROMPT];
+  if (resume) args.push("--resume", resume);
+  if (process.env.PLINTH_MODEL) args.push("--model", process.env.PLINTH_MODEL);
+  return args;
+}
+
 /** "mcp__plugin_plinth_plinth__propose_change" → "propose change". */
 export const friendlyTool = (name) => name.replace(TOOL_PREFIX, "").replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "").replace(/_/g, " ");
 
 export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAUDE_BIN || "claude" } = {}) {
   const dir = join(ctx.root, ".ds");
   const logPath = join(dir, "chat.jsonl");
-  const sessionPath = join(dir, "claude-session.json");
+  const sessionPath = sessionFile(ctx.root);
   const messages = existsSync(logPath)
     ? readFileSync(logPath, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
     : [];
@@ -51,8 +85,7 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
     const args = [
       "-p", "--output-format", "stream-json", "--verbose",
       "--plugin-dir", PLUGIN_ROOT,
-      "--allowedTools", "mcp__plugin_plinth_plinth", "mcp__plinth", "Read", "Glob", "Grep",
-      "--disallowedTools", "Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "WebFetch", "WebSearch",
+      ...RESTRICTED_TOOLS,
       "--append-system-prompt", SYSTEM_PROMPT,
     ];
     if (session.id && !fresh) args.push("--resume", session.id);
@@ -115,6 +148,9 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
     /** A message from the UI. Resolves when Claude's turn is complete. */
     async send({ text, images = [] }) {
       if (child) throw new Error("Claude is still working on the previous message. Wait or press Stop.");
+      if (terminalHolder(ctx.root)) throw new Error("This conversation is open in a terminal (plinth --terminal). Continue there, or close it to chat here.");
+      // The terminal may have moved the conversation on; pick up its latest session.
+      try { session = JSON.parse(readFileSync(sessionPath, "utf8")); } catch { /* none yet */ }
       const body = String(text ?? "").trim().slice(0, MAX_TEXT);
       if (!body && !images.length) throw new Error("Write a message or attach an image.");
       const id = randomUUID().slice(0, 8);
@@ -156,6 +192,7 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
       return {
         messages: messages.slice(-200),
         working: Boolean(child),
+        terminal: Boolean(terminalHolder(ctx.root)),
         activity: activity ? { since: activity.since, tool: activity.tool, steps: activity.tools.length } : null,
         session: session.id ?? null,
         error: lastError,
