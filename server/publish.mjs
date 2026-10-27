@@ -8,11 +8,21 @@ import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
 import { git, regenerate } from "../engine/workspace.mjs";
 
+// A terminal opened before the GitHub CLI was installed has no gh on PATH; on Windows try the installer's location.
+const GH_CANDIDATES = ["gh", ...(process.platform === "win32" ? [join(process.env.ProgramFiles ?? "C:\\Program Files", "GitHub CLI", "gh.exe")] : [])];
+let ghBin = null;
+function findGh() {
+  if (ghBin) return ghBin;
+  for (const c of GH_CANDIDATES) {
+    try { execFileSync(c, ["--version"], { stdio: "ignore", windowsHide: true }); ghBin = c; return c; } catch { /* next */ }
+  }
+  return null;
+}
 function gh(root, args) {
-  return execFileSync("gh", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true }).trim();
+  return execFileSync(findGh() ?? "gh", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true }).trim();
 }
 function hasGh() {
-  try { execFileSync("gh", ["--version"], { stdio: "ignore", windowsHide: true }); return true; } catch { return false; }
+  return findGh() !== null;
 }
 function ghAuthed(root) {
   try { gh(root, ["auth", "status", "--hostname", "github.com"]); return true; } catch { return false; }
