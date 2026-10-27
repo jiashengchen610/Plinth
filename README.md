@@ -7,10 +7,10 @@ describe → review → apply → check → publish.
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.3).** Tested by `npm test` (12 tests), by the 42 story tests in a generated workspace, and by
-> end-to-end runs with real Claude Code from an `npx` install on Windows 11. Few people have used it yet, and the
-> first real publish to GitHub has not been exercised outside dry runs. Expect rough edges; issues and pull
-> requests are welcome.
+> **Status: early (0.3).** Tested by `npm test` (13 tests), by the 42 story tests in a generated workspace, and
+> end to end on Windows 11 from an `npx` install: brief → proposals → apply → publish to a new GitHub repository →
+> Storybook live on GitHub Pages ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used
+> it yet, and macOS and Linux are untested. Expect rough edges; issues and pull requests are welcome.
 
 ## Contents
 
