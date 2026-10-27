@@ -37,7 +37,12 @@ export type PublishResult = {
   github?: string; actions?: string; storybook?: string | null; steps: PublishStep[]; tests?: TestResult;
 };
 export type PublishState = { running: boolean; steps: PublishStep[]; result: PublishResult | null; startedAt: string | null };
-export type PublishDefaults = { ghInstalled: boolean; ghAuthed: boolean; user: string | null; remote: string | null; repo: string | null; suggestedRepo: string };
+export type PublishDefaults = {
+  ghInstalled: boolean; ghAuthed: boolean; scopesOk: boolean; missingScopes: string[]; user: string | null; plan: string | null;
+  privatePagesAllowed: boolean | null; suggestedVisibility: "private" | "public";
+  remote: string | null; repo: string | null; suggestedRepo: string;
+};
+export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
 export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
 export type ChatImage = { type: string; data: string; name: string };
@@ -47,6 +52,7 @@ export type State = {
   deps: { installed: boolean; installing: boolean; error: string | null };
   tests: { running: boolean; last: TestResult | null };
   publish: PublishState;
+  github: GithubLogin;
   // Present when exists is true.
   config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[]; exceptions?: Exception[] };
   brands: string[];
@@ -84,6 +90,8 @@ export const api = {
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
   publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
+  githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
+  githubCancel: () => call<GithubLogin>("POST", "/api/github/cancel"),
 };
 
 /** Key of a check result, matching the server's exceptionKey. */

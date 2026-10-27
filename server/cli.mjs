@@ -32,6 +32,6 @@ if (!args.includes("--no-open")) {
   try { spawn(opener[0], opener[1], { stdio: "ignore", detached: true, windowsHide: true }).unref(); } catch { /* the URL is printed */ }
 }
 
-const shutdown = () => { ctx.storybook?.stop?.(); ctx.chat?.stop?.(); ui.close(); process.exit(0); };
+const shutdown = () => { ctx.storybook?.stop?.(); ctx.chat?.stop?.(); ctx.github?.stop?.(); ui.close(); process.exit(0); };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

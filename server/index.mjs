@@ -73,7 +73,7 @@ rl.on("line", (line) => {
   try { msg = JSON.parse(line); } catch { return fail(null, -32700, "Parse error"); }
   handle(msg).catch((e) => fail(msg.id ?? null, -32603, e.message));
 });
-const shutdown = () => { ctx.storybook?.stop?.(); ctx.chat?.stop?.(); ui?.close(); process.exit(0); };
+const shutdown = () => { ctx.storybook?.stop?.(); ctx.chat?.stop?.(); ctx.github?.stop?.(); ui?.close(); process.exit(0); };
 rl.on("close", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

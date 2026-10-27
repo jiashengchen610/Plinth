@@ -64,7 +64,7 @@ messages and restarts; **New thread** starts over, and **Stop** interrupts a run
 | Node 20+ | runs Plinth | `node --version` |
 | git | every applied change is a commit | `git --version` |
 | [Claude Code](https://claude.com/claude-code), signed in | drives the chat | run `claude` once and sign in |
-| GitHub CLI, signed in (publishing only) | creates the repo, enables Pages | `gh auth login --web` |
+| [GitHub CLI](https://cli.github.com) (publishing only) | creates the repo, enables Pages | install it; sign in from the Publish dialog (**Connect GitHub**), no terminal needed |
 
 Tested on Windows 11 with Node 24. macOS and Linux should work, but nobody has tested them yet.
 
@@ -89,7 +89,9 @@ Claude scaffolds the repo (about 20 seconds) and proposes tokens and guidelines 
 4. Keep talking: "make the primary blue", "use Inter", "add a kids brand", "make a pricing card from this
    screenshot" (attach or paste images in the chat).
 5. **Checks**: fix or accept what fails; **Run tests**.
-6. **Publish**: confirm the repository name and visibility the first time.
+6. **Publish**: the first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize),
+   then choose the repository name and visibility. On GitHub's free plan choose **Public**: Pages does not work for
+   private repositories there, so Storybook would not go online.
 
 Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open`.
 

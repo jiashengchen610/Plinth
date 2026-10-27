@@ -31,7 +31,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
 
   const state = () => {
     const exists = existsSync(join(ctx.root, "design-system.json"));
-    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state() };
+    const common = { rev, exists, workspace: ctx.root, chat: ctx.chat?.state() ?? null, deps: ctx.deps.state(), tests: ctx.tests.state(), publish: ctx.publish.state(), github: ctx.github.state() };
     if (!exists) return common;
     const config = loadConfig(ctx.root);
     const brands = listBrands(ctx.root, config);
@@ -84,6 +84,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/tests": (_req, url) => { needsWorkspace(); return longOp(url, () => ctx.tests.run()); },
     "POST /api/storybook/start": () => { needsWorkspace(); return ctx.storybook.start(); },
     "GET /api/publish/defaults": () => { needsWorkspace(); return publishDefaults(ctx.root); },
+    "POST /api/github/login": () => ctx.github.start(),
+    "POST /api/github/cancel": () => ctx.github.cancel(),
     "POST /api/publish": async (req, url) => { needsWorkspace(); const opts = await readJson(req); return longOp(url, () => ctx.publish.start(opts)); },
     "POST /api/contrast-fixes": () => {
       needsWorkspace();

@@ -7,17 +7,8 @@ import { runChecks } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
 import { git, regenerate } from "../engine/workspace.mjs";
+import { findGh, githubStatus } from "./github.mjs";
 
-// A terminal opened before the GitHub CLI was installed has no gh on PATH; on Windows try the installer's location.
-const GH_CANDIDATES = ["gh", ...(process.platform === "win32" ? [join(process.env.ProgramFiles ?? "C:\\Program Files", "GitHub CLI", "gh.exe")] : [])];
-let ghBin = null;
-function findGh() {
-  if (ghBin) return ghBin;
-  for (const c of GH_CANDIDATES) {
-    try { execFileSync(c, ["--version"], { stdio: "ignore", windowsHide: true }); ghBin = c; return c; } catch { /* next */ }
-  }
-  return null;
-}
 function gh(root, args) {
   return execFileSync(findGh() ?? "gh", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true }).trim();
 }
@@ -32,16 +23,22 @@ function remoteUrl(root) {
 }
 const repoFromUrl = (u) => u?.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?$/)?.[1] ?? null;
 
-/** What the Publish dialog needs before the first push. */
+/**
+ * What the Publish dialog needs before the first push. GitHub Pages on a private repository needs a paid plan,
+ * so on the free plan the suggested visibility is public.
+ */
 export function publishDefaults(root) {
-  const installed = hasGh();
-  const authed = installed && ghAuthed(root);
-  let user = null;
-  if (authed) { try { user = JSON.parse(gh(root, ["api", "user"])).login ?? null; } catch { /* offline */ } }
+  const s = githubStatus();
   const remote = remoteUrl(root);
   let name = "design-system";
   try { name = loadConfig(root).name.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || name; } catch { /* no workspace */ }
-  return { ghInstalled: installed, ghAuthed: authed, user, remote, repo: repoFromUrl(remote), suggestedRepo: user ? `${user}/${name}` : name };
+  const freePlan = s.plan === "free";
+  return {
+    ghInstalled: s.installed, ghAuthed: s.authed, scopesOk: s.scopesOk, missingScopes: s.missingScopes, user: s.user, plan: s.plan,
+    privatePagesAllowed: s.plan === null ? null : !freePlan,
+    suggestedVisibility: freePlan ? "public" : "private",
+    remote, repo: repoFromUrl(remote), suggestedRepo: s.user ? `${s.user}/${name}` : name,
+  };
 }
 
 /**
@@ -94,8 +91,10 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   if (dryRun) return { published: false, dryRun: true, steps, next: "Run publish without dryRun to push." };
 
   // 5. GitHub
-  if (!hasGh()) return stop("github", { error: "The GitHub CLI (gh) is not installed.", next: "Install it from https://cli.github.com, then run: gh auth login --web" });
-  if (!ghAuthed(root)) return stop("github", { error: "GitHub is not connected or the sign-in expired.", next: "Reconnect GitHub: run `gh auth login --web` and finish in the browser. Local work is unaffected; publish again afterwards." });
+  if (!hasGh()) return stop("github", { error: "The GitHub CLI is not installed.", next: "Install it from https://cli.github.com (Windows installer), then press Connect GitHub in the Publish dialog." });
+  if (!ghAuthed(root)) return stop("github", { error: "GitHub is not connected or the sign-in expired.", next: "Press Connect GitHub in the Publish dialog (or ask Claude to publish again after connecting). Local work is unaffected." });
+  const scope = githubStatus();
+  if (!scope.scopesOk) return stop("github", { error: `The GitHub sign-in is missing permission: ${scope.missingScopes.join(", ")} (needed to push the Storybook workflow).`, next: "Press Connect GitHub in the Publish dialog to grant it." });
 
   let url = remoteUrl(root);
   try {
