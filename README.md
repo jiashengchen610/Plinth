@@ -62,9 +62,9 @@ messages and restarts; **New thread** starts over, and **Stop** interrupts a run
 | Need | Why | Check |
 |---|---|---|
 | Node 20+ | runs Plinth | `node --version` |
-| git | every applied change is a commit | `git --version` |
-| [Claude Code](https://claude.com/claude-code), signed in | drives the chat | run `claude` once and sign in |
-| [GitHub CLI](https://cli.github.com) (publishing only) | creates the repo, enables Pages | install it; sign in from the Publish dialog (**Connect GitHub**), no terminal needed |
+| git | every applied change is a commit | the launcher checks it and offers to install it |
+| [Claude Code](https://claude.com/claude-code), signed in | drives the chat | the launcher checks it and offers to install and sign in |
+| [GitHub CLI](https://cli.github.com) (publishing only) | creates the repo, enables Pages | the launcher offers to install it and sign in; or **Connect GitHub** in the Publish dialog |
 
 Tested on Windows 11 with Node 24. macOS and Linux should work, but nobody has tested them yet.
 
@@ -76,7 +76,23 @@ In an empty folder for your design system:
 npx -y github:jiashengchen610/Plinth
 ```
 
-The UI opens at http://localhost:4319. Keep the terminal window open while you use it. Type the brief in the chat,
+First it checks what Plinth needs and offers to fix what is missing, right in the terminal:
+
+```
+Checking what Plinth needs…
+
+  ✔ Node 24.11.1
+  ✔ git
+  ✔ Claude Code, signed in
+  ✖ GitHub is not connected (only needed to publish).
+    Connect GitHub now? A browser window opens; enter the code shown here. [Y/n]
+```
+
+Missing tools are installed with winget (Windows) or Homebrew (macOS) when you agree; Claude Code installs with
+npm. Sign-ins (Claude Code, GitHub) open the browser. GitHub is optional at this point: you can also connect it
+later from the Publish dialog. Skip the checks with `--no-setup`.
+
+Then the UI opens at http://localhost:4319. Keep the terminal window open while you use it. Type the brief in the chat,
 for example:
 
 > Create a design system for a budgeting app for young professionals. Warm and trustworthy, dark mode matters.
@@ -93,7 +109,7 @@ Claude scaffolds the repo (about 20 seconds) and proposes tokens and guidelines 
    then choose the repository name and visibility. On GitHub's free plan choose **Public**: Pages does not work for
    private repositories there, so Storybook would not go online.
 
-Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open`.
+Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup`.
 
 ### From a Claude Code session (plugin)
 

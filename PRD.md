@@ -10,7 +10,7 @@
 
 - 使用者：不需要懂設計或程式的人，例如 PM、個人開發者、小團隊。
 - 唯一驅動方式是 Claude Code。產品本身不帶模型，也不接 API 金鑰或本機模型；思考由使用者的 Claude 負責，用量算在使用者自己的 Claude 方案。
-- 主要入口是本機網頁介面：在空資料夾執行一個指令（`npx -y github:jiashengchen610/Plinth`）就打開，整個流程（描述、審核、套用、檢查、發佈）都在裡面完成。網頁的對話框每送一則訊息，就由本機 server 以 headless 模式執行一次 Claude Code（`claude -p`），載入 Plinth plugin、只允許 Plinth 工具與唯讀檔案工具；同一個對話以 session id 續接，關掉重開也接得上。使用者只需要安裝並登入 Claude Code，不需要開著終端機 session。
+- 主要入口是本機網頁介面：在空資料夾執行一個指令（`npx -y github:jiashengchen610/Plinth`）就打開，整個流程（描述、審核、套用、檢查、發佈）都在裡面完成。網頁的對話框每送一則訊息，就由本機 server 以 headless 模式執行一次 Claude Code（`claude -p`），載入 Plinth plugin、只允許 Plinth 工具與唯讀檔案工具；同一個對話以 session id 續接，關掉重開也接得上。啟動指令會先檢查 git、Claude Code（是否登入）與 GitHub（是否連線、權限是否足夠），缺什麼就在終端機裡詢問後協助安裝或登入；GitHub 也可以之後在發佈視窗連線。之後整個流程都在網頁裡，不需要再操作終端機。
 - 同一套東西也以 Claude Code plugin 形式發佈（skills、本機 MCP server、由 MCP server 啟動的同一個網頁介面），給想在終端機對話、用網頁審核的人；兩種方式可以對同一個資料夾混用。
 - 介面只提供英文。
 
