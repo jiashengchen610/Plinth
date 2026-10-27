@@ -2,7 +2,7 @@
 
 Create and maintain a multi-brand design system by talking to Claude. Describe the product, paste a screenshot,
 and get design tokens, design and writing guidelines, and shadcn/ui components. You review every change in a local
-UI before it is written, and publish the result as Storybook on GitHub Pages. The whole loop happens in one UI:
+UI before it is written, and publish the result as Storybook on GitHub Pages, with pages for the tokens and guidelines next to the components. The whole loop happens in one UI:
 describe → review → apply → check → publish.
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
@@ -141,6 +141,7 @@ my-design-system/
 │   ├── styles/tokens.css          generated: CSS variables per brand × mode + Tailwind v4 @theme
 │   ├── styles/fonts.css           generated: Google Fonts imports for the font tokens
 │   └── components/<name>/         <name>.tsx, <name>.stories.tsx, <name>.spec.md
+│   └── foundations/               Storybook pages: Introduction, Colors, Typography, Shape, Guidelines
 ├── exports/<brand>/DESIGN.md      written at publish: complete DESIGN.md per brand (Google format)
 ├── .storybook/                    brand and mode toolbar
 └── .github/workflows/storybook.yml   typecheck + story tests, then deploy to GitHub Pages
@@ -185,6 +186,7 @@ pass, so a failing push leaves the previous Storybook online.
 | a token's name (`rename`) | aliases in all token files, and utilities in components (`bg-old` → `bg-new`, `text-old/80`, `var(--old)`) |
 | a color's hue family (pink → blue) | the preview lists sentences in DESIGN.md that still name the old hue; Claude rewrites them in the same change |
 | tokens or brand prose | the DESIGN.md YAML at publish |
+| tokens, DESIGN.md, WRITING.md | the Storybook Foundations and Guidelines pages (they read the files directly) |
 
 ## Data flow and privacy
 

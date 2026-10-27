@@ -44,6 +44,7 @@ my-design-system/
 ├── src/
 │   ├── styles/tokens.css         由 token 產生，不手改
 │   ├── styles/fonts.css          由字體 token 產生（Google Fonts 載入），不手改
+│   ├── foundations/              Storybook 的 Introduction、Colors、Typography、Shape、Guidelines 頁面（由 Plinth 維護，直接讀 token 與準則檔）
 │   └── components/<name>/
 │       ├── <name>.tsx
 │       ├── <name>.stories.tsx

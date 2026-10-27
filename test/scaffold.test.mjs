@@ -2,11 +2,11 @@
 // npm drops .gitignore files from packages. Both must not break a new workspace.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, readdirSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, cpSync, existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
-import { initWorkspace, TEMPLATE_DIR } from "../engine/workspace.mjs";
+import { initWorkspace, syncManaged, TEMPLATE_DIR } from "../engine/workspace.mjs";
 
 test("scaffold: template copied from an install under node_modules, with a .gitignore", (t) => {
   const base = mkdtempSync(join(tmpdir(), "plinth-npx-"));
@@ -42,4 +42,28 @@ test("no fs.cpSync in engine/ or server/ (aborts Node 24 on Windows for D:\<fold
       assert.doesNotMatch(src, /\bcpSync\b/, `${dir}/${f} uses cpSync; use copyDir from engine/workspace.mjs`);
     }
   }
+});
+
+test("foundations: generated data for Storybook, managed files restored from the template", (t) => {
+  const base = mkdtempSync(join(tmpdir(), "plinth-found-"));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const root = join(base, "ws");
+  initWorkspace(root, { name: "Found", brand: "acme", context: "saas-dashboard" });
+  const data = JSON.parse(readFileSync(join(root, "src/foundations/tokens.generated.json"), "utf8"));
+  assert.equal(data.name, "Found");
+  assert.equal(data.defaultBrand, "acme");
+  const acme = data.brands.acme;
+  assert.deepEqual(acme.modes, ["light", "dark"]);
+  const primary = acme.tokens.find((x) => x.name === "primary");
+  assert.ok(primary.values.light.resolved && primary.values.dark.resolved);
+  assert.ok(acme.contrast.some((c) => c.bg === "primary" && c.fg === "primary-foreground" && c.mode === "dark"));
+  for (const f of ["Introduction.mdx", "Colors.mdx", "Typography.mdx", "Shape.mdx", "Guidelines.mdx", "Writing.mdx", "blocks.tsx"]) {
+    assert.ok(existsSync(join(root, "src/foundations", f)), `missing ${f}`);
+  }
+  // A managed file that drifted (older Plinth, or a hand edit) is put back on the next regenerate.
+  writeFileSync(join(root, ".storybook/preview.tsx"), "// old\n");
+  rmSync(join(root, "src/foundations/Colors.mdx"));
+  assert.deepEqual(syncManaged(root).sort(), [".storybook/preview.tsx", "src/foundations/Colors.mdx"]);
+  assert.match(readFileSync(join(root, ".storybook/preview.tsx"), "utf8"), /globalsUpdated/);
+  assert.deepEqual(syncManaged(root), [], "nothing to do the second time");
 });

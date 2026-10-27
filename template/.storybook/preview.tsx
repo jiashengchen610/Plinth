@@ -1,15 +1,28 @@
+// Managed by Plinth: rewritten from the template so fixes reach existing design systems. Edits here are replaced.
 import type { Decorator, Preview } from "@storybook/react-vite";
+import { addons } from "storybook/preview-api";
 import "../src/index.css";
 import system from "../design-system.json";
 
 type Brand = { id: string; name?: string };
 const brands: Brand[] = (system.brands as Brand[]) ?? [{ id: "default" }];
+const defaultBrand = system.defaultBrand ?? brands[0].id;
 
-/** Applies the selected brand and mode to <html>, where the generated token CSS expects them. */
-const withBrandAndMode: Decorator = (Story, context) => {
+/** The generated token CSS expects the brand and mode on <html>. */
+function apply(globals: Record<string, unknown> = {}) {
   const root = document.documentElement;
-  root.dataset.brand = context.globals.brand ?? system.defaultBrand ?? brands[0].id;
-  root.classList.toggle("dark", context.globals.mode === "dark");
+  root.dataset.brand = (globals.brand as string) ?? defaultBrand;
+  root.classList.toggle("dark", globals.mode === "dark");
+}
+apply({ brand: defaultBrand, mode: "light" });
+
+// Docs pages without stories (Introduction, Foundations, Guidelines) render no decorators; follow the toolbar here.
+const channel = addons.getChannel();
+channel.on("globalsUpdated", ({ globals }: { globals: Record<string, unknown> }) => apply(globals));
+channel.on("setGlobals", ({ globals }: { globals: Record<string, unknown> }) => apply(globals));
+
+const withBrandAndMode: Decorator = (Story, context) => {
+  apply(context.globals);
   return Story();
 };
 
@@ -25,10 +38,13 @@ const preview: Preview = {
       toolbar: { title: "Mode", icon: "mirror", items: [{ value: "light", title: "Light" }, { value: "dark", title: "Dark" }], dynamicTitle: true },
     },
   },
-  initialGlobals: { brand: system.defaultBrand ?? brands[0].id, mode: "light" },
+  initialGlobals: { brand: defaultBrand, mode: "light" },
   parameters: {
     controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
     a11y: { test: "error" },
+    options: {
+      storySort: { order: ["Introduction", "Foundations", ["Colors", "Typography", "Shape and elevation"], "Guidelines", ["Design", "Writing"], "Components", "Patterns"] },
+    },
   },
 };
 

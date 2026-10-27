@@ -1,0 +1,22 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { BrandSummary, Showcase, meta } from "./blocks";
+
+<Meta title="Introduction" />
+
+# {meta.name}
+
+<BrandSummary />
+
+<Showcase />
+
+## What is here
+
+- **Foundations**: the design tokens (colors, typography, shape, elevation, motion) and the design and writing
+  guidelines. Every value comes from the token files in this repository.
+- **Components**: every component with one story per variant and state, its props, and its accessibility tests.
+
+Switch the **brand** and **light / dark** mode in the toolbar: everything on these pages follows.
+
+This design system is maintained with [Plinth](https://github.com/jiashengchen610/Plinth). The token files, the
+guidelines and the components are plain files in this repository, and each brand has a complete `DESIGN.md` in
+`exports/` for other AI tools.

@@ -98,7 +98,11 @@ export function initWorkspace(root, { name = "my-design-system", brand = "defaul
   return gitCommit(root, `Create design system "${name}"`);
 }
 
-/** Regenerate derived files: the token stylesheet and the font loader. Returns build issues. */
+/**
+ * Regenerate derived files: the token stylesheet, the font loader, and the data the Storybook Foundations pages
+ * read. Also brings Plinth-managed files (Foundations pages, Storybook preview, deploy workflow) up to date, so
+ * workspaces created by an older Plinth get fixes. Returns build issues.
+ */
 export function regenerate(root) {
   const config = loadConfig(root);
   const { css, issues } = buildCss(root, config);
@@ -106,7 +110,57 @@ export function regenerate(root) {
   mkdirSync(styles, { recursive: true });
   writeFileSync(join(styles, "tokens.css"), css);
   writeFileSync(join(styles, "fonts.css"), fontsCss(fontsToLoad(root, config)));
+  syncManaged(root);
+  writeFoundationsData(root, config);
   return issues;
+}
+
+/** Files that belong to Plinth, not to the user's design: kept identical to the template. */
+const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations"];
+export function syncManaged(root, templateDir = TEMPLATE_DIR) {
+  const changed = [];
+  const syncFile = (rel) => {
+    const src = join(templateDir, rel), dest = join(root, rel);
+    if (!existsSync(src)) return;
+    if (existsSync(dest) && readFileSync(dest).equals(readFileSync(src))) return;
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSync(src, dest);
+    changed.push(rel);
+  };
+  const walk = (rel) => {
+    const abs = join(templateDir, rel);
+    if (!existsSync(abs)) return;
+    if (statSync(abs).isDirectory()) for (const n of readdirSync(abs)) walk(`${rel}/${n}`);
+    else if (!rel.endsWith(".generated.json")) syncFile(rel);
+  };
+  for (const rel of MANAGED) walk(rel);
+  return changed;
+}
+
+/**
+ * Everything the Foundations pages show, computed here so Storybook only renders: tokens per brand and mode,
+ * and the contrast results. Read by src/foundations/*.tsx at build time.
+ */
+export function writeFoundationsData(root, config = loadConfig(root)) {
+  const exceptions = config.exceptions ?? [];
+  const contrast = checkContrast(root, config);
+  const modeName = (m) => (m === "default" ? "light" : m);
+  const brands = {};
+  for (const id of listBrands(root, config)) {
+    const r = resolveBrand(root, id, config);
+    brands[id] = {
+      name: (config.brands ?? []).find((b) => (b.id ?? b) === id)?.name ?? id,
+      modes: r.modes.map(modeName),
+      tokens: r.tokens.filter((t) => !t.derived).map((t) => ({
+        name: t.name, path: t.key, group: t.path[0], type: t.type, description: t.description || undefined,
+        values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [modeName(m), { raw: v.raw, css: v.css, resolved: v.resolved }])),
+      })),
+      contrast: contrast.filter((c) => c.brand === id).map((c) => ({ mode: modeName(c.mode), bg: c.bg, fg: c.fg, ratio: c.ratio, min: c.min, pass: c.pass, accepted: Boolean(acceptedBy(exceptions, "contrast", c)) })),
+    };
+  }
+  const out = join(root, "src", "foundations", "tokens.generated.json");
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, JSON.stringify({ name: config.name, context: config.context, defaultBrand: config.defaultBrand ?? listBrands(root, config)[0], brands }, null, 2) + "\n");
 }
 
 // ---------------- token file editing ----------------
