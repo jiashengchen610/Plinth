@@ -127,6 +127,30 @@ export const TOOLS = [
     run: (_a, ctx) => ws.listPending(ctx.root).map(({ id, title, rationale, by, createdAt, ops, preview }) => ({ id, title, rationale, by, createdAt, ops: ops.length, files: preview.files, failingAfter: preview.failingAfter, distinctFailures: preview.distinctFailures?.length ?? 0, notes: preview.notes ?? [] })),
   },
   {
+    name: "get_change",
+    description: "One pending change in full, to review it before it is applied: every token it touches with the value before and after (as written and resolved, per brand and mode), other files it writes, and the preview's reminders (contrast that fails after, look-alike roles, guideline notes, broken references). Without id: the newest pending change.",
+    inputSchema: { type: "object", properties: { id: { type: "string" } } },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const list = ws.listPending(ctx.root);
+      const c = a.id ? list.find((x) => x.id === a.id) : list.at(-1);
+      if (!c) return { message: "No pending change." };
+      const diff = ws.changeDiff(ctx.root, c.ops);
+      const p = c.preview;
+      return {
+        id: c.id, title: c.title, by: c.by, rationale: c.rationale || undefined, edits: c.ops.length,
+        tokens: diff.tokens, files: diff.files,
+        reminders: {
+          contrastFailingAfter: p.contrastChanges.filter((x) => !x.pass && !x.accepted).map(({ brand, mode, bg, fg, before, ratio, min }) => ({ brand, mode, fg, bg, before, after: ratio, min })),
+          contrastFixed: p.contrastChanges.filter((x) => x.pass && x.before !== null && x.before < x.min).map(({ brand, mode, bg, fg, before, ratio }) => ({ brand, mode, fg, bg, before, after: ratio })),
+          lookAlike: (p.distinctFailures ?? []).map(({ brand, mode, a: x, b, reason }) => ({ brand, mode, a: x, b, reason })),
+          guidelineNotes: p.notes ?? [],
+          brokenReferences: p.issues,
+        },
+      };
+    },
+  },
+  {
     name: "apply_change",
     description: "Apply a pending change: write files, regenerate CSS and fonts, commit. Only call when the user approved it (in chat or by asking you to apply).",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },

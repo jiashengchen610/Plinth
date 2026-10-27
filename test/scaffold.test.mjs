@@ -139,3 +139,27 @@ test("previews: stacked on earlier pending changes; guideline notes follow refer
   assert.ok(role.preview.notes.some((n) => /says "(grey|neutral)" but primary is now (teal|green)/.test(n)), JSON.stringify(role.preview.notes));
   assert.equal(pal.preview.notes.length, 0, "adding palette steps no role uses says nothing about prose");
 });
+
+test("typography: a part edited by path lands in the composite, and old child entries take effect", async (t) => {
+  const ws = await import("../engine/workspace.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-type-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Type", brand: "acme", context: "saas-dashboard" });
+  // What a real session did: set the parts that get_tokens lists as their own paths.
+  ws.apply(root, ws.propose(root, { title: "Serif headings", ops: [
+    { op: "set", file: "tokens/base.tokens.json", path: "typography/display/font-family", value: ["Cormorant Garamond", "serif"] },
+    { op: "set", file: "tokens/base.tokens.json", path: "typography/display/font-size", value: { value: 2.75, unit: "rem" } },
+  ] }).id);
+  const base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
+  assert.deepEqual(base.typography.display.$value.fontFamily, ["Cormorant Garamond", "serif"]);
+  assert.equal(base.typography.display["font-family"], undefined, "no child token left behind");
+  assert.match(readFileSync(join(root, "src/styles/fonts.css"), "utf8"), /family=Cormorant\+Garamond/);
+  assert.match(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--display-font: 600 2\.75rem\/1\.15 'Cormorant Garamond', serif;/);
+
+  // A file written before the fix (children inside the composite) is read as intended.
+  base.typography.body["font-family"] = { $value: ["Work Sans", "sans-serif"] };
+  writeFileSync(join(root, "tokens/base.tokens.json"), JSON.stringify(base, null, 2));
+  ws.regenerate(root);
+  assert.match(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--body-font-family: 'Work Sans', sans-serif;/);
+  assert.match(readFileSync(join(root, "src/styles/fonts.css"), "utf8"), /family=Work\+Sans/);
+});

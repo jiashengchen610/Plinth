@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { buildCss, loadConfig, listBrands, resolveBrand, cssName } from "./tokens.mjs";
+import { buildCss, loadConfig, listBrands, resolveBrand, cssName, TYPOGRAPHY_PARTS } from "./tokens.mjs";
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { hueFamily, staleMentions } from "./prose.mjs";
@@ -254,6 +254,24 @@ function applyOp(root, op, files) {
   switch (op.op) {
     case "set": { // set a token value (optionally for a mode); creates the token if missing
       const tree = json();
+      // One part of a typography token (typography/display/font-family, as get_tokens lists it): write the field
+      // inside the composite, never a child token the engine would not read.
+      const segs = op.path.split(/[/.]/);
+      const part = TYPOGRAPHY_PARTS[segs.at(-1)];
+      const parent = part && getNode(tree, segs.slice(0, -1).join("/"), false);
+      if (part && parent && parent.$value && typeof parent.$value === "object" && !Array.isArray(parent.$value) && op.value !== undefined) {
+        const light = !op.mode || op.mode === "default" || op.mode === "light";
+        if (light) parent.$value = { ...parent.$value, [part]: op.value };
+        else {
+          parent.$extensions ??= {};
+          parent.$extensions.plinth ??= {};
+          parent.$extensions.plinth.modes ??= {};
+          parent.$extensions.plinth.modes[op.mode] = { ...(parent.$extensions.plinth.modes[op.mode] ?? parent.$value), [part]: op.value };
+        }
+        delete parent[segs.at(-1)];
+        files.set(rel, tree);
+        break;
+      }
       const node = getNode(tree, op.path, true);
       if (op.type) node.$type = op.type;
       if (op.description !== undefined) node.$description = op.description;
@@ -413,6 +431,47 @@ export function previewOps(root, ops, prior = []) {
       issues,
       ...(prior.length ? { assumes: "earlier pending changes applied" } : {}),
     };
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/**
+ * What a change does to each token it touches, for a reviewer: per brand and mode, the value before and after,
+ * both as written (a reference like {color.red.700} or a fixed value) and as resolved. Files and guidelines are listed.
+ */
+export function changeDiff(root, ops) {
+  const scratch = mkdtempSync(join(tmpdir(), "ds-diff-"));
+  try {
+    for (const f of ["design-system.json", "tokens", "brands", "src/components", "DESIGN.md"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
+    const files = new Map();
+    for (const op of ops) applyOp(scratch, op, files);
+    writeFiles(scratch, files);
+    const config = loadConfig(root), configAfter = loadConfig(scratch);
+    const tokenOps = ops.filter((o) => o.path && /\.json$/.test(o.file) && o.file !== "design-system.json");
+    const out = [];
+    for (const op of tokenOps) {
+      const brandOf = op.file.match(/^brands\/([^/]+)\//)?.[1];
+      for (const brand of brandOf ? [brandOf] : listBrands(scratch, configAfter)) {
+        let before = null, after = null;
+        try { before = resolveBrand(root, brand, config).tokens.find((t) => t.key === op.path) ?? null; } catch { /* brand added by this change */ }
+        try { after = resolveBrand(scratch, brand, configAfter).tokens.find((t) => t.key === (op.to ?? op.path)) ?? null; } catch { /* brand removed */ }
+        const modes = op.mode ? [op.mode === "light" ? "default" : op.mode] : Object.keys(after?.values ?? before?.values ?? { default: 1 });
+        for (const mode of modes) {
+          const b = before?.values[mode] ?? before?.values.default, a = after?.values[mode] ?? after?.values.default;
+          out.push({
+            token: after?.name ?? before?.name ?? op.path, path: op.path, op: op.op, file: op.file, brand, mode: mode === "default" ? "light" : mode,
+            layer: after?.layerId ?? before?.layerId ?? null,
+            before: b ? { value: b.raw, resolved: b.resolved, alpha: b.alpha } : null,
+            after: a ? { value: a.raw, resolved: a.resolved, alpha: a.alpha } : null,
+          });
+        }
+      }
+    }
+    // Shared tokens are the same in every brand: one row is enough when nothing differs.
+    const seen = new Set();
+    const tokens = out.filter((r) => { const k = `${r.path}|${r.mode}|${JSON.stringify(r.before)}|${JSON.stringify(r.after)}`; return !seen.has(k) && seen.add(k); });
+    return { tokens, files: [...files.keys()].filter((f) => !tokenOps.some((o) => o.file === f)) };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

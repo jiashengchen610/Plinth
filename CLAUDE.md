@@ -15,7 +15,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - Tokens are layered (design-system.json → layers): palette (Tailwind, regenerate with `scripts/tailwind-primitives.mjs`),
   roles, component tokens. Template components use only component tokens. Fixes never edit the palette.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
-- After changing `engine/` or `server/`, run `npm test` (19 tests).
+- After changing `engine/` or `server/`, run `npm test` (20 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (42 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the

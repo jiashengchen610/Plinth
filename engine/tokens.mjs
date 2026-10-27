@@ -76,12 +76,26 @@ function flatten(tree, source, out, path = [], inheritedType, layer = { layer: 0
       alpha: ds.alpha ?? null,
       deprecated: Boolean(tree.$deprecated),
     };
+    if (t.type === "typography" && tree.$value && typeof tree.$value === "object") {
+      // A part written as its own child (typography/display/font-family) belongs inside the composite. Writes fold
+      // it in (workspace.mjs); files written before that still carry children, applied here so they take effect.
+      for (const [part, prop] of Object.entries(TYPOGRAPHY_PARTS)) {
+        if (tree[part] && "$value" in tree[part]) {
+          for (const mode of Object.keys(t.values)) t.values[mode] = { ...t.values[mode], [prop]: tree[part].$value };
+        }
+      }
+      out.set(key, t);
+      expandTypography(t, out);
+      return;
+    }
     out.set(key, t);
-    if (t.type === "typography" && tree.$value && typeof tree.$value === "object") expandTypography(t, out);
     return;
   }
   for (const [k, v] of Object.entries(tree)) if (!k.startsWith("$")) flatten(v, source, out, [...path, k], groupType, layer);
 }
+
+/** The parts of a typography token, as path segments and as composite fields. */
+export const TYPOGRAPHY_PARTS = { "font-family": "fontFamily", "font-size": "fontSize", "font-weight": "fontWeight", "line-height": "lineHeight", "letter-spacing": "letterSpacing" };
 
 /** Opacity of a token in a mode: $extensions.plinth.alpha as a number, or per mode. 1 when unset. */
 const alphaIn = (t, mode) => {
