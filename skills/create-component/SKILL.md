@@ -25,19 +25,29 @@ The spec is written and approved before any code.
 `propose_change` with one `write` op for `src/components/<name>/<name>.spec.md`, sections:
 `## Parts`, `## States`, `## Props` (each with allowed values), `## Tokens` (every token it uses),
 `## Accessibility` (roles, keyboard, what is announced). Add `## Token gaps` when the design needs a value no token
-covers: name the value and the closest token. Do not invent tokens inside a component proposal; propose them first
-with the change-design-system skill (in every brand) if the user agrees.
+covers: name the value and the closest token. Do not invent roles or palette colors inside a component proposal
+(its own component tokens are fine); propose those first with the change-design-system skill (roles in every brand)
+if the user agrees.
 
 Ask the user to approve the spec in the UI. Apply it only when they do.
 
-## 3. Component and stories (one proposal)
+## 3. Component tokens, component and stories (one proposal)
 
-`propose_change` with `write` ops for `<name>.tsx` and `<name>.stories.tsx`.
+`propose_change` with `write` ops for `tokens/components/<name>.tokens.json`, `<name>.tsx` and `<name>.stories.tsx`.
+
+Component tokens first: one per part and property the component styles, pointing at roles, e.g.
+`{ "<name>": { "$type": "color", "container": { "background": { "$value": "{color.card}" }, "foreground": … } } }`
+and `"radius": { "$type": "dimension", "$value": "{radius.container}" }`. Name color parts `<part>/background`,
+`<part>/foreground`, `<part>/border`, `<part>/background-hover` (background and foreground pairs are checked for
+contrast automatically). Opacity: `"$extensions": { "plinth": { "alpha": 0.1 } }`. A composition (tier 2) reuses
+the inner components' tokens and adds tokens only for what it styles itself.
 
 Component rules:
 - Imports: `@/components/<x>/<x>`, `@/lib/utils` (`cn`), `radix-ui`, `class-variance-authority`, `lucide-react`.
-- Styling: theme utilities from token names only (`bg-primary`, `text-muted-foreground`, `bg-success`, `rounded-lg`,
-  `shadow-card`, `text-display`). No hex, `oklch()`, arbitrary values (`p-[13px]`), inline styles or magic pixel values.
+- Styling: the component's own tokens as theme utilities (`bg-<name>-container-background`,
+  `text-<name>-container-foreground`, `rounded-<name>`), spacing from Tailwind's scale (`p-4`, `gap-2`). Focus rings
+  and invalid states may use roles (`ring-ring`, `border-destructive`). No hex, `oklch()`, arbitrary values
+  (`p-[13px]`), inline styles or magic pixel values.
 - Variants with `cva`; `data-slot` on the root; forward `className`; type props explicitly.
 - Copy follows WRITING.md (verbs on buttons, sentence case, specific errors).
 

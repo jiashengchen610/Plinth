@@ -10,11 +10,30 @@
       "name": "Default"
     }
   ],
-  "tokens": {
-    "rename": {
-      "radius/base": "radius"
+  "layers": [
+    {
+      "id": "primitives",
+      "name": "Primitives",
+      "files": [
+        "tokens/primitives.tokens.json"
+      ]
+    },
+    {
+      "id": "semantic",
+      "name": "Semantic",
+      "files": [
+        "tokens/base.tokens.json",
+        "brands/{brand}/tokens.json"
+      ]
+    },
+    {
+      "id": "components",
+      "name": "Components",
+      "files": [
+        "tokens/components/*.tokens.json"
+      ]
     }
-  },
+  ],
   "hardcoded": {
     "allowFiles": [
       "src/components/button/button.tsx",

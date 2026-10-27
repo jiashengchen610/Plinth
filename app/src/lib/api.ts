@@ -17,7 +17,8 @@ export type TokenRow = { name: string; path: string; type: string; source: strin
 export type ContrastResult = { brand: string; mode: string; bg: string; fg: string; min: number; ratio: number | null; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type DistinctResult = { brand: string; mode: string; a: string; b: string; deltaE: number; hueDiff: number | null; pass: boolean; reason: string | null; accepted?: boolean; exceptionReason?: string };
 export type Hardcoded = { file: string; line: number; rule: string; match: string; hint?: string; snippet?: string; accepted?: boolean; exceptionReason?: string };
-export type CheckName = "contrast" | "distinct" | "hardcoded";
+export type CheckName = "contrast" | "distinct" | "hardcoded" | "structure";
+export type StructureResult = { brand: string; token: string; layer: string; kind: "upward" | "unlinked"; detail: string; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type Exception = { check: CheckName; key: string; reason?: string; at?: string };
 export type Op = { op: "set" | "delete" | "rename" | "write"; file: string; path?: string; to?: string; mode?: string; value?: unknown; content?: string };
 export type Change = {
@@ -62,12 +63,15 @@ export type State = {
   checks: {
     gate: boolean;
     summary: Record<string, { ok: boolean; failing?: number; count?: number; accepted?: number; issues?: string[] }>;
-    contrast: ContrastResult[]; distinct: DistinctResult[]; hardcoded: Hardcoded[]; tokenIssues: string[]; exceptions: Exception[];
+    warnings: { check: string; count: number }[];
+    contrast: ContrastResult[]; distinct: DistinctResult[]; structure: StructureResult[]; hardcoded: Hardcoded[]; tokenIssues: string[]; exceptions: Exception[];
   };
   components: Component[];
   guidelines: { shared: string | null; writing: string | null; brands: Record<string, string | null> };
   pending: Change[];
   outside: OutsideChange[];
+  layers: { id: string; name?: string; files: string[] }[] | null;
+  upgradeAvailable: boolean;
   versions: Version[];
   storybook: string | null;
 };
@@ -95,6 +99,9 @@ export const api = {
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
+  upgrade: () => call<{ id?: string; message?: string }>("POST", "/api/upgrade"),
+  linkPalette: () => call<{ id?: string; message?: string; unmatched?: unknown[] }>("POST", "/api/link-palette"),
+  addPaletteColor: (name: string, color: string) => call<{ id: string; name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),
   recordOutside: (note: string) => call<{ version: string | null }>("POST", "/api/outside/record", { note }),
   discardOutside: () => call<{ discarded: string[] }>("POST", "/api/outside/discard"),
   githubLogin: () => call<GithubLogin>("POST", "/api/github/login"),
@@ -106,4 +113,5 @@ export const exceptionKey = {
   contrast: (r: ContrastResult) => `${r.brand}|${r.mode}|${r.bg}|${r.fg}`,
   distinct: (r: DistinctResult) => `${r.brand}|${r.mode}|${r.a}|${r.b}`,
   hardcoded: (f: Hardcoded) => `${f.file}|${f.rule}|${f.match}`,
+  structure: (r: StructureResult) => `${r.brand}|${r.kind}|${r.token}`,
 };

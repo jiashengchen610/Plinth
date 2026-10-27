@@ -9,6 +9,7 @@ import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy } from "./publish.mjs";
+import { toolByName } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
@@ -38,12 +39,13 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     const tokens = {};
     for (const b of brands) {
       const r = resolveBrand(ctx.root, b, config);
-      tokens[b] = { modes: r.modes, issues: r.issues, rows: r.tokens.map((t) => ({ name: t.name, path: t.key, type: t.type, source: t.source, description: t.description, derived: Boolean(t.derived), values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [m, { raw: v.raw, css: v.css, resolved: v.resolved }])) })) };
+      tokens[b] = { modes: r.modes, layers: r.layers, issues: r.issues, rows: r.tokens.map((t) => ({ name: t.name, path: t.key, type: t.type, source: t.source, layer: t.layer, layerId: t.layerId, refs: t.refs, linked: t.linked, description: t.description, derived: Boolean(t.derived), values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [m, { raw: v.raw, css: v.css, resolved: v.resolved, alpha: v.alpha }])) })) };
     }
     const checks = runChecks(ctx.root);
     return {
       ...common, config, brands, tokens,
-      checks: { gate: checks.gate, summary: checks.summary, contrast: checks.contrast, distinct: checks.distinct, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues, exceptions: checks.exceptions },
+      checks: { gate: checks.gate, summary: checks.summary, warnings: checks.warnings, contrast: checks.contrast, distinct: checks.distinct, structure: checks.structure, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues, exceptions: checks.exceptions },
+      layers: (config.layers ?? null), upgradeAvailable: !Array.isArray(config.layers),
       components: ws.listComponents(ctx.root),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },
       pending: ws.listPending(ctx.root),
@@ -98,6 +100,10 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       return { id: c.id };
     },
     "POST /api/exceptions": async (req) => { needsWorkspace(); return { version: ws.acceptException(ctx.root, await readJson(req)) }; },
+    // The same engine actions the tools offer; the UI calls them directly.
+    "POST /api/palette": async (req) => { needsWorkspace(); return toolByName.get("propose_palette_color").run(await readJson(req), ctx); },
+    "POST /api/upgrade": () => { needsWorkspace(); return toolByName.get("propose_upgrade").run({}, ctx); },
+    "POST /api/link-palette": () => { needsWorkspace(); return toolByName.get("propose_link_to_palette").run({}, ctx); },
     "POST /api/outside/record": async (req) => { needsWorkspace(); return ws.recordOutside(ctx.root, (await readJson(req)).note ?? ""); },
     "POST /api/outside/discard": () => { needsWorkspace(); return ws.discardOutside(ctx.root); },
     "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return { version: ws.removeException(ctx.root, await readJson(req)) }; },

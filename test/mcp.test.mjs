@@ -74,7 +74,7 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
     title: "Give the primary a teal hue",
     rationale: "Brand asked for a calmer, friendlier feel.",
     ops: [
-      { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "oklch(0.55 0.12 190)" },
+      { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "oklch(0.45 0.1 190)" },
       { op: "set", file: "brands/acme/tokens.json", path: "color/muted-foreground", mode: "dark", value: "oklch(0.4 0 0)" },
     ],
   });
@@ -85,20 +85,22 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   assert.equal((await s.call("list_pending_changes")).length, 1);
 
   // Nothing is written before apply.
-  assert.doesNotMatch(readFileSync(join(ws, "brands/acme/tokens.json"), "utf8"), /0\.55 0\.12 190/);
+  assert.doesNotMatch(readFileSync(join(ws, "brands/acme/tokens.json"), "utf8"), /0\.45 0\.1 190/);
   const applied = await s.call("apply_change", { id: proposed.id });
   assert.match(applied.version, /^[0-9a-f]{7}$/);
-  assert.match(readFileSync(join(ws, "src/styles/tokens.css"), "utf8"), /--primary: oklch\(0\.55 0\.12 190\)/);
+  assert.match(readFileSync(join(ws, "src/styles/tokens.css"), "utf8"), /--primary: oklch\(0\.45 0\.1 190\)/);
 
   const checks = await s.call("run_checks");
-  assert.equal(checks.gate, false);
+  assert.equal(checks.gate, true, "contrast is a reminder, not a gate");
+  assert.equal(checks.summary.contrast.ok, false);
+  assert.ok(checks.warnings.some((w) => w.check === "contrast"));
   assert.ok(checks.contrastFailures.some((f) => f.fg === "muted-foreground" && f.mode === "dark"));
 
   // Deterministic contrast repair.
   const fixes = await s.call("propose_contrast_fixes");
   assert.ok(fixes.id, JSON.stringify(fixes));
   await s.call("apply_change", { id: fixes.id });
-  assert.equal((await s.call("run_checks")).gate, true);
+  assert.equal((await s.call("run_checks")).summary.contrast.ok, true);
 
   // Distinct roles: a primary that is the destructive red is flagged in the preview, and the prose note
   // points at the guideline that still describes the old hue.
@@ -120,18 +122,21 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   assert.ok(toPurple.preview.notes.some((n) => /brands\/acme\/DESIGN\.md \(Overview\) still says "teal" but primary is now purple/.test(n)), JSON.stringify(toPurple.preview.notes));
   await s.call("discard_change", { id: toPurple.id });
 
-  // Rename follows into components: bg-primary → bg-brand in button.tsx, primary-foreground untouched.
+  // Rename follows the references: component tokens that pointed at primary now point at brand; files without a
+  // reference to it are not part of the change.
   const renamed = await s.call("propose_change", {
     title: "Rename primary to brand",
     ops: [{ op: "rename", file: "brands/acme/tokens.json", path: "color/primary", to: "color/brand" }],
   });
-  assert.ok(renamed.preview.files.includes("src/components/button/button.tsx"), JSON.stringify(renamed.preview.files));
+  assert.ok(renamed.preview.files.includes("tokens/components/button.tokens.json"), JSON.stringify(renamed.preview.files));
+  assert.ok(!renamed.preview.files.includes("tokens/primitives.tokens.json"), "the palette does not refer to primary");
   await s.call("apply_change", { id: renamed.id });
-  const button = readFileSync(join(ws, "src/components/button/button.tsx"), "utf8");
-  assert.match(button, /bg-brand/);
-  assert.doesNotMatch(button, /bg-primary(?![\w-])/);
-  assert.match(button, /text-primary-foreground/, "a sibling token with a longer name is not touched");
+  const buttonTokens = readFileSync(join(ws, "tokens/components/button.tokens.json"), "utf8");
+  assert.match(buttonTokens, /\{color\.brand\}/);
+  assert.doesNotMatch(buttonTokens, /\{color\.primary\}/);
+  assert.match(buttonTokens, /\{color\.primary-foreground\}/, "a sibling token with a longer name is not touched");
   assert.match(readFileSync(join(ws, "src/styles/tokens.css"), "utf8"), /--brand: oklch/);
+  assert.equal((await s.call("run_checks")).tokenIssues.length, 0, "no reference was left dangling");
   // and back, so the rest of the test sees shadcn names
   const back = await s.call("propose_change", { title: "Rename brand back", ops: [{ op: "rename", file: "brands/acme/tokens.json", path: "color/brand", to: "color/primary" }] });
   await s.call("apply_change", { id: back.id });
@@ -141,7 +146,7 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   assert.equal(versions.length, 6);
   const restored = await s.call("restore_version", { version: versions[5].short });
   assert.ok(restored.version);
-  assert.doesNotMatch(readFileSync(join(ws, "brands/acme/tokens.json"), "utf8"), /0\.55 0\.12 190/);
+  assert.doesNotMatch(readFileSync(join(ws, "brands/acme/tokens.json"), "utf8"), /0\.45 0\.1 190/);
   assert.equal((await s.call("list_versions")).length, 7, "restore adds a commit instead of rewriting history");
 
   // Second brand through a write op on design-system.json + brand files.
@@ -199,7 +204,7 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   st = await (await api("api/state")).json();
   assert.ok(st.checks.contrast.some((c) => c.accepted && c.exceptionReason === "decorative text"));
   assert.equal((await api("api/exceptions/remove", { check: "contrast", key: "*|*|*|muted-foreground" })).status, 200);
-  assert.equal((await s.call("run_checks")).gate, false);
+  assert.equal((await s.call("run_checks")).summary.contrast.ok, false);
   assert.equal((await api("api/exceptions", { check: "contrast", key: "nonsense" })).status, 400);
   await api("api/exceptions", { check: "contrast", key: "*|*|*|muted-foreground", reason: "decorative text" });
 

@@ -35,22 +35,34 @@ State the brief back in 4–6 lines and continue unless the user corrects it.
 
 ## 3. Propose the brand tokens (one change)
 
-Read `get_tokens` first so you use the exact paths. Then `propose_change` titled e.g. "Set Acme colors and type"
-with `set` ops on `brands/<brand>/tokens.json` (colors) and `tokens/base.tokens.json` (radius, fonts, shadows, motion).
+The tokens come in layers (`status` → `layers`): the **palette** (`tokens/primitives.tokens.json`, Tailwind's colors,
+radius and shadow scales), semantic **roles** (`brands/<brand>/tokens.json`, `tokens/base.tokens.json`) that point at
+the palette, and **component tokens** (`tokens/components/*.tokens.json`) that point at roles. Read `get_tokens` first
+so you use the exact paths.
+
+1. If the brand needs a hue Tailwind does not have, or a specific brand color, add it to the palette first:
+   `propose_palette_color` with a name (`lacquer-red`) and the color; the engine generates its 50–950 scale.
+2. Then `propose_change` titled e.g. "Set Acme colors and type" with `set` ops on `brands/<brand>/tokens.json`
+   (roles) and `tokens/base.tokens.json` (radius roles, fonts, shadows, motion).
 
 How to choose values:
 
-- Write colors as `oklch(L C H)`. Work in OKLCH so lightness is predictable: light-mode surfaces L 0.97–1,
-  text L 0.15–0.25; dark-mode surfaces L 0.13–0.22, text L 0.93–0.98.
-- Start from one brand hue for `primary`. Derive `accent`, `secondary`, `muted` from it (same hue, low chroma) unless
-  the brief asks for a second hue. `destructive` stays red (H 25–30) in every brand.
+- A role's value is a palette reference, e.g. `{color.red.700}` or `{color.lacquer-red.600}`, with `mode: "dark"` for
+  the dark value. Not a fixed oklch value: a fixed value is flagged as not on the palette.
+- Lightness guide (Tailwind steps): light-mode surfaces white / 50–100, text 900–950; dark-mode surfaces 900–950,
+  text 50–200; primaries 600–700 in light mode, 300–400 in dark mode.
+- Start from one brand hue for `primary`. Derive `accent`, `secondary`, `muted` from a near-grey family (`stone`,
+  `zinc`, `neutral` …) or light steps of the brand hue. `destructive` stays red in every brand.
 - Status colors exist in the template: `success` (green), `warning` (amber), `info` (blue), each with a `-foreground`.
   Tune their chroma and lightness to the brand; keep their hue families so they stay distinguishable from `primary`
   and from each other (the engine checks this: see `distinctFailures` in the preview).
 - Every `X` has an `X-foreground` that reads on it. Aim for ≥ 4.5:1; the engine checks and can repair it.
 - Set a `dark` value for every color (`mode: "dark"`). Dark mode is not inverted light mode: lower chroma, lighter
   primaries, never pure black surfaces.
-- Radius from personality: crisp 0.25–0.375rem, balanced 0.5–0.625rem, friendly 0.75–1rem.
+- Radius from personality, through the radius roles in `tokens/base.tokens.json` (`radius/control`,
+  `radius/container`, `radius/pill`): crisp `{radius.sm}`–`{radius.md}`, balanced `{radius.lg}`, friendly
+  `{radius.xl}`–`{radius.2xl}`.
+- Component tokens already point at the roles; change them only when one component should differ.
 - Fonts: one family, two at most, chosen for the subject. Any Google Fonts family works: set `font/sans` and the
   `fontFamily` of `typography/*` to its name (e.g. `["Inter", "sans-serif"]`); the engine generates the loader.
   Families not on Google Fonts (system fonts) are fine too; anything else will not load.
@@ -58,7 +70,8 @@ How to choose values:
   accent; every surface the same radius and the same grey shadow. Use one only if the brief asks for it.
 
 Read the proposal's preview: `failingAfter` (contrast), `distinctFailures` (look-alike roles) and `notes` (guideline
-prose that still names an old hue). Fix them in the same proposal (discard and re-propose) or in the next one.
+prose that still names an old hue). These are reminders, not blockers: tell the user, and fix what they want fixed
+(contrast: move the role to a darker or lighter step of the same hue).
 Then tell the user it is waiting in the Changes tab. Call `apply_change` only after they approve; in the UI they
 can press Apply themselves.
 

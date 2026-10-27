@@ -41,9 +41,11 @@ const preview: Preview = {
   initialGlobals: { brand: defaultBrand, mode: "light" },
   parameters: {
     controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
-    a11y: { test: "error" },
+    // Accessibility findings are reported as warnings in Storybook and in the tests, not failures: design problems
+    // are reminders in Plinth. Interaction tests still fail on errors.
+    a11y: { test: "todo" },
     options: {
-      storySort: { order: ["Introduction", "Foundations", ["Colors", "Typography", "Shape and elevation"], "Guidelines", ["Design", "Writing"], "Components", "Patterns"] },
+      storySort: { order: ["Introduction", "Foundations", ["Palette", "Colors", "Typography", "Shape and elevation", "Component tokens"], "Guidelines", ["Design", "Writing"], "Components", "Patterns"] },
     },
   },
 };

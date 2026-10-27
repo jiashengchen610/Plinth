@@ -6,16 +6,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Derived scales that shadcn components expect. Values come from tokens.css. */
+/* Managed by Plinth. Every value comes from tokens.css (primitives, semantic and component tokens). */
 @theme inline {
   --font-heading: var(--font-sans);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 @layer base {

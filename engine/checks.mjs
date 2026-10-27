@@ -4,7 +4,7 @@
 // but do not block the gate.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { contrastRatio, fixContrast, deltaE, hueDifference, tint } from "./color.mjs";
+import { contrastRatio, fixContrast, deltaE, hueDifference, tint, parseColor, rgbToOklch } from "./color.mjs";
 import { loadConfig, listBrands, resolveBrand, buildCss } from "./tokens.mjs";
 import { scan } from "./check-hardcoded.mjs";
 
@@ -12,6 +12,7 @@ import { scan } from "./check-hardcoded.mjs";
  * Foreground/background pairs that must meet contrast. Derived from naming conventions:
  *   shadcn   X / X-foreground            (background / foreground is the page pair)
  *   material X / on-X
+ *   component tokens  …-background / …-foreground   (button-default-background, card-foreground …)
  *   explicit design-system.json → contrastPairs: [["bg-name","fg-name", minRatio?]]
  */
 export function contrastPairs(colorNames, config = {}) {
@@ -24,6 +25,7 @@ export function contrastPairs(colorNames, config = {}) {
   for (const n of colorNames) {
     if (set.has(`${n}-foreground`)) add(n, `${n}-foreground`);
     if (set.has(`on-${n}`)) add(n, `on-${n}`);
+    if (n.endsWith("-background")) add(n, n.replace(/-background$/, "-foreground"));
   }
   if (set.has("muted-foreground")) add("background", "muted-foreground");
   if (set.has("on-surface-variant") && set.has("surface")) add("surface", "on-surface-variant");
@@ -65,38 +67,78 @@ export function tintedPairs(root) {
   return [...found.values()];
 }
 
+const aliasKey = (v) => (typeof v === "string" && /^\{[^}]+\}$/.test(v.trim()) ? v.trim().slice(1, -1).replace(/\./g, "/") : null);
+
+/**
+ * Where a color's value really lives, following aliases: the token to edit to change it, and when that token points
+ * at the palette, the palette colors a fix may move to. Fixes never edit the palette itself: they re-point the token
+ * that refers to it, along the same hue (or, for white and black, between white, black and the neutral greys).
+ */
+function editPoint(byKey, start, mode) {
+  let cur = start, prev = null;
+  for (let i = 0; i < 20; i++) {
+    const raw = cur.values[mode]?.raw ?? cur.values.default?.raw;
+    const next = aliasKey(raw) && byKey.get(aliasKey(raw));
+    if (!next) break;
+    prev = cur;
+    cur = next;
+  }
+  if (cur.layerId === "primitives" && cur.path[0] === "color") {
+    if (!prev) return { token: cur, raw: null, palette: [], end: cur.key, frozen: true };
+    const isPalette = (t) => t.layerId === "primitives" && t.path[0] === "color" && t.values.default?.resolved;
+    const ref = (t) => `{${t.path.join(".")}}`;
+    const hue = cur.path.length === 3 ? cur.path[1] : null;
+    const candidates = [...byKey.values()].filter((t) => isPalette(t) && (hue
+      ? t.path.length === 3 && t.path[1] === hue
+      : (t.path.length === 2 && ["white", "black"].includes(t.path[1])) || (t.path.length === 3 && t.path[1] === "neutral")));
+    return { token: prev, raw: prev.values[mode]?.raw ?? prev.values.default?.raw, palette: candidates.map((t) => ({ ref: ref(t), value: t.values.default.resolved })), end: cur.key };
+  }
+  return { token: cur, raw: cur.values[mode]?.raw ?? cur.values.default?.raw, palette: null, end: cur.key };
+}
+
 /** Contrast results for every brand and mode. */
 export function checkContrast(root, config = loadConfig(root)) {
   const results = [];
   const tinted = tintedPairs(root);
   for (const brand of listBrands(root, config)) {
     const r = resolveBrand(root, brand, config);
+    const byKey = new Map(r.tokens.map((t) => [t.key, t]));
     const colors = r.tokens.filter((t) => t.type === "color");
     const byName = new Map(colors.map((t) => [t.name, t]));
     const valueIn = (name, mode) => byName.get(name).values[mode] ?? byName.get(name).values.default;
+    const page = (mode) => (byName.has("background") ? valueIn("background", mode)?.resolved : "#ffffff");
+    // A translucent surface is seen over the page.
+    const opaque = (v, mode) => { const c = parseColor(v); return c && (c.alpha ?? 1) < 1 ? tint(v, 1, page(mode)) : v; };
     const row = (p, mode, bgValue, extra = {}) => {
       const fg = valueIn(p.fg, mode);
       const ratio = contrastRatio(fg?.resolved, bgValue);
+      const edit = editPoint(byKey, byName.get(p.fg), mode);
       return {
         brand, mode, bg: p.bg, fg: p.fg, min: p.min,
         ratio: ratio === null ? null : Number(ratio.toFixed(2)),
         pass: ratio !== null && ratio >= p.min,
-        fgToken: byName.get(p.fg).key, fgSource: byName.get(p.fg).source,
-        // The value to edit: this mode's own value when it has one, else the default it inherits.
-        fgRaw: byName.get(p.fg).values[mode]?.raw ?? byName.get(p.fg).values.default?.raw, bgValue,
+        // The token to edit, in its file: this mode's own value when it has one, else the default it inherits.
+        fgToken: edit.token.key, fgSource: edit.token.source, fgRaw: edit.raw, palette: edit.palette, bgValue,
         ...extra,
       };
     };
     for (const p of contrastPairs(colors.map((t) => t.name), config)) {
-      for (const mode of r.modes) results.push(row(p, mode, valueIn(p.bg, mode)?.resolved));
+      for (const mode of r.modes) {
+        const bg = valueIn(p.bg, mode);
+        const extra = {};
+        // A tint of the text's own color (component token "destructive at 10%"): the background moves with any fix.
+        if ((bg?.alpha ?? 1) < 1 && editPoint(byKey, byName.get(p.bg), mode).end === editPoint(byKey, byName.get(p.fg), mode).end) {
+          extra.selfTint = { alpha: bg.alpha, base: page(mode) };
+        }
+        results.push(row(p, mode, opaque(bg?.resolved, mode), extra));
+      }
     }
     for (const t of tinted) {
       if (!byName.has(t.fg) || !byName.has("background")) continue;
       for (const mode of r.modes) {
         const alpha = mode === "dark" ? t.dark : t.light;
-        const base = valueIn("background", mode)?.resolved;
+        const base = page(mode);
         const bgValue = tint(valueIn(t.fg, mode)?.resolved, alpha, base);
-        // The background moves with the text color: fixes recompute it (see contrastFixes).
         results.push(row({ fg: t.fg, bg: `${t.fg}/${Math.round(alpha * 100)}`, min: 4.5 }, mode, bgValue, { selfTint: { alpha, base }, files: t.files }));
       }
     }
@@ -147,8 +189,9 @@ export function checkDistinct(root, config = loadConfig(root)) {
 }
 
 /**
- * Turn failing contrast results into token edits: move the foreground's lightness until it passes.
- * Aliased foregrounds are reported, not edited (fix the alias target instead).
+ * Turn failing contrast results into token edits. A color linked to the palette moves to the nearest shade of the
+ * same hue that passes (the token that points at the palette is re-pointed; the palette itself never changes). A
+ * literal color moves its OKLCH lightness, keeping the hue.
  */
 export function contrastFixes(results) {
   const ops = [], skipped = [];
@@ -164,9 +207,23 @@ export function contrastFixes(results) {
     const failing = pairs.filter((p) => !p.pass && !p.accepted);
     if (!failing.length) continue;
     const r = failing[0];
-    if (typeof r.fgRaw === "string" && /^\{.+\}$/.test(r.fgRaw)) { skipped.push(...failing.map((f) => ({ ...f, reason: "foreground is an alias; fix the token it points to" }))); continue; }
     // A tint of the text's own color moves with it; every other background is fixed.
     const bgOf = (p, v) => (p.selfTint ? tint(v, p.selfTint.alpha, p.selfTint.base) : p.bgValue);
+    const passesAll = (v) => pairs.every((p) => (contrastRatio(v, bgOf(p, v)) ?? 0) >= p.min);
+    const why = (v) => `${r.fg} (${r.brand}, ${r.mode === "default" ? "light" : r.mode}): ${failing.map((f) => `on ${f.bg} ${f.ratio} → ${contrastRatio(v, bgOf(f, v)).toFixed(2)}`).join(", ")}`;
+    const op = (value, resolved) => ({ op: "set", file: r.fgSource, path: r.fgToken, mode: r.mode, value, why: why(resolved) });
+
+    if (r.palette) {
+      // Nearest shade (by lightness) of the same hue that works on every background.
+      const current = r.palette.find((s) => s.ref === r.fgRaw);
+      const lightOf = (v) => rgbToOklch(parseColor(v) ?? { r: 0, g: 0, b: 0 }).l;
+      const from = current ? lightOf(current.value) : 0.5;
+      const pick = r.palette.filter((s) => s.ref !== r.fgRaw && passesAll(s.value)).sort((a, b) => Math.abs(lightOf(a.value) - from) - Math.abs(lightOf(b.value) - from))[0];
+      if (pick) ops.push(op(pick.ref, pick.value));
+      else skipped.push(...failing.map((f) => ({ ...f, reason: "no shade of this hue works on every background it is used on; pick another color" })));
+      continue;
+    }
+    if (typeof r.fgRaw !== "string" || /^\{.+\}$/.test(r.fgRaw)) { skipped.push(...failing.map((f) => ({ ...f, reason: "this color is not a plain value; change the token it points to" }))); continue; }
     let value = r.fgRaw;
     for (let round = 0; round < 8; round++) {
       let changed = false;
@@ -181,13 +238,8 @@ export function contrastFixes(results) {
       }
       if (!value || !changed) break;
     }
-    const ok = value && pairs.every((p) => (contrastRatio(value, bgOf(p, value)) ?? 0) >= p.min);
-    if (!ok) { skipped.push(...failing.map((f) => ({ ...f, reason: "no lightness satisfies every background this color is used on; change a background or the hue" }))); continue; }
-    ops.push({
-      op: "set", file: r.fgSource === "base" ? "tokens/base.tokens.json" : `${r.fgSource}/tokens.json`,
-      path: r.fgToken, mode: r.mode, value,
-      why: `${r.fg} (${r.brand}, ${r.mode === "default" ? "light" : r.mode}): ${failing.map((f) => `on ${f.bg} ${f.ratio} → ${contrastRatio(value, bgOf(f, value)).toFixed(2)}`).join(", ")}`,
-    });
+    if (!value || !passesAll(value)) { skipped.push(...failing.map((f) => ({ ...f, reason: "no lightness satisfies every background this color is used on; change a background or the hue" }))); continue; }
+    ops.push(op(value, value));
   }
   return { ops, skipped };
 }
@@ -201,6 +253,7 @@ export const exceptionKey = {
   contrast: (r) => `${r.brand}|${r.mode}|${r.bg}|${r.fg}`,
   distinct: (r) => `${r.brand}|${r.mode}|${r.a}|${r.b}`,
   hardcoded: (f) => `${f.file}|${f.rule}|${f.match}`,
+  structure: (r) => `${r.brand}|${r.kind}|${r.token}`,
 };
 const keyMatches = (pattern, key) => {
   const p = pattern.split("|"), k = key.split("|");
@@ -215,23 +268,57 @@ function markAccepted(list, check, exceptions) {
   return list.map((r) => { const e = acceptedBy(exceptions, check, r); return e ? { ...r, accepted: true, exceptionReason: e.reason } : r; });
 }
 
-/** Run every check. `gate` is true when the workspace may be published. */
+/**
+ * How the layers are used, per brand: a token pointing at a token in a higher layer (a primitive referring to a
+ * semantic color, say), and a color above the palette that is a literal value instead of a palette color.
+ * @returns {Array<{ brand, token, layer, kind: "upward" | "unlinked", detail }>}
+ */
+export function checkStructure(root, config = loadConfig(root)) {
+  if (!Array.isArray(config.layers)) return [];
+  const results = [];
+  const hasPalette = config.layers.some((l) => l.id === "primitives");
+  for (const brand of listBrands(root, config)) {
+    const r = resolveBrand(root, brand, config);
+    const byKey = new Map(r.tokens.map((t) => [t.key, t]));
+    for (const t of r.tokens) {
+      if (t.derived) continue;
+      for (const ref of t.refs ?? []) {
+        const target = byKey.get(ref);
+        if (target && target.layer > t.layer) {
+          results.push({ brand, token: t.key, layer: t.layerId, kind: "upward", pass: false, detail: `${t.key} (${t.layerId}) points at ${ref} (${target.layerId}), a layer above it` });
+        }
+      }
+      if (hasPalette && t.type === "color" && t.layerId !== "primitives" && !t.linked) {
+        results.push({ brand, token: t.key, layer: t.layerId, kind: "unlinked", pass: false, detail: `${t.key} is a fixed value, not a palette color` });
+      }
+    }
+  }
+  return results;
+}
+
+/**
+ * Run every check. Design findings (contrast, look-alike roles, hardcoded values, layer structure) are reminders:
+ * they are reported and never stop publishing. Only token problems that break the generated CSS (an alias to
+ * nothing, a cycle, a brand missing tokens) close the gate. Typecheck and story tests are separate (tests.mjs).
+ */
 export function runChecks(root) {
   const config = loadConfig(root);
   const exceptions = Array.isArray(config.exceptions) ? config.exceptions : [];
   const css = buildCss(root, config);
   const contrast = markAccepted(checkContrast(root, config), "contrast", exceptions);
   const distinct = markAccepted(checkDistinct(root, config), "distinct", exceptions);
+  const structure = markAccepted(checkStructure(root, config), "structure", exceptions);
   const componentsDir = join(root, "src", "components");
   const hardcoded = markAccepted(existsSync(componentsDir) ? scan(["src/components"], root) : [], "hardcoded", exceptions);
-  const blocking = (list) => list.filter((c) => !c.pass && !c.accepted);
+  const open = (list) => list.filter((c) => !c.pass && !c.accepted);
   const summary = {
     tokens: { ok: css.issues.length === 0, issues: css.issues },
-    contrast: { ok: blocking(contrast).length === 0, failing: blocking(contrast).length, accepted: contrast.filter((c) => !c.pass && c.accepted).length, total: contrast.length },
-    hardcoded: { ok: hardcoded.every((f) => f.accepted), count: hardcoded.filter((f) => !f.accepted).length, accepted: hardcoded.filter((f) => f.accepted).length },
-    // Advisory: reported, never part of the gate.
-    distinct: { ok: blocking(distinct).length === 0, advisory: true, failing: blocking(distinct).length, accepted: distinct.filter((c) => !c.pass && c.accepted).length, total: distinct.length },
+    contrast: { ok: open(contrast).length === 0, advisory: true, failing: open(contrast).length, accepted: contrast.filter((c) => !c.pass && c.accepted).length, total: contrast.length },
+    hardcoded: { ok: hardcoded.every((f) => f.accepted), advisory: true, count: hardcoded.filter((f) => !f.accepted).length, accepted: hardcoded.filter((f) => f.accepted).length },
+    distinct: { ok: open(distinct).length === 0, advisory: true, failing: open(distinct).length, accepted: distinct.filter((c) => !c.pass && c.accepted).length, total: distinct.length },
+    structure: { ok: open(structure).length === 0, advisory: true, failing: open(structure).length, accepted: structure.filter((c) => c.accepted).length },
   };
   const gate = Object.values(summary).every((s) => s.ok || s.advisory);
-  return { gate, summary, contrast, distinct, hardcoded, tokenIssues: css.issues, exceptions };
+  const warnings = Object.entries(summary).filter(([, s]) => s.advisory && !s.ok).map(([k, s]) => ({ check: k, count: s.failing ?? s.count ?? 0 }));
+  return { gate, summary, warnings, contrast, distinct, structure, hardcoded, tokenIssues: css.issues, exceptions };
 }

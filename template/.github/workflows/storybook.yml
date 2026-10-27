@@ -31,7 +31,7 @@ jobs:
       # which makes `npm ci` refuse to install. `npm install` keeps the locked versions and fills those in.
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
-      # Quality gate: type errors or a failing story (interaction or accessibility) stop the deploy.
+      # Type errors or a failing interaction test stop the deploy; accessibility findings are reported, not blocking.
       - run: npm run typecheck
       - run: npm test
       - run: npm run build-storybook

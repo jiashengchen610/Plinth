@@ -1,0 +1,40 @@
+{
+  "card": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}"
+    },
+    "$type": "color",
+    "container": {
+      "background": {
+        "$value": "{color.card}"
+      },
+      "foreground": {
+        "$value": "{color.card-foreground}"
+      },
+      "border": {
+        "$value": "{color.foreground}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.1
+          }
+        }
+      }
+    },
+    "description": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      }
+    },
+    "footer": {
+      "background": {
+        "$value": "{color.muted}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.5
+          }
+        }
+      }
+    }
+  }
+}

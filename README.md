@@ -17,7 +17,7 @@ See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), includ
 - [How it works](#how-it-works)
 - [Use it](#use-it)
 - [What you get](#what-you-get)
-- [Checks and the publish gate](#checks-and-the-publish-gate)
+- [Checks and reminders](#checks-and-reminders)
 - [What stays in sync](#what-stays-in-sync)
 - [Data flow and privacy](#data-flow-and-privacy)
 - [Reference: MCP tools, skills, configuration](#reference)
@@ -47,8 +47,11 @@ Three rules shape everything:
 2. **Anything a program can compute is computed, not guessed.** Contrast ratios and fixes, CSS output, font loading,
    the DESIGN.md YAML, and rename follow-through are deterministic code in `engine/`. Claude writes the parts that
    need judgement: values, prose, components.
-3. **Tokens are the single source of truth.** Components use semantic token names only (`bg-primary`,
-   `text-muted-foreground`), so the same components render every brand in light and dark.
+3. **Tokens are the single source of truth, in layers.** The **palette** at the bottom is Tailwind's colors, radius
+   and shadow scales, plus colors you add (one color becomes a 50–950 scale). Semantic **roles** (`primary`,
+   `muted-foreground`, `radius/control`) point at palette steps, per brand and mode. **Component tokens**
+   (`button/default/background`) point at roles, and components use only those. Change a palette step, a role or one
+   component's token, and everything above it follows. You can add your own layers in between.
 
 The chat runs **Claude Code** on your computer, once per message, with the Plinth plugin loaded. Only Plinth's
 tools and read-only file tools (`Read`, `Glob`, `Grep`) are allowed; `Write`, `Edit` and `Bash` are disallowed.
@@ -144,9 +147,13 @@ The folder becomes a normal git repository that you own. It contains no Plinth c
 
 ```
 my-design-system/
-├── tokens/base.tokens.json        shared scales: radius, fonts, typography, shadows, motion (DTCG)
+├── tokens/
+│   ├── primitives.tokens.json     the palette: Tailwind's colors, radius and shadow scales, plus added colors
+│   ├── base.tokens.json           shared roles: radius roles, fonts, typography, elevation, motion
+│   ├── components/<name>.tokens.json   each component's tokens, pointing at roles
+│   └── layers/<id>.tokens.json    layers you add between the others (optional)
 ├── brands/<id>/
-│   ├── tokens.json                the brand's semantic colors, light and dark (DTCG)
+│   ├── tokens.json                the brand's color roles, light and dark, pointing at the palette
 │   └── DESIGN.md                  the brand's style, intent, do's and don'ts
 ├── DESIGN.md                      guidelines shared by all brands
 ├── WRITING.md                     voice, tone, interface copy rules, terminology
@@ -174,15 +181,20 @@ my-design-system/
 - `.ds/` holds Plinth's working state: pending changes, chat history, attached images. It is gitignored and never
   pushed.
 
-## Checks and the publish gate
+## Checks and reminders
+
+Design findings are reminders: shown in the proposal preview and in Checks, listed at publish, never blocking.
+What blocks is what would break: a token reference to nothing (the styles would break), type errors, and failing
+interaction tests.
 
 | Check | When | Blocks publish | Fix |
 |---|---|---|---|
-| Token consistency: every brand defines the same names, aliases resolve | every change | yes | ask Claude |
-| WCAG AA contrast (4.5:1) for every `X` / `X-foreground` pair, `foreground` and `muted-foreground` on `background`, in every brand × mode | every change, and in the proposal preview | yes | **Propose fixes**: moves the foreground's OKLCH lightness, keeps the hue |
-| No hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change | yes | ask Claude |
-| Look-alike roles: primary, destructive, success, warning and info too close (ΔE_OK < 0.08 or < 20° of hue) | every change, and in the preview | **no**, advisory | move one, or mark the pair as intended |
-| TypeScript and every story's interaction + accessibility tests (Vitest browser mode, axe) | **Run tests**, publish, GitHub Actions | yes | ask Claude |
+| Token references: aliases resolve, no cycles, every brand defines the same names | every change | **yes** | ask Claude |
+| WCAG AA contrast (4.5:1) for every `X` / `X-foreground` and `…-background` / `…-foreground` pair, text on the page, translucent component surfaces composited over the page, in every brand × mode | every change, preview | no | **Propose fixes**: a role on the palette moves to another step of the same hue; a fixed value moves its lightness. The palette itself is never edited |
+| Layers: a token pointing at a higher layer; a role with a fixed value instead of a palette step | every change | no | **Link colors to the palette** (closest visually identical step) |
+| Look-alike roles: primary, destructive, success, warning and info too close (ΔE_OK < 0.08 or < 20° of hue) | every change, preview | no | move one, or mark the pair as intended |
+| Hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change | no | ask Claude |
+| TypeScript and every story's interaction tests (Vitest browser mode); accessibility (axe) reported as warnings | **Run tests**, publish, GitHub Actions | interaction and types: **yes** | ask Claude |
 
 Only text-on-surface pairs are checked for contrast; borders, rings and shadows are decorative and are not. When
 a pair is decorative in your product, or you accept a finding on purpose, **Accept** it in Checks with a reason.
@@ -228,6 +240,8 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `get_tokens`, `get_guidelines`, `list_components` | Read the system (per brand) |
 | `propose_change` | Queue ops (`set`, `delete`, `rename`, `write`) with a preview; nothing is written |
 | `list_pending_changes`, `apply_change`, `discard_change` | Review queue |
+| `propose_palette_color` | Add a color to the palette as a 50–950 scale |
+| `propose_upgrade`, `propose_link_to_palette` | Move a design system made before layers onto them; point fixed colors at the palette |
 | `run_checks`, `propose_contrast_fixes` | Deterministic checks; computed contrast fixes as a proposal |
 | `run_tests` | Typecheck and story tests in the workspace |
 | `list_versions`, `restore_version` | History; a restore is a new commit |

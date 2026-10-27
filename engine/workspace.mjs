@@ -16,7 +16,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const TEMPLATE_DIR = resolve(here, "..", "template");
 
 // Files a change may touch. Anything else is refused.
-const EDITABLE = [/^tokens\/[^/]+\.json$/, /^brands\/[a-z0-9-]+\/(tokens\.json|DESIGN\.md|WRITING\.md)$/, /^(DESIGN|WRITING)\.md$/, /^design-system\.json$/, /^src\/components\/[a-z0-9-]+\/[^/]+$/];
+const EDITABLE = [/^tokens\/(components\/|layers\/)?[^/]+\.json$/, /^brands\/[a-z0-9-]+\/(tokens\.json|DESIGN\.md|WRITING\.md)$/, /^(DESIGN|WRITING)\.md$/, /^design-system\.json$/, /^src\/components\/[a-z0-9-]+\/[^/]+$/];
 
 // ---------------- git ----------------
 export function git(root, args, opts = {}) {
@@ -38,7 +38,7 @@ export function gitCommit(root, message, paths = null) {
 }
 
 /** Paths regenerate writes: committed together with the change that caused them. */
-export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md"];
+export const GENERATED = ["src/styles/tokens.css", "src/styles/fonts.css", "src/foundations", ".github/workflows/storybook.yml", ".storybook/preview.tsx", ".claude/settings.json", "CLAUDE.md", "src/index.css"];
 
 export function versions(root, limit = 50) {
   if (!existsSync(join(root, ".git"))) return [];
@@ -175,6 +175,8 @@ export function regenerate(root) {
 
 /** Files that belong to Plinth, not to the user's design: kept identical to the template. */
 const MANAGED = [".github/workflows/storybook.yml", ".storybook/preview.tsx", "src/foundations", ".claude/settings.json", "CLAUDE.md"];
+// Only for layered workspaces: older ones derive their radius scale in index.css, which the upgrade replaces.
+const MANAGED_LAYERED = ["src/index.css"];
 export function syncManaged(root, templateDir = TEMPLATE_DIR) {
   const changed = [];
   const syncFile = (rel) => {
@@ -191,7 +193,9 @@ export function syncManaged(root, templateDir = TEMPLATE_DIR) {
     if (statSync(abs).isDirectory()) for (const n of readdirSync(abs)) walk(`${rel}/${n}`);
     else if (!rel.endsWith(".generated.json")) syncFile(rel);
   };
-  for (const rel of MANAGED) walk(rel);
+  let layered = false;
+  try { layered = Array.isArray(loadConfig(root).layers); } catch { /* no workspace yet */ }
+  for (const rel of [...MANAGED, ...(layered ? MANAGED_LAYERED : [])]) walk(rel);
   return changed;
 }
 
@@ -210,15 +214,16 @@ export function writeFoundationsData(root, config = loadConfig(root)) {
       name: (config.brands ?? []).find((b) => (b.id ?? b) === id)?.name ?? id,
       modes: r.modes.map(modeName),
       tokens: r.tokens.filter((t) => !t.derived).map((t) => ({
-        name: t.name, path: t.key, group: t.path[0], type: t.type, description: t.description || undefined,
-        values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [modeName(m), { raw: v.raw, css: v.css, resolved: v.resolved }])),
+        name: t.name, path: t.key, group: t.path[0], type: t.type, description: t.description || undefined, layer: t.layerId ?? null, refs: t.refs ?? [],
+        values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [modeName(m), { raw: v.raw, css: v.css, resolved: v.resolved, alpha: v.alpha ?? 1 }])),
       })),
       contrast: contrast.filter((c) => c.brand === id).map((c) => ({ mode: modeName(c.mode), bg: c.bg, fg: c.fg, ratio: c.ratio, min: c.min, pass: c.pass, accepted: Boolean(acceptedBy(exceptions, "contrast", c)) })),
     };
   }
   const out = join(root, "src", "foundations", "tokens.generated.json");
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, JSON.stringify({ name: config.name, context: config.context, defaultBrand: config.defaultBrand ?? listBrands(root, config)[0], brands }, null, 2) + "\n");
+  const layers = (config.layers ?? []).map(({ id, name }) => ({ id, name: name ?? id }));
+  writeFileSync(out, JSON.stringify({ name: config.name, context: config.context, defaultBrand: config.defaultBrand ?? listBrands(root, config)[0], layers, brands }, null, 2) + "\n");
 }
 
 // ---------------- token file editing ----------------
@@ -279,7 +284,9 @@ function applyOp(root, op, files) {
       const to = `{${op.to.replace(/\//g, ".")}}`;
       for (const f of tokenFiles(root)) {
         const t = files.get(f) ?? JSON.parse(readFileSync(join(root, f), "utf8"));
-        files.set(f, JSON.parse(JSON.stringify(t).replace(from, to)));
+        const before = JSON.stringify(t), after = before.replace(from, to);
+        // Only files whose references change belong to this change.
+        if (after !== before || files.has(f)) files.set(f, JSON.parse(after));
       }
       renameInComponents(root, op.path, op.to, node.$type, files);
       break;
@@ -326,6 +333,10 @@ function renameInComponents(root, fromPath, toPath, type, files) {
 export function tokenFiles(root) {
   const out = [];
   if (existsSync(join(root, "tokens"))) for (const f of readdirSync(join(root, "tokens"))) if (f.endsWith(".json")) out.push(`tokens/${f}`);
+  for (const sub of ["components", "layers"]) {
+    const dir = join(root, "tokens", sub);
+    if (existsSync(dir)) for (const f of readdirSync(dir)) if (f.endsWith(".json")) out.push(`tokens/${sub}/${f}`);
+  }
   if (existsSync(join(root, "brands"))) for (const b of readdirSync(join(root, "brands"))) if (existsSync(join(root, "brands", b, "tokens.json"))) out.push(`brands/${b}/tokens.json`);
   return out;
 }
@@ -353,15 +364,21 @@ function savePending(root, list) {
  * role colors that would stop being distinguishable, and guideline prose that still names the old hue.
  * Throws on invalid ops.
  */
-export function previewOps(root, ops) {
-  const files = new Map();
-  for (const op of ops) applyOp(root, op, files);
+export function previewOps(root, ops, prior = []) {
   const scratch = mkdtempSync(join(tmpdir(), "ds-preview-"));
   try {
-    for (const f of ["design-system.json", "tokens", "brands", "src/components"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
+    for (const f of ["design-system.json", "tokens", "brands", "src/components", "DESIGN.md"]) if (existsSync(join(root, f))) { if (statSync(join(root, f)).isDirectory()) copyDir(join(root, f), join(scratch, f)); else copyFileSync(join(root, f), join(scratch, f)); }
+    // Changes still waiting before this one are assumed applied: a proposal that uses a palette color proposed
+    // just before it is previewed against that color, not against a reference to nothing.
+    const priorFiles = new Map();
+    for (const op of prior) { try { applyOp(scratch, op, priorFiles); } catch { /* a stale earlier change: ignore */ } }
+    writeFiles(scratch, priorFiles);
+    const files = new Map();
+    for (const op of ops) applyOp(scratch, op, files);
+    const exceptions = loadConfig(scratch).exceptions ?? [];
+    const before = checkContrast(scratch);
+    const rolesBefore = roleColors(scratch);
     writeFiles(scratch, files);
-    const exceptions = loadConfig(root).exceptions ?? [];
-    const before = checkContrast(root);
     const after = checkContrast(scratch);
     const prev = new Map(before.map((r) => [exceptionKey.contrast(r), r]));
     const contrastChanges = after
@@ -374,47 +391,54 @@ export function previewOps(root, ops) {
       contrastChanges,
       failingAfter: after.filter((r) => !r.pass && !acceptedBy(exceptions, "contrast", r)).length,
       distinctFailures,
-      notes: proseNotes(root, ops, files),
+      notes: proseNotes(scratch, rolesBefore, roleColors(scratch), files),
       issues,
+      ...(prior.length ? { assumes: "earlier pending changes applied" } : {}),
     };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
 }
 
-/**
- * A color token that moved to another hue family while a DESIGN.md still describes the old one, and this
- * change does not rewrite that file. Claude is expected to add the rewrite to the same change.
- */
-function proseNotes(root, ops, files) {
-  const notes = [];
+/** Resolved light and dark color of every role (not palette, not component tokens), per brand. */
+function roleColors(root) {
   const config = loadConfig(root);
-  for (const op of ops) {
-    if (op.op !== "set" || typeof op.value !== "string") continue;
-    const brandOf = op.file.match(/^brands\/([^/]+)\//)?.[1];
-    const brands = brandOf ? [brandOf] : listBrands(root, config);
-    for (const brand of brands) {
-      const was = resolveBrand(root, brand, config).tokens.find((t) => t.key === op.path);
-      if (!was || was.type !== "color") continue;
-      const mode = !op.mode || op.mode === "light" ? "default" : op.mode;
-      const oldFamily = hueFamily(was.values[mode]?.resolved ?? was.values.default?.resolved);
-      const newFamily = hueFamily(op.value);
-      if (!oldFamily || !newFamily || oldFamily === newFamily) continue;
-      for (const doc of [`brands/${brand}/DESIGN.md`, "DESIGN.md"]) {
-        if (files.has(doc)) continue;
-        for (const m of staleMentions(readText(root, doc), oldFamily, newFamily).slice(0, 3)) {
-          notes.push(`${doc}${m.section ? ` (${m.section})` : ""} still says "${m.word}" but ${was.name} is now ${newFamily}: "${m.line}". Update the prose in this change.`);
-        }
+  const out = new Map();
+  for (const brand of listBrands(root, config)) {
+    for (const t of resolveBrand(root, brand, config).tokens) {
+      if (t.type !== "color" || t.layerId === "primitives" || t.layerId === "components" || t.derived) continue;
+      for (const [mode, v] of Object.entries(t.values)) out.set(`${brand}|${t.key}|${mode}`, { brand, name: t.name, mode, value: v.resolved });
+    }
+  }
+  return out;
+}
+
+/**
+ * A role whose color moved to another hue family (directly, or through the palette step it points at) while a
+ * DESIGN.md still describes the old one, and this change does not rewrite that file. Claude is expected to add
+ * the rewrite to the same change.
+ */
+function proseNotes(root, before, after, files) {
+  const notes = new Set();
+  for (const [key, b] of before) {
+    const a = after.get(key);
+    if (!a || b.mode !== "default") continue; // the light value is what prose describes
+    const oldFamily = hueFamily(b.value), newFamily = hueFamily(a.value);
+    if (!oldFamily || !newFamily || oldFamily === newFamily) continue;
+    for (const doc of [`brands/${b.brand}/DESIGN.md`, "DESIGN.md"]) {
+      if (files.has(doc)) continue;
+      for (const m of staleMentions(readText(root, doc), oldFamily, newFamily).slice(0, 3)) {
+        notes.add(`${doc}${m.section ? ` (${m.section})` : ""} still says "${m.word}" but ${b.name} is now ${newFamily}: "${m.line}". Update the prose in this change.`);
       }
     }
   }
-  return [...new Set(notes)];
+  return [...notes];
 }
 
 /** Queue a change for the user to review. */
 export function propose(root, { title, ops, rationale = "", by = "claude" }) {
   if (!title || !Array.isArray(ops) || !ops.length) throw new Error("a change needs a title and at least one op");
-  const preview = previewOps(root, ops);
+  const preview = previewOps(root, ops, listPending(root).flatMap((c) => c.ops));
   const change = { id: randomUUID().slice(0, 8), title, rationale, by, createdAt: new Date().toISOString(), ops, preview };
   savePending(root, [...listPending(root), change]);
   return change;

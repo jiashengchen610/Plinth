@@ -13,11 +13,13 @@ import { Input } from "@/components/input/input";
 import { Label } from "@/components/label/label";
 import data from "./tokens.generated.json";
 
-type Value = { raw: unknown; css: string | null; resolved: string | null };
-type Token = { name: string; path: string; group: string; type: string; description?: string; values: Record<string, Value> };
+type Value = { raw: unknown; css: string | null; resolved: string | null; alpha?: number };
+type Token = { name: string; path: string; group: string; type: string; description?: string; layer: string | null; refs: string[]; values: Record<string, Value> };
 type Contrast = { mode: string; bg: string; fg: string; ratio: number | null; min: number; pass: boolean; accepted: boolean };
 type Brand = { name: string; modes: string[]; tokens: Token[]; contrast: Contrast[] };
-const foundations = data as unknown as { name: string; context: string; defaultBrand: string; brands: Record<string, Brand> };
+const foundations = data as unknown as { name: string; context: string; defaultBrand: string; layers: { id: string; name: string }[]; brands: Record<string, Brand> };
+/** Semantic roles: everything that is neither the palette nor a component's own token. */
+const isRole = (t: Token) => t.layer !== "primitives" && t.layer !== "components";
 
 // Guidelines are read straight from the repository, so the pages always show the current text.
 const sharedDesign = import.meta.glob("../../DESIGN.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -81,7 +83,7 @@ function ContrastBadge({ c }: { c?: Contrast }) {
 /** Every color: pairs (X with X-foreground) as surfaces with text on them, the rest as swatches. */
 export function ColorPalette() {
   const { brand, mode } = useBrandMode();
-  const colors = brand.tokens.filter((t) => t.type === "color");
+  const colors = brand.tokens.filter((t) => t.type === "color" && isRole(t));
   const names = new Set(colors.map((t) => t.name));
   const pairs = colors.filter((t) => names.has(`${t.name}-foreground`));
   const paired = new Set(pairs.flatMap((t) => [t.name, `${t.name}-foreground`]));
@@ -209,6 +211,74 @@ export function ShapeScale() {
           {motion.map((t) => <code key={t.name} className="text-xs">--{t.name}: {valueIn(t, mode).resolved ?? show(valueIn(t, mode))}</code>)}
         </section>
       )}
+    </Surface>
+  );
+}
+
+// ---------------------------------------------------------------- palette and component tokens
+
+const SHADE_ORDER = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
+const refName = (key: string) => key.split("/").slice(key.startsWith("color/") ? 1 : 0).join("-");
+
+/** The bottom layer: every palette hue as a row of steps, and which semantic roles use each step. */
+export function Palette() {
+  const { brand, mode } = useBrandMode();
+  const palette = brand.tokens.filter((t) => t.layer === "primitives" && t.type === "color");
+  const usedBy = new Map<string, string[]>();
+  for (const t of brand.tokens) if (isRole(t)) for (const r of t.refs) usedBy.set(r, [...(usedBy.get(r) ?? []), t.name]);
+  const hues = [...new Set(palette.map((t) => t.path.split("/")[1]))];
+  if (!palette.length) return <Surface><Note>This design system has no palette layer yet.</Note></Surface>;
+  return (
+    <Surface className="flex flex-col gap-2 overflow-x-auto">
+      <div className="grid min-w-[44rem] grid-cols-[6rem_repeat(11,minmax(0,1fr))] gap-1 text-xs">
+        <span />
+        {SHADE_ORDER.map((s) => <span key={s} className="text-center text-muted-foreground">{s}</span>)}
+        {hues.map((hue) => {
+          const steps = palette.filter((t) => t.path.split("/")[1] === hue);
+          if (steps.length === 1) return null;
+          return [
+            <span key={hue} className="self-center font-medium">{hue}</span>,
+            ...SHADE_ORDER.map((s) => {
+              const t = steps.find((x) => x.path.endsWith(`/${s}`));
+              const users = t ? usedBy.get(t.path) ?? [] : [];
+              return (
+                <div key={`${hue}-${s}`} title={t ? `${hue}-${s}: ${show(valueIn(t, mode))}${users.length ? `\nused by ${users.join(", ")}` : ""}` : ""} className="relative h-9 rounded-md border" style={{ background: t ? `var(--${t.name})` : "transparent" }}>
+                  {users.length > 0 && <span className="absolute inset-x-0 bottom-0.5 text-center text-[10px] font-semibold text-white mix-blend-difference">{users.length}</span>}
+                </div>
+              );
+            }),
+          ];
+        })}
+      </div>
+      <Note>A number on a step: how many semantic roles use it in <strong>{brand.name}</strong> ({mode}). Hover for names.</Note>
+    </Surface>
+  );
+}
+
+/** Each component's own tokens, what they point at, and the color they end up as. */
+export function ComponentTokens() {
+  const { brand, mode } = useBrandMode();
+  const tokens = brand.tokens.filter((t) => t.layer === "components");
+  const components = [...new Set(tokens.map((t) => t.path.split("/")[0]))];
+  if (!tokens.length) return <Surface><Note>This design system has no component tokens yet.</Note></Surface>;
+  return (
+    <Surface className="flex flex-col gap-6">
+      {components.map((c) => (
+        <section key={c} className="flex flex-col gap-2">
+          <h3 className="text-base font-semibold capitalize">{c}</h3>
+          <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_2rem] gap-x-3 gap-y-1.5 text-xs">
+            {tokens.filter((t) => t.path.split("/")[0] === c).map((t) => {
+              const v = valueIn(t, mode);
+              return [
+                <code key={`${t.name}-n`} className="truncate">{t.name}</code>,
+                <code key={`${t.name}-r`} className="truncate text-muted-foreground">{t.refs.length ? `→ ${t.refs.map(refName).join(", ")}${(v?.alpha ?? 1) < 1 ? ` · ${Math.round((v.alpha ?? 1) * 100)}%` : ""}` : show(v)}</code>,
+                t.type === "color" ? <span key={`${t.name}-s`} className="h-4 w-8 rounded border" style={{ background: `var(--${t.name})` }} /> : <span key={`${t.name}-s`} />,
+              ];
+            })}
+          </div>
+        </section>
+      ))}
+      <Note>Change a component's look by pointing its tokens at other roles, or change the role for every component that uses it.</Note>
     </Surface>
   );
 }

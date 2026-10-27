@@ -1,0 +1,10 @@
+{
+  "label": {
+    "$type": "color",
+    "text": {
+      "foreground": {
+        "$value": "{color.foreground}"
+      }
+    }
+  }
+}

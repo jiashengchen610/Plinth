@@ -1,22 +1,46 @@
-// Token engine: loads a workspace's DTCG token files (shared base + one file per brand), resolves
-// aliases per brand and mode, converts values to CSS, and emits one generated stylesheet that
-// supports every brand × mode combination. Also produces the flat token table the UI and the
-// MCP tools use. Zero dependencies.
+// Token engine: loads a workspace's DTCG token files layer by layer, resolves aliases per brand and mode,
+// converts values to CSS, and emits one generated stylesheet that supports every brand × mode combination.
+// Also produces the flat token table the UI and the MCP tools use. Zero dependencies.
 //
-// Files (relative to the workspace root):
-//   tokens/base.tokens.json        shared tokens (scales, motion, shadows, fonts …)
-//   brands/<brand>/tokens.json     per-brand semantic tokens; brand values override base on the same path
-// Modes: a token's $value is the default (light) mode; other modes live in
-//   $extensions.plinth.modes.<mode>
+// Layers (design-system.json → layers, bottom to top; a token should reference its own layer or lower ones):
+//   primitives   tokens/primitives.tokens.json            Tailwind's palette, radius and shadow scales, added colors
+//   semantic     tokens/base.tokens.json, brands/<brand>/tokens.json   roles; the brand file overrides base
+//   …            tokens/layers/<id>.tokens.json           layers the user adds, anywhere in the order
+//   components   tokens/components/*.tokens.json          what each component uses
+// Workspaces without `layers` (made before layers existed) have one layer: base + brand.
+// Modes: a token's $value is the default (light) mode; other modes live in $extensions.plinth.modes.<mode>.
+// Transparency: $extensions.plinth.alpha (0..1, or { default, <mode> }) draws a color token at that opacity,
+//   so "destructive at 10%" stays an alias of destructive.
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { parseColor, rgbToOklch, formatOklch } from "./color.mjs";
+
+export const LEGACY_LAYERS = [{ id: "semantic", name: "Semantic", files: ["tokens/base.tokens.json", "brands/{brand}/tokens.json"] }];
+export const layersOf = (config) => (Array.isArray(config.layers) && config.layers.length ? config.layers : LEGACY_LAYERS);
+
+/** Token files of one brand, bottom layer first: [{ rel, layer, layerId }]. Patterns: {brand}, and * in a file name. */
+export function layerFiles(root, config, brand) {
+  const out = [];
+  layersOf(config).forEach((layer, i) => {
+    for (const pattern of layer.files ?? []) {
+      const rel = pattern.replace("{brand}", brand);
+      if (rel.includes("*")) {
+        const dir = rel.slice(0, rel.lastIndexOf("/"));
+        const suffix = rel.slice(rel.lastIndexOf("*") + 1);
+        if (!existsSync(join(root, dir))) continue;
+        for (const f of readdirSync(join(root, dir)).filter((n) => n.endsWith(suffix)).sort()) out.push({ rel: `${dir}/${f}`, layer: i, layerId: layer.id });
+      } else if (existsSync(join(root, rel))) out.push({ rel, layer: i, layerId: layer.id });
+    }
+  });
+  return out;
+}
 
 const WEIGHTS = { thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300, normal: 400, regular: 400, book: 400, medium: 500, semibold: 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, black: 900, heavy: 900 };
 export const STRIP_GROUPS = new Set(["color", "colors", "semantic", "tokens"]);
 // Groups that coincide with Tailwind v4 theme namespaces: the base variable gets the group as a
 // suffix (--card-shadow) so the generated @theme entry (--shadow-card: var(--card-shadow)) is not circular.
-const SUFFIX_GROUPS = { shadow: "shadow", shadows: "shadow", elevation: "shadow", ease: "ease", easing: "ease", blur: "blur", font: "font", fonts: "font", typography: "font" };
+const SUFFIX_GROUPS = { shadow: "shadow", shadows: "shadow", elevation: "shadow", radius: "radius", ease: "ease", easing: "ease", blur: "blur", font: "font", fonts: "font", typography: "font" };
 
 const slug = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const isAlias = (v) => typeof v === "string" && /^\{[^}]+\}$/.test(v.trim());
@@ -38,25 +62,39 @@ export function listBrands(root, config = loadConfig(root)) {
 }
 
 // ---------- flatten ----------
-function flatten(tree, source, out, path = [], inheritedType) {
+function flatten(tree, source, out, path = [], inheritedType, layer = { layer: 0, layerId: "semantic" }) {
   if (!tree || typeof tree !== "object" || Array.isArray(tree)) return;
   const groupType = tree.$type ?? inheritedType;
   if ("$value" in tree) {
     const key = path.join("/");
     const ds = tree.$extensions?.plinth ?? {};
     const t = {
-      path, key, source,
+      path, key, source, layer: layer.layer, layerId: layer.layerId,
       type: tree.$type ?? groupType ?? inferType(path, tree.$value),
       description: tree.$description ?? "",
       values: { default: tree.$value, ...(ds.modes ?? {}) },
+      alpha: ds.alpha ?? null,
       deprecated: Boolean(tree.$deprecated),
     };
     out.set(key, t);
     if (t.type === "typography" && tree.$value && typeof tree.$value === "object") expandTypography(t, out);
     return;
   }
-  for (const [k, v] of Object.entries(tree)) if (!k.startsWith("$")) flatten(v, source, out, [...path, k], groupType);
+  for (const [k, v] of Object.entries(tree)) if (!k.startsWith("$")) flatten(v, source, out, [...path, k], groupType, layer);
 }
+
+/** Opacity of a token in a mode: $extensions.plinth.alpha as a number, or per mode. 1 when unset. */
+const alphaIn = (t, mode) => {
+  const a = t.alpha;
+  if (a === null || a === undefined) return 1;
+  if (typeof a === "number") return a;
+  return a[mode] ?? a.default ?? 1;
+};
+/** A resolved color at an opacity, as oklch with alpha (what contrast checks composite over the page). */
+const withAlpha = (resolved, alpha) => {
+  const rgb = parseColor(resolved);
+  return rgb ? formatOklch({ ...rgbToOklch(rgb), alpha: (rgb.alpha ?? 1) * alpha }) : resolved;
+};
 
 function expandTypography(t, out) {
   const parts = { "font-family": ["fontFamily", "fontFamily"], "font-size": ["fontSize", "dimension"], "font-weight": ["fontWeight", "fontWeight"], "line-height": ["lineHeight", null], "letter-spacing": ["letterSpacing", "dimension"] };
@@ -65,7 +103,7 @@ function expandTypography(t, out) {
     for (const [mode, v] of Object.entries(t.values)) if (v && typeof v === "object" && v[prop] !== undefined) values[mode] = v[prop];
     if (!Object.keys(values).length) continue;
     const lh = values.default;
-    out.set(`${t.key}/${suffix}`, { path: [...t.path, suffix], key: `${t.key}/${suffix}`, source: t.source, type: type ?? (typeof lh === "object" ? "dimension" : "number"), description: "", values, derived: true });
+    out.set(`${t.key}/${suffix}`, { path: [...t.path, suffix], key: `${t.key}/${suffix}`, source: t.source, layer: t.layer, layerId: t.layerId, type: type ?? (typeof lh === "object" ? "dimension" : "number"), description: "", values, derived: true });
   }
 }
 
@@ -149,16 +187,14 @@ function literal(value, type, ref) {
 
 // ---------- resolve one brand ----------
 /**
- * Load base + brand tokens and resolve every token for every mode.
- * @returns {{ brand, modes: string[], tokens: Array<{key,name,type,description,source,derived?,deprecated?,values:{[mode]:{raw,css,resolved}}}>, issues: string[] }}
+ * Load every layer's tokens for one brand (later files override earlier ones on the same path) and resolve every
+ * token for every mode.
+ * @returns {{ brand, modes: string[], layers: Array<{id,name}>, tokens: Array<{key,name,type,description,source,layer,layerId,refs,derived?,deprecated?,values:{[mode]:{raw,css,resolved,alpha}}}>, issues: string[] }}
  */
 export function resolveBrand(root, brand, config = loadConfig(root)) {
   const map = new Map();
-  const base = join(root, "tokens", "base.tokens.json");
-  if (existsSync(base)) flatten(readJson(base), "base", map);
-  const brandFile = join(root, "brands", brand, "tokens.json");
-  if (!existsSync(brandFile)) throw new Error(`brand "${brand}" has no tokens.json`);
-  flatten(readJson(brandFile), `brands/${brand}`, map);
+  if (!existsSync(join(root, "brands", brand, "tokens.json"))) throw new Error(`brand "${brand}" has no tokens.json`);
+  for (const f of layerFiles(root, config, brand)) flatten(readJson(join(root, f.rel)), f.rel, map, [], undefined, f);
 
   const issues = [];
   const byKey = map;
@@ -178,6 +214,15 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
     if (!target) { issues.push(`unresolved alias ${t.key} → ${v}`); return undefined; }
     if (seen.has(target.key)) { issues.push(`alias cycle at ${t.key}`); return undefined; }
     return resolveRaw(target, mode, new Set([...seen, t.key]));
+  };
+  // Opacity multiplies along an alias chain: "hover at 80%" of "destructive at 10%" is 8%.
+  const alphaChain = (t, mode, seen = new Set()) => {
+    const own = alphaIn(t, mode);
+    const v = valueIn(t, mode);
+    if (!isAlias(v)) return own;
+    const target = targetOf(v);
+    if (!target || seen.has(target.key)) return own;
+    return own * alphaChain(target, mode, new Set([...seen, t.key]));
   };
   // Reference inside a composite: emit var() so the cascade follows brand/mode; resolve for previews.
   const refCss = (v, type) => {
@@ -203,10 +248,17 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
         css = literal(v, t.type, refCss);
         if (css === null) issues.push(`${t.key}: ${t.type} value is not emitted (unknown composite)`);
       }
-      const resolved = resolveRaw(t, mode);
-      values[mode] = { raw: v, css, resolved: resolved === undefined ? null : literal(resolved, t.type, refCss) };
+      const own = t.type === "color" ? alphaIn(t, mode) : 1;
+      if (css !== null && own < 1) css = `color-mix(in oklab, ${css} ${Number((own * 100).toFixed(2))}%, transparent)`;
+      const raw = resolveRaw(t, mode);
+      let resolved = raw === undefined ? null : literal(raw, t.type, refCss);
+      const alpha = t.type === "color" ? alphaChain(t, mode) : 1;
+      if (resolved !== null && alpha < 1) resolved = withAlpha(resolved, alpha);
+      values[mode] = { raw: v, css, resolved, alpha };
     }
-    return { key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, derived: t.derived, deprecated: t.deprecated, values };
+    const first = valueIn(t, "default");
+    const refs = [...new Set(Object.values(t.values).filter(isAlias).map((v) => targetOf(v)?.key).filter(Boolean))];
+    return { key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, layer: t.layer, layerId: t.layerId, refs, linked: isAlias(first), derived: t.derived, deprecated: t.deprecated, values };
   });
 
   const seen = new Map();
@@ -214,7 +266,7 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
     if (seen.has(t.name) && seen.get(t.name) !== t.key) issues.push(`name collision: --${t.name} from ${seen.get(t.name)} and ${t.key}`);
     seen.set(t.name, t.key);
   }
-  return { brand, modes, tokens, issues: [...new Set(issues)] };
+  return { brand, modes, layers: layersOf(config).map(({ id, name }) => ({ id, name: name ?? id })), tokens, issues: [...new Set(issues)] };
 }
 
 // ---------- Tailwind v4 @theme entries ----------
@@ -262,10 +314,16 @@ export function buildCss(root, config = loadConfig(root)) {
     issues.push(...r.issues.map((x) => `[${r.brand}] ${x}`));
   });
 
+  // The palette is the same for every brand and mode: declare it once.
+  const constant = (t) => t.layerId === "primitives" && Object.values(t.values).every((v) => v.css === t.values.default?.css);
+  const palette = resolved[0].tokens.filter((t) => constant(t) && t.values.default?.css !== null).map((t) => `  --${t.name}: ${t.values.default.css};`).sort();
+  if (palette.length) out.push(":root {", ...palette, "}", "");
+
   for (const r of resolved) {
     const isDefault = r.brand === defaultBrand;
     const otherModes = r.modes.filter((m) => m !== "default");
     const block = (mode) => r.tokens
+      .filter((t) => !constant(t))
       .map((t) => {
         // A mode without its own value repeats the default so another brand's dark value never leaks in.
         const v = t.values[mode] ?? t.values.default;

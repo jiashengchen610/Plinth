@@ -102,9 +102,9 @@ export default function App() {
   }
 
   const gate = state.checks.gate;
-  // Blocking findings only; look-alike roles are advisory and shown inside Checks.
-  const failing = (state.checks.summary.contrast?.failing ?? 0) + (state.checks.summary.hardcoded?.count ?? 0) + state.checks.tokenIssues.length;
-  const advisories = state.checks.summary.distinct?.failing ?? 0;
+  // Only broken token references block publishing; everything else is a reminder.
+  const failing = state.checks.tokenIssues.length;
+  const advisories = (state.checks.warnings ?? []).reduce((n, w) => n + w.count, 0);
   const deps = state.deps;
 
   return (
@@ -127,7 +127,7 @@ export default function App() {
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setTab("checks")} className="rounded-full">
-            <Badge variant={gate ? "secondary" : "destructive"}>{gate ? "Checks pass" : `${failing} check${failing === 1 ? "" : "s"} failing`}</Badge>
+            <Badge variant={!gate ? "destructive" : advisories ? "warning" : "secondary"}>{!gate ? `${failing} token problem${failing === 1 ? "" : "s"}` : advisories ? `${advisories} reminder${advisories === 1 ? "" : "s"}` : "No reminders"}</Badge>
           </button>
           {state.publish.running && <Badge variant="outline">Publishing…</Badge>}
           <Button size="sm" onClick={() => setPublishing(true)} disabled={state.publish.running}>Publish</Button>
@@ -140,6 +140,13 @@ export default function App() {
             {deps.installing ? "Installing dependencies (Storybook, the test browser)… a few minutes." : deps.error ? `Dependency install failed: ${deps.error}` : "Dependencies are not installed yet. Component previews and tests need them."}
           </span>
           {!deps.installing && <Button size="sm" variant="outline" onClick={() => act(() => api.install(), "Installing dependencies.")} disabled={busy}>{deps.error ? "Retry install" : "Install dependencies"}</Button>}
+        </div>
+      )}
+
+      {state.upgradeAvailable && (
+        <div role="status" className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info/50 bg-info/10 px-4 py-3 text-sm sm:mx-6">
+          <span className="min-w-0"><strong>Upgrade available: layered tokens.</strong> Adds Tailwind's palette at the bottom and component tokens on top, so you can change one component or one role without touching code. Your colors keep their values; edited components are left as they are.</span>
+          <Button size="sm" onClick={() => act(async () => { await api.upgrade(); setTab("changes"); }, "Upgrade proposed. Review it in Changes.")} disabled={busy}>Review the upgrade</Button>
         </div>
       )}
 
@@ -160,7 +167,7 @@ export default function App() {
             <TabsTrigger value="components">Components</TabsTrigger>
             <TabsTrigger value="guidelines">Guidelines</TabsTrigger>
             <TabsTrigger value="changes">Changes{state.pending.length ? ` (${state.pending.length})` : ""}</TabsTrigger>
-            <TabsTrigger value="checks">Checks{failing ? ` (${failing})` : advisories ? ` (${advisories} to look at)` : ""}</TabsTrigger>
+            <TabsTrigger value="checks">Checks{failing ? ` (${failing})` : advisories ? ` (${advisories})` : ""}</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <TabsContent value="chat" className="lg:hidden">

@@ -25,18 +25,25 @@ Use `propose_change` with a short imperative `title` (it becomes the version nam
 
 | Request | Ops |
 |---|---|
-| Change a value | `set` on the token's file and path; add `mode: "dark"` for the dark value. Change both modes unless asked otherwise. |
-| New token | `set` with `type` (and `description`), in **every** brand file: brands must define the same token names. Semantic names follow shadcn (`X` + `X-foreground`). |
+| Change a role (primary, muted …) | `set` it to another palette step, e.g. `{color.red.800}`; add `mode: "dark"` for the dark value. Change both modes unless asked otherwise. |
+| A color that is not in the palette | `propose_palette_color` (name + color → a 50–950 scale), then point roles at it |
+| Change one component only | `set` its component token in `tokens/components/<component>.tokens.json` (e.g. `button/default/background` → `{color.accent}`); opacity via `$extensions.plinth.alpha` |
+| Change every component that uses a role | change the role, not the component tokens |
+| A new layer between two others | `write` `tokens/layers/<id>.tokens.json` and `design-system.json` with the layer inserted in `layers`; tokens should point at their own layer or lower ones |
+| Old design system without layers | `propose_upgrade`; afterwards `propose_link_to_palette` points fixed colors at the matching palette step |
+| New role | `set` with `type` (and `description`), in **every** brand file: brands must define the same token names. Semantic names follow shadcn (`X` + `X-foreground`). |
 | Rename / regroup | `rename` with `path` and `to`. Aliases in token files and utilities in components (`bg-old` → `bg-new`) are rewritten; the preview lists the component files touched. |
 | Remove | `delete`; first check no component or alias uses it. |
 | Change a font | `set` `font/sans` and the `fontFamily` of each `typography/*` token to the Google Fonts family name. The loader (`src/styles/fonts.css`) regenerates on apply; nothing else to do. |
 | Guidelines | `write` the whole file (`DESIGN.md`, `brands/<id>/DESIGN.md`, `WRITING.md`). Keep sections in DESIGN.md order: Overview, Colors, Typography, Layout, Elevation & Depth, Shapes, Components, Do's and Don'ts. |
 | New brand | `write` `brands/<id>/tokens.json` (copy an existing brand's structure: every token name, both modes), `write` `brands/<id>/DESIGN.md`, and `write` `design-system.json` with the brand appended to `brands`. |
-| Fix contrast | `propose_contrast_fixes` (deterministic; keeps hue, moves lightness). |
+| Fix contrast | `propose_contrast_fixes` (deterministic: a role on the palette moves to another step of the same hue; a fixed value keeps its hue and moves its lightness; the palette itself is never edited). |
 | Two roles look alike | Decide with the user which role moves (usually the status color returns to its hue family: destructive red, success green, warning amber, info blue), then `set` it. |
 
 Read the proposal's preview before telling the user about it:
 
+- Everything in the preview is a reminder: nothing blocks applying or publishing except a broken reference
+  (`issues`). Tell the user what it found and let them decide.
 - `failingAfter` > 0: say which pairs fail and either adjust or plan `propose_contrast_fixes`.
 - `distinctFailures`: two role colors would look alike; adjust one, or explain and let the user accept an exception
   in the Checks tab.
@@ -64,7 +71,8 @@ itself be undone. It waits while there are outside edits.
 
 ## Rules
 
-- Values: colors as `oklch(L C H)`; dimensions as `{ "value": n, "unit": "rem" }`.
+- Values: roles and component tokens are references (`{color.red.700}`, `{radius.lg}`); only the palette holds
+  fixed values (colors as `oklch(L C H)`, dimensions as `{ "value": n, "unit": "rem" }`).
 - Brands share token names; only values differ. Components never reference a brand directly.
 - A request that would break the guidelines (e.g. a 2:1 contrast) is proposed only with the conflict stated, and the
   user decides; accepted exceptions are recorded in `design-system.json` and shown at publish.

@@ -11,8 +11,10 @@ import { BrandSummary, Showcase, meta } from "./blocks";
 
 ## What is here
 
-- **Foundations**: the design tokens (colors, typography, shape, elevation, motion) and the design and writing
-  guidelines. Every value comes from the token files in this repository.
+- **Foundations**: the design tokens in three layers. The **palette** (Tailwind CSS's colors, plus any you add) at
+  the bottom; semantic **roles** (Colors, Typography, Shape) that point at it; **component tokens** on top that point
+  at the roles. Every value comes from the token files in this repository.
+- **Guidelines**: the design and writing guidelines.
 - **Components**: every component with one story per variant and state, its props, and its accessibility tests.
 
 Switch the **brand** and **light / dark** mode in the toolbar: everything on these pages follows.

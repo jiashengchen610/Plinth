@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { api, exceptionKey, type CheckName, type ContrastResult, type DistinctResult, type Hardcoded, type State } from "@/lib/api";
+import { api, exceptionKey, type CheckName, type ContrastResult, type DistinctResult, type Hardcoded, type State, type StructureResult } from "@/lib/api";
 import { ratioLabel, timeAgo } from "@/lib/format";
 
 type Props = {
@@ -69,16 +69,17 @@ export function ChecksView({ state, busy, onFixContrast, onRunTests, onInstall, 
   const contrast = c.contrast.filter((r) => !r.pass && !r.accepted);
   const distinct = c.distinct.filter((r) => !r.pass && !r.accepted);
   const hardcoded = c.hardcoded.filter((f) => !f.accepted);
+  const structure = (c.structure ?? []).filter((r) => !r.accepted);
   const tests = state.tests;
   const t = tests.last;
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Contrast, hardcoded values and token consistency block publishing until they pass; look-alike roles are advisory. Where the program can fix something it offers a fix; otherwise ask Claude in the chat, or accept the finding as a recorded exception.
+        Design findings are reminders: they never stop publishing. Only a broken token reference (a token pointing at nothing) does, because the styles would break. Where the program can fix something it offers a fix; otherwise ask Claude, or mark the finding as intended.
       </p>
 
-      <Section title="Contrast" ok={contrast.length === 0} count={`${c.summary.contrast?.failing ?? 0} failing · ${c.summary.contrast?.accepted ?? 0} accepted · ${c.contrast.length} pairs`}
+      <Section title="Contrast" advisory ok={contrast.length === 0} count={`${c.summary.contrast?.failing ?? 0} failing · ${c.summary.contrast?.accepted ?? 0} accepted · ${c.contrast.length} pairs`}
         action={contrast.length > 0 ? <Button size="sm" onClick={onFixContrast} disabled={busy}>Propose fixes</Button> : undefined}>
         {contrast.length > 0 && (
           <ul className="mt-3 divide-y">
@@ -104,7 +105,20 @@ export function ChecksView({ state, busy, onFixContrast, onRunTests, onInstall, 
         ) : <p className="mt-2 text-sm text-muted-foreground">Primary, destructive and status colors can be told apart in every brand and mode.</p>}
       </Section>
 
-      <Section title="Hardcoded values" ok={hardcoded.length === 0} count={`${hardcoded.length} in components`}>
+      <Section title="Layers" advisory ok={structure.length === 0} count={`${structure.length} to look at`}
+        action={structure.some((s) => s.kind === "unlinked") ? <Button size="sm" onClick={() => api.linkPalette().then(onChanged).catch((e) => onError((e as Error).message))} disabled={busy}>Link colors to the palette</Button> : undefined}>
+        {state.layers ? (
+          structure.length > 0 ? (
+            <ul className="mt-1 divide-y">
+              {structure.slice(0, 40).map((r: StructureResult) => (
+                <Failing key={exceptionKey.structure(r)} check="structure" keyOf={exceptionKey.structure(r)} title={r.kind === "unlinked" ? "Not on the palette" : "Points up a layer"} detail={`${r.detail} · ${r.brand}`} acceptLabel="Intended" onDone={onChanged} onError={onError} />
+              ))}
+            </ul>
+          ) : <p className="mt-2 text-sm text-muted-foreground">Every role points at the palette and every component token at a role.</p>
+        ) : <p className="mt-2 text-sm text-muted-foreground">This design system has no layers yet. Use the upgrade banner at the top of the page.</p>}
+      </Section>
+
+      <Section title="Hardcoded values" advisory ok={hardcoded.length === 0} count={`${hardcoded.length} in components`}>
         {hardcoded.length > 0 ? (
           <>
             <p className="mt-2 text-sm text-muted-foreground">Components must use tokens. Ask Claude to replace these with theme utilities, or accept a deliberate exception.</p>

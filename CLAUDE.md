@@ -10,9 +10,12 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - Node 24 / Windows aborts the process without an error in two cases we hit: `process.exit()` right after `fetch`, and
   `fs.cpSync` into an existing folder directly under a drive root (`D:\demo`). So: no `fetch` in `server/` (use
   `httpJson`), no `cpSync` (use `copyDir`; a test enforces it), and verify through an npx install in a `D:\` folder.
-- Anything the model could guess but a program can compute (contrast, CSS output, YAML) is computed in `engine/`.
+- Anything the model could guess but a program can compute (contrast, CSS output, YAML, palette scales, contrast fixes)
+  is computed in `engine/`.
+- Tokens are layered (design-system.json → layers): palette (Tailwind, regenerate with `scripts/tailwind-primitives.mjs`),
+  roles, component tokens. Template components use only component tokens. Fixes never edit the palette.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
-- After changing `engine/` or `server/`, run `npm test` (12 tests).
+- After changing `engine/` or `server/`, run `npm test` (18 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (42 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the

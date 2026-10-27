@@ -87,13 +87,16 @@ export function parseColor(value) {
     const n = (i) => parseInt(hex.slice(i, i + 2), 16) / 255;
     return { r: n(0), g: n(2), b: n(4), alpha: hex.length === 8 ? n(6) : 1 };
   }
-  m = s.match(new RegExp(`^oklch\\(\\s*${NUM}(%?)\\s+${NUM}\\s+${NUM}(?:deg)?\\s*(?:/\\s*${NUM}(%?))?\\s*\\)$`));
+  // CSS allows `none` for a missing component (Tailwind writes greys as oklch(20.5% 0 none)); it counts as 0.
+  const NUM_OR_NONE = `(${NUM.slice(1, -1)}|none)`;
+  m = s.match(new RegExp(`^oklch\\(\\s*${NUM}(%?)\\s+${NUM_OR_NONE}\\s+${NUM_OR_NONE}(?:deg)?\\s*(?:/\\s*${NUM}(%?))?\\s*\\)$`));
   if (m) {
     let l = Number(m[1]);
     if (m[2] === "%" || l > 1.5) l /= 100;
     let alpha = m[5] !== undefined ? Number(m[5]) : 1;
     if (m[6] === "%") alpha /= 100;
-    return oklchToRgb({ l, c: Number(m[3]), h: Number(m[4]), alpha });
+    const num = (x) => (x === "none" ? 0 : Number(x));
+    return oklchToRgb({ l, c: num(m[3]), h: num(m[4]), alpha });
   }
   m = s.match(new RegExp(`^rgba?\\(\\s*${NUM}[\\s,]+${NUM}[\\s,]+${NUM}\\s*(?:[,/]\\s*${NUM}(%?))?\\s*\\)$`));
   if (m) {

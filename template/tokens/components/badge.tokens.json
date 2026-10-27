@@ -1,0 +1,86 @@
+{
+  "badge": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.pill}"
+    },
+    "$type": "color",
+    "default": {
+      "background": {
+        "$value": "{color.primary}"
+      },
+      "foreground": {
+        "$value": "{color.primary-foreground}"
+      }
+    },
+    "secondary": {
+      "background": {
+        "$value": "{color.secondary}"
+      },
+      "foreground": {
+        "$value": "{color.secondary-foreground}"
+      }
+    },
+    "destructive": {
+      "background": {
+        "$value": "{color.destructive}",
+        "$extensions": {
+          "plinth": {
+            "alpha": {
+              "default": 0.1,
+              "dark": 0.2
+            }
+          }
+        }
+      },
+      "foreground": {
+        "$value": "{color.destructive}"
+      }
+    },
+    "success": {
+      "background": {
+        "$value": "{color.success}"
+      },
+      "foreground": {
+        "$value": "{color.success-foreground}"
+      }
+    },
+    "warning": {
+      "background": {
+        "$value": "{color.warning}"
+      },
+      "foreground": {
+        "$value": "{color.warning-foreground}"
+      }
+    },
+    "info": {
+      "background": {
+        "$value": "{color.info}"
+      },
+      "foreground": {
+        "$value": "{color.info-foreground}"
+      }
+    },
+    "outline": {
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      }
+    },
+    "ghost": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "background-hover": {
+        "$value": "{color.muted}"
+      }
+    },
+    "link": {
+      "foreground": {
+        "$value": "{color.primary}"
+      }
+    }
+  }
+}

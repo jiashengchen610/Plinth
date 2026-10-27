@@ -1,0 +1,90 @@
+{
+  "button": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "$type": "color",
+    "default": {
+      "background": {
+        "$value": "{color.primary}"
+      },
+      "foreground": {
+        "$value": "{color.primary-foreground}"
+      },
+      "background-hover": {
+        "$value": "{color.primary}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.8
+          }
+        }
+      }
+    },
+    "secondary": {
+      "background": {
+        "$value": "{color.secondary}"
+      },
+      "foreground": {
+        "$value": "{color.secondary-foreground}"
+      },
+      "background-hover": {
+        "$value": "{color.muted}"
+      }
+    },
+    "outline": {
+      "background": {
+        "$value": "{color.background}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      },
+      "background-hover": {
+        "$value": "{color.muted}"
+      }
+    },
+    "ghost": {
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "background-hover": {
+        "$value": "{color.muted}"
+      }
+    },
+    "destructive": {
+      "background": {
+        "$value": "{color.destructive}",
+        "$extensions": {
+          "plinth": {
+            "alpha": {
+              "default": 0.1,
+              "dark": 0.2
+            }
+          }
+        }
+      },
+      "foreground": {
+        "$value": "{color.destructive}"
+      },
+      "background-hover": {
+        "$value": "{color.destructive}",
+        "$extensions": {
+          "plinth": {
+            "alpha": {
+              "default": 0.2,
+              "dark": 0.3
+            }
+          }
+        }
+      }
+    },
+    "link": {
+      "foreground": {
+        "$value": "{color.primary}"
+      }
+    }
+  }
+}

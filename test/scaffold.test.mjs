@@ -68,21 +68,74 @@ test("foundations: generated data for Storybook, managed files restored from the
   assert.deepEqual(syncManaged(root), [], "nothing to do the second time");
 });
 
-test("contrast: text on a tint of its own color (bg-X/10 text-X) is checked like the browser test, and fixable", async (t) => {
+test("contrast: text on a tint of its own color is checked like the browser test, and fixable", async (t) => {
   const { checkContrast, contrastFixes } = await import("../engine/checks.mjs");
   const ws = await import("../engine/workspace.mjs");
   const root = join(mkdtempSync(join(tmpdir(), "plinth-tint-")), "ws");
   t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
   ws.initWorkspace(root, { name: "Tint", brand: "acme", context: "saas-dashboard" });
   // The red a real session chose: passes on the page, fails on its own 10% tint (axe measured 4.28 on that brand).
+  // Button and Badge draw destructive text on destructive at 10% through their component tokens.
   const c = ws.propose(root, { title: "Brighter red", ops: [{ op: "set", file: "brands/acme/tokens.json", path: "color/destructive", value: "#d42515" }] });
-  assert.equal(c.preview.failingAfter, 1, "the proposal preview sees it");
+  assert.equal(c.preview.failingAfter, 2, "the proposal preview sees both components");
   ws.apply(root, c.id);
   const failing = checkContrast(root).filter((r) => !r.pass);
-  assert.deepEqual(failing.map((r) => `${r.mode} ${r.fg} on ${r.bg}`), ["default destructive on destructive/10"]);
-  assert.ok(failing[0].ratio > 4 && failing[0].ratio < 4.5, String(failing[0].ratio));
+  assert.deepEqual(failing.map((r) => `${r.mode} ${r.fg} on ${r.bg}`).sort(), ["default badge-destructive-foreground on badge-destructive-background", "default button-destructive-foreground on button-destructive-background"]);
+  assert.ok(failing.every((r) => r.ratio > 4 && r.ratio < 4.5 && r.fgToken === "color/destructive"), JSON.stringify(failing.map((r) => [r.ratio, r.fgToken])));
   const { ops } = contrastFixes(checkContrast(root));
-  assert.equal(ops.length, 1);
+  assert.equal(ops.length, 1, "one fix to the semantic color serves both components");
   ws.apply(root, ws.propose(root, { title: "Fix", ops: ops.map(({ why, ...o }) => o) }).id);
-  assert.ok(checkContrast(root).every((r) => r.pass), "after the fix every pair passes, the tint included");
+  assert.ok(checkContrast(root).every((r) => r.pass), "after the fix every pair passes, the tints included");
+
+  // Components written by hand with a Tailwind opacity modifier are read from the source.
+  writeFileSync(join(root, "src/components/button/note.tsx"), 'export const Note = () => <p className="bg-warning/10 text-warning">Heads up</p>;\n');
+  assert.ok(checkContrast(root).some((r) => r.fg === "warning" && r.bg === "warning/10"), "bg-X/NN text-X in component code is checked too");
+});
+
+test("palette: a color becomes a Tailwind-shaped scale; fixes move along the palette", async (t) => {
+  const { checkContrast, contrastFixes } = await import("../engine/checks.mjs");
+  const ws = await import("../engine/workspace.mjs");
+  const { paletteColorOps } = await import("../engine/palette.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-pal-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Pal", brand: "acme", context: "saas-dashboard" });
+  const p = paletteColorOps(root, { name: "Lacquer Red", value: "#c8102e" });
+  assert.equal(p.name, "lacquer-red");
+  assert.equal(p.ops.length, 11);
+  ws.apply(root, ws.propose(root, { title: "Add lacquer red", ops: p.ops }).id);
+  // A semantic role points at a step that is too light for white text; the fix moves it down the same hue.
+  ws.apply(root, ws.propose(root, { title: "Red primary", ops: [
+    { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.lacquer-red.400}" },
+    { op: "set", file: "brands/acme/tokens.json", path: "color/primary-foreground", value: "{color.white}" },
+  ] }).id);
+  const failing = checkContrast(root).filter((r) => !r.pass && r.mode === "default" && r.fg === "primary-foreground");
+  assert.ok(failing.length, "white on lacquer-red-400 fails");
+  const fix = contrastFixes(checkContrast(root)).ops.find((o) => o.path === "color/primary-foreground" || o.path === "color/primary");
+  assert.ok(fix, "a fix is offered");
+  assert.match(fix.value, /^\{color\.[a-z-]+(\.\d+)?\}$/, `the fix is a palette reference: ${fix.value}`);
+  const css = readFileSync(join(root, "src/styles/tokens.css"), "utf8");
+  assert.match(css, /--lacquer-red-500: oklch/);
+  assert.match(css, /--primary: var\(--lacquer-red-400\)/);
+});
+
+test("previews: stacked on earlier pending changes; guideline notes follow references", async (t) => {
+  const ws = await import("../engine/workspace.mjs");
+  const { paletteColorOps } = await import("../engine/palette.mjs");
+  const root = join(mkdtempSync(join(tmpdir(), "plinth-stack-")), "ws");
+  t.after(() => rmSync(join(root, ".."), { recursive: true, force: true }));
+  ws.initWorkspace(root, { name: "Stack", brand: "acme", context: "saas-dashboard" });
+  ws.apply(root, ws.propose(root, { title: "Prose", ops: [{ op: "write", file: "brands/acme/DESIGN.md", content: "# Acme\n\n## Colors\n\nA calm grey primary, neutral everywhere.\n" }] }).id);
+
+  // A palette color, still pending, and a role that points at it: the second preview resolves the reference.
+  const pal = ws.propose(root, { title: "Add tea", ops: paletteColorOps(root, { name: "tea", value: "#2f5d50" }).ops });
+  const role = ws.propose(root, { title: "Tea primary", ops: [
+    { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.tea.800}" },
+    { op: "set", file: "brands/acme/tokens.json", path: "color/primary-foreground", value: "{color.white}" },
+  ] });
+  assert.deepEqual(role.preview.issues, [], "no reference to nothing");
+  assert.equal(role.preview.failingAfter, 0, JSON.stringify(role.preview.contrastChanges.filter((c) => !c.pass)));
+  assert.equal(role.preview.assumes, "earlier pending changes applied");
+  // The guideline says grey; the primary is now a green-teal through the palette reference.
+  assert.ok(role.preview.notes.some((n) => /says "(grey|neutral)" but primary is now (teal|green)/.test(n)), JSON.stringify(role.preview.notes));
+  assert.equal(pal.preview.notes.length, 0, "adding palette steps no role uses says nothing about prose");
 });

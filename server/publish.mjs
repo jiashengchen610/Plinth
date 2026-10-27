@@ -73,9 +73,10 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   const checks = runChecks(root);
   if (!checks.gate) {
     step("checks", checks.summary, false);
-    return stop("checks", { summary: checks.summary, contrastFailures: checks.contrast.filter((c) => !c.pass && !c.accepted).slice(0, 20), distinctFailures: checks.distinct.filter((c) => !c.pass && !c.accepted).slice(0, 20), hardcoded: checks.hardcoded.filter((f) => !f.accepted).slice(0, 20), tokenIssues: checks.tokenIssues, next: "Fix the failures in Checks (or accept them as exceptions), then publish again." });
+    return stop("checks", { summary: checks.summary, tokenIssues: checks.tokenIssues, next: "These token problems break the generated CSS (a reference to a token that does not exist, a cycle, or a brand missing tokens). Fix them, then publish again." });
   }
-  step("checks", { ...checks.summary, exceptions: checks.exceptions.length });
+  // Design findings are reminders: listed with the result, never a reason to stop.
+  step("checks", { ...checks.summary, exceptions: checks.exceptions.length, warnings: checks.warnings });
 
   // 2. Exports: one complete DESIGN.md per brand
   const config = loadConfig(root);
@@ -142,7 +143,7 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
     return stop("github", { error: msg, next: "Check your GitHub access, then publish again. Local work is unaffected." });
   }
 
-  const result = { published: true, version: head, repo: full, github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions`, storybook: pages.url ?? null, steps };
+  const result = { published: true, warnings: checks.warnings, version: head, repo: full, github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions`, storybook: pages.url ?? null, steps };
   if (pages.ok) return { ...result, note: "Storybook deploys through GitHub Actions after the tests pass there; it is live a few minutes after the push." };
   return { ...result, pagesBlocked: pages.blocked, note: pages.blocked === "plan" ? "The code is on GitHub, but your GitHub plan does not serve Pages for private repositories, so Storybook is not online. Make the repository public to deploy it, or keep it private without a Storybook site." : `The code is on GitHub, but Storybook could not be deployed: ${pages.error}` };
 }

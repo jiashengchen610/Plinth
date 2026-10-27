@@ -6,6 +6,8 @@ import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
+import { paletteColorOps } from "../engine/palette.mjs";
+import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
 
 const requireWorkspace = (root) => {
   if (!existsSync(join(root, "design-system.json"))) throw new Error(`No design system in ${root}. Call create_design_system first.`);
@@ -36,6 +38,7 @@ const failures = (r) => ({
   contrastFailures: r.contrast.filter((c) => !c.pass && !c.accepted).map(({ brand, mode, bg, fg, ratio, min }) => ({ brand, mode, bg, fg, ratio, min })),
   distinctFailures: r.distinct.filter((c) => !c.pass && !c.accepted).map(({ brand, mode, a, b, deltaE, hueDiff, reason }) => ({ brand, mode, a, b, deltaE, hueDiff, reason })),
   hardcoded: r.hardcoded.filter((f) => !f.accepted).slice(0, 30).map(({ file, line, rule, match }) => ({ file, line, rule, match })),
+  structure: (r.structure ?? []).filter((x) => !x.accepted).slice(0, 30).map(({ brand, kind, detail }) => ({ brand, kind, detail })),
   tokenIssues: r.tokenIssues,
   exceptions: r.exceptions,
 });
@@ -50,7 +53,8 @@ export const TOOLS = [
       const checks = runChecks(ctx.root);
       if (ctx.storybook.refresh) await ctx.storybook.refresh();
       const outside = ws.outsideChanges(ctx.root);
-      return { exists: true, ...ws.summary(ctx.root), gate: checks.gate, checks: checks.summary, outsideEdits: outside.length ? { files: outside, next: "Files changed outside Plinth. Tell the user; they record or discard them (UI banner, or record_outside_edits when they ask). Publish and restore wait until then." } : null, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
+      const config = loadConfig(ctx.root);
+      return { exists: true, ...ws.summary(ctx.root), layers: config.layers?.map((l) => l.id) ?? null, upgradeAvailable: !Array.isArray(config.layers), gate: checks.gate, checks: checks.summary, warnings: checks.warnings, outsideEdits: outside.length ? { files: outside, next: "Files changed outside Plinth. Tell the user; they record or discard them (UI banner, or record_outside_edits when they ask). Publish and restore wait until then." } : null, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
     },
   },
   {
@@ -134,6 +138,44 @@ export const TOOLS = [
     run: (a, ctx) => { ws.discard(ctx.root, a.id); ctx.notify(); return { discarded: a.id }; },
   },
   {
+    name: "propose_palette_color",
+    description: "Add a color to the palette (bottom layer): from one color, the engine generates a full 50–950 scale shaped like Tailwind's, with the given color on its nearest step. Queued as a proposal. Then point semantic tokens at it, e.g. {color.brand-red.600}.",
+    inputSchema: { type: "object", properties: { name: { type: "string", description: "Palette name, kebab-case, e.g. lacquer-red" }, color: { type: "string", description: "Any CSS color: #d42515, oklch(0.55 0.2 27) …" } }, required: ["name", "color"] },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const p = paletteColorOps(ctx.root, { name: a.name, value: a.color, templateDir: ws.TEMPLATE_DIR });
+      const c = ws.propose(ctx.root, { title: `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`, rationale: `${a.color} sits on step ${p.anchor}; the other steps follow Tailwind's lightness curve with the same hue.`, ops: p.ops });
+      ctx.notify();
+      return { id: c.id, name: p.name, anchor: p.anchor, shades: p.shades, preview: c.preview };
+    },
+  },
+  {
+    name: "propose_upgrade",
+    description: "For a design system made before layers existed: propose the upgrade (Tailwind palette, component tokens, layer list; base components rewritten only if untouched). The user reviews it in Changes.",
+    inputSchema: { type: "object", properties: {} },
+    run: (_a, ctx) => {
+      requireWorkspace(ctx.root);
+      const p = upgradeProposal(ctx.root, ws.TEMPLATE_DIR);
+      if (!p) return { message: "Already layered." };
+      const c = ws.propose(ctx.root, { title: p.title, rationale: p.rationale, ops: p.ops, by: "engine" });
+      ctx.notify();
+      return { id: c.id, kept: p.kept, preview: c.preview };
+    },
+  },
+  {
+    name: "propose_link_to_palette",
+    description: "Point fixed semantic colors at the visually identical palette color (ΔE under 0.04), so they follow the palette. Colors without a close match are listed and left alone. Queued as a proposal.",
+    inputSchema: { type: "object", properties: {} },
+    run: (_a, ctx) => {
+      requireWorkspace(ctx.root);
+      const { ops, unmatched, reason } = linkToPaletteOps(ctx.root);
+      if (!ops.length) return { message: reason ?? "Nothing to link.", unmatched };
+      const c = ws.propose(ctx.root, { title: `Link ${ops.length} color value${ops.length > 1 ? "s" : ""} to the palette`, rationale: ops.map((o) => o.why).join("; "), ops: ops.map(({ why, ...o }) => o), by: "engine" });
+      ctx.notify();
+      return { id: c.id, linked: ops.map((o) => o.why), unmatched };
+    },
+  },
+  {
     name: "record_outside_edits",
     description: "Save files changed outside Plinth (by hand, another tool, or a Claude Code session with full permissions) as one version, after regenerating from them. Only when the user asks; they can also discard them in the UI. Run run_checks afterwards.",
     inputSchema: { type: "object", properties: { note: { type: "string", description: "Why, in a few words; added to the version name" } } },
@@ -146,7 +188,7 @@ export const TOOLS = [
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
       const r = runChecks(ctx.root);
-      return { gate: r.gate, summary: r.summary, ...failures(r) };
+      return { gate: r.gate, summary: r.summary, warnings: r.warnings, ...failures(r) };
     },
   },
   {
