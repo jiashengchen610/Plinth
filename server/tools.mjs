@@ -24,6 +24,7 @@ const OP_SCHEMA = {
     value: { description: "Token value for set: CSS color string (oklch preferred), dimension object {value,unit}, or DTCG composite" },
     type: { type: "string", description: "DTCG $type when creating a token (color, dimension, shadow, typography, …)" },
     description: { type: "string" },
+    alpha: { type: "number", description: "Opacity 0..1 of a color token (set), for `mode` or the light value; 1 removes it" },
     content: { type: "string", description: "Full file content (write)" },
   },
   required: ["op", "file"],

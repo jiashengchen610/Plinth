@@ -12,15 +12,15 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
   return json as T;
 }
 
-export type ModeValue = { raw: unknown; css: string | null; resolved: string | null };
-export type TokenRow = { name: string; path: string; type: string; source: string; description: string; derived: boolean; values: Record<string, ModeValue> };
+export type ModeValue = { raw: unknown; css: string | null; resolved: string | null; alpha?: number };
+export type TokenRow = { name: string; path: string; type: string; source: string; layer?: number; layerId?: string; refs?: string[]; linked?: boolean; description: string; derived: boolean; values: Record<string, ModeValue> };
 export type ContrastResult = { brand: string; mode: string; bg: string; fg: string; min: number; ratio: number | null; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type DistinctResult = { brand: string; mode: string; a: string; b: string; deltaE: number; hueDiff: number | null; pass: boolean; reason: string | null; accepted?: boolean; exceptionReason?: string };
 export type Hardcoded = { file: string; line: number; rule: string; match: string; hint?: string; snippet?: string; accepted?: boolean; exceptionReason?: string };
 export type CheckName = "contrast" | "distinct" | "hardcoded" | "structure";
 export type StructureResult = { brand: string; token: string; layer: string; kind: "upward" | "unlinked"; detail: string; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type Exception = { check: CheckName; key: string; reason?: string; at?: string };
-export type Op = { op: "set" | "delete" | "rename" | "write"; file: string; path?: string; to?: string; mode?: string; value?: unknown; content?: string };
+export type Op = { op: "set" | "delete" | "rename" | "write"; file: string; path?: string; to?: string; mode?: string; value?: unknown; type?: string; description?: string; alpha?: number; content?: string };
 export type Change = {
   id: string; title: string; rationale: string; by: string; createdAt: string; ops: Op[];
   preview: { files: string[]; failingAfter: number; issues: string[]; notes?: string[]; distinctFailures?: DistinctResult[]; contrastChanges: (ContrastResult & { before: number | null })[] };
@@ -59,7 +59,7 @@ export type State = {
   // Present when exists is true.
   config: { name: string; context: string; naming: string; defaultBrand: string; brands: { id: string; name?: string }[]; exceptions?: Exception[] };
   brands: string[];
-  tokens: Record<string, { modes: string[]; issues: string[]; rows: TokenRow[] }>;
+  tokens: Record<string, { modes: string[]; layers?: { id: string; name: string }[]; issues: string[]; rows: TokenRow[] }>;
   checks: {
     gate: boolean;
     summary: Record<string, { ok: boolean; failing?: number; count?: number; accepted?: number; issues?: string[] }>;
@@ -99,6 +99,8 @@ export const api = {
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
+  previewDraft: (ops: Op[]) => call<Change["preview"]>("POST", "/api/preview", { ops }),
+  createChange: (title: string, ops: Op[], rationale = "") => call<{ id: string; preview: Change["preview"] }>("POST", "/api/changes", { title, ops, rationale }),
   upgrade: () => call<{ id?: string; message?: string }>("POST", "/api/upgrade"),
   linkPalette: () => call<{ id?: string; message?: string; unmatched?: unknown[] }>("POST", "/api/link-palette"),
   addPaletteColor: (name: string, color: string) => call<{ id: string; name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),

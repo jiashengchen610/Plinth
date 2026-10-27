@@ -5,20 +5,24 @@ import { ratioLabel, showValue, timeAgo } from "@/lib/format";
 
 type Props = { state: State; brand: string; onApply: (id: string) => void; onDiscard: (id: string) => void; busy: boolean };
 
-/** Current raw value of a token for the diff, looked up across brands by file. */
-function currentValue(state: State, op: Op): unknown {
-  const brand = op.file.match(/^brands\/([^/]+)\//)?.[1] ?? state.config.defaultBrand;
-  const row = state.tokens[brand]?.rows.find((r) => r.path === op.path);
-  const mode = !op.mode || op.mode === "light" ? "default" : op.mode;
-  return row?.values[mode]?.raw;
+const brandOf = (state: State, op: Op) => op.file.match(/^brands\/([^/]+)\//)?.[1] ?? state.config.defaultBrand;
+const modeOf = (op: Op) => (!op.mode || op.mode === "light" ? "default" : op.mode);
+
+/** Current value of a token for the diff, looked up in the brand its file belongs to. */
+function currentValue(state: State, op: Op) {
+  const row = state.tokens[brandOf(state, op)]?.rows.find((r) => r.path === op.path);
+  return row?.values[modeOf(op)] ?? row?.values.default;
 }
 
-function Chip({ value }: { value: unknown }) {
-  const text = showValue(value, null);
-  const color = typeof value === "string" && /^(#|oklch|rgb|hsl)/.test(value) ? value : null;
+/** A value as the reviewer sees it: a reference by its name with the color it resolves to, or the value itself. */
+function Chip({ value, state, op }: { value: unknown; state: State; op: Op }) {
+  const ref = typeof value === "string" && /^\{[^}]+\}$/.test(value) ? value.slice(1, -1) : null;
+  const target = ref ? state.tokens[brandOf(state, op)]?.rows.find((r) => r.path === ref.replace(/\./g, "/")) : null;
+  const shown = target ? (target.values[modeOf(op)] ?? target.values.default)?.resolved : typeof value === "string" && /^(#|oklch|rgb|hsl)/.test(value) ? value : null;
+  const text = ref ? ref.replace(/^color\./, "").replace(/\./g, "-") : showValue(value, null);
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-xs">
-      {color && <span className="size-3 shrink-0 rounded-sm border" style={{ background: color }} />}
+      {shown && <span className="size-3 shrink-0 rounded-sm border" style={{ background: shown }} />}
       <span className="truncate">{text || "—"}</span>
     </span>
   );
@@ -26,17 +30,23 @@ function Chip({ value }: { value: unknown }) {
 
 function OpRow({ state, op }: { state: State; op: Op }) {
   if (op.op === "set") {
+    const cur = currentValue(state, op);
     return (
       <li className="flex flex-wrap items-center gap-2 py-2 text-sm">
         <code className="text-xs">{op.path}</code>
         {op.mode && op.mode !== "default" && <Badge variant="outline">{op.mode}</Badge>}
         <span className="text-xs text-muted-foreground">{op.file}</span>
-        <span className="flex min-w-0 basis-full items-center gap-2">
-          <Chip value={currentValue(state, op)} />
-          <span aria-hidden="true" className="text-muted-foreground">→</span>
-          <span className="sr-only">changes to</span>
-          <Chip value={op.value} />
-        </span>
+        {op.value !== undefined && (
+          <span className="flex min-w-0 basis-full items-center gap-2">
+            <Chip value={cur?.raw} state={state} op={op} />
+            <span aria-hidden="true" className="text-muted-foreground">→</span>
+            <span className="sr-only">changes to</span>
+            <Chip value={op.value} state={state} op={op} />
+          </span>
+        )}
+        {op.alpha !== undefined && (
+          <span className="basis-full text-xs">opacity {Math.round((cur?.alpha ?? 1) * 100)}% → {Math.round(op.alpha * 100)}%</span>
+        )}
       </li>
     );
   }
@@ -57,7 +67,7 @@ function ChangeCard({ change, state, onApply, onDiscard, busy }: { change: Chang
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-medium">{change.title}</h2>
-          <p className="text-xs text-muted-foreground">Proposed by {change.by} · {timeAgo(change.createdAt)}</p>
+          <p className="text-xs text-muted-foreground">{change.by === "you" ? "Your edits" : `Proposed by ${change.by}`} · {timeAgo(change.createdAt)}</p>
         </div>
         {change.preview.failingAfter > 0 || (change.preview.distinctFailures?.length ?? 0) > 0 ? (
           <div className="flex flex-wrap gap-1">

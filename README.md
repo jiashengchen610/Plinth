@@ -105,10 +105,15 @@ Claude scaffolds the repo (about 20 seconds) and proposes tokens and guidelines 
 1. **Changes**: read each proposal and press **Apply** (or **Discard**).
 2. **Install dependencies** (banner at the top, 1–3 minutes, once): Storybook and the test browser.
 3. **Components**: start Storybook, switch brand and light/dark in the header.
-4. Keep talking: "make the primary blue", "use Inter", "add a kids brand", "make a pricing card from this
+4. **Tokens**: the layers side by side (palette → roles → component tokens). Click a token to light up where it
+   comes from and everything that uses it; re-point it at another palette step or role, per light and dark, or set
+   its opacity. **Components**: pick a component and change it from its tokens, narrowest first (this component →
+   its role → the palette). Edits collect in a **draft** that previews reminders live; **Send to Changes** makes
+   them one proposal, applied like Claude's.
+5. Or keep talking: "make the primary blue", "use Inter", "add a kids brand", "make a pricing card from this
    screenshot" (attach or paste images in the chat).
-5. **Checks**: fix or accept what fails; **Run tests**.
-6. **Publish**: the first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize),
+6. **Checks**: reminders to fix or mark as intended; **Run tests**.
+7. **Publish**: the first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize),
    then choose the repository name and visibility. On GitHub's free plan choose **Public**: Pages does not work for
    private repositories there, so Storybook would not go online.
 

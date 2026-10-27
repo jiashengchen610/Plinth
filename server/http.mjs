@@ -101,6 +101,14 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     },
     "POST /api/exceptions": async (req) => { needsWorkspace(); return { version: ws.acceptException(ctx.root, await readJson(req)) }; },
     // The same engine actions the tools offer; the UI calls them directly.
+    // Edits made in the UI: preview a draft without saving it, then queue it like any proposal.
+    "POST /api/preview": async (req) => { needsWorkspace(); const { ops } = await readJson(req); return ws.previewOps(ctx.root, ops ?? [], ws.listPending(ctx.root).flatMap((c) => c.ops)); },
+    "POST /api/changes": async (req) => {
+      needsWorkspace();
+      const { title, rationale, ops } = await readJson(req);
+      const c = ws.propose(ctx.root, { title: title || "Edits from the token graph", rationale: rationale ?? "", ops, by: "you" });
+      return { id: c.id, preview: c.preview };
+    },
     "POST /api/palette": async (req) => { needsWorkspace(); return toolByName.get("propose_palette_color").run(await readJson(req), ctx); },
     "POST /api/upgrade": () => { needsWorkspace(); return toolByName.get("propose_upgrade").run({}, ctx); },
     "POST /api/link-palette": () => { needsWorkspace(); return toolByName.get("propose_link_to_palette").run({}, ctx); },

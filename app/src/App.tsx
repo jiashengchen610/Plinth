@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, type State } from "@/lib/api";
-import { TokensView } from "@/views/TokensView";
+import { api, type Op, type State } from "@/lib/api";
+import { buildGraph, mergeOp, type Mode } from "@/lib/tokens";
+import { TokenGraph } from "@/views/TokenGraph";
+import { DraftBar } from "@/views/DraftBar";
 import { ComponentsView } from "@/views/ComponentsView";
 import { GuidelinesView } from "@/views/GuidelinesView";
 import { ChangesView } from "@/views/ChangesView";
@@ -26,6 +28,11 @@ export default function App() {
   const [brand, setBrand] = useState<string>("");
   const [mode, setMode] = useState<"light" | "dark">("light");
   const [publishing, setPublishing] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  // Unsent edits from the token graph; kept in this browser so a reload does not lose them.
+  const [draft, setDraftState] = useState<Op[]>(() => { try { return JSON.parse(localStorage.getItem("plinth-draft") ?? "[]"); } catch { return []; } });
+  const setDraft = useCallback((next: Op[]) => { setDraftState(next); try { localStorage.setItem("plinth-draft", JSON.stringify(next)); } catch { /* storage unavailable */ } }, []);
+  const [chatOpen, setChatOpen] = useState(true);
   const rev = useRef(0);
   // On wide screens the chat is a side panel, so the Chat tab does not exist there.
   const [wide, setWide] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
@@ -81,6 +88,11 @@ export default function App() {
   };
   const onError = useCallback((m: string) => setError(m), []);
 
+  const graph = useMemo(() => (state?.exists && brand ? buildGraph(state, brand) : null), [state, brand]);
+  const tokenMode: Mode = mode === "dark" ? "dark" : "default";
+  const addToDraft = useCallback((op: Op) => setDraftState((d) => { const next = mergeOp(d, op); try { localStorage.setItem("plinth-draft", JSON.stringify(next)); } catch { /* storage unavailable */ } return next; }), []);
+  const openToken = useCallback((key: string | null) => { setSelectedToken(key); if (key) setTab("tokens"); }, []);
+
   if (!state) {
     return <main className="grid min-h-screen place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
   }
@@ -130,6 +142,7 @@ export default function App() {
             <Badge variant={!gate ? "destructive" : advisories ? "warning" : "secondary"}>{!gate ? `${failing} token problem${failing === 1 ? "" : "s"}` : advisories ? `${advisories} reminder${advisories === 1 ? "" : "s"}` : "No reminders"}</Badge>
           </button>
           {state.publish.running && <Badge variant="outline">Publishing…</Badge>}
+          <Button size="sm" variant="ghost" className="hidden lg:inline-flex" onClick={() => setChatOpen(!chatOpen)} aria-pressed={chatOpen}>{chatOpen ? "Hide chat" : "Show chat"}</Button>
           <Button size="sm" onClick={() => setPublishing(true)} disabled={state.publish.running}>Publish</Button>
         </div>
       </header>
@@ -150,6 +163,14 @@ export default function App() {
         </div>
       )}
 
+      {graph && (
+        <DraftBar draft={draft} g={graph}
+          onRemove={(i) => setDraft(draft.filter((_, j) => j !== i))}
+          onDiscard={() => setDraft([])}
+          onSend={async (title) => { try { await api.createChange(title, draft); setDraft([]); setNotice("Draft sent to Changes. Review it there and press Apply."); setTab("changes"); await load(); } catch (e) { setError((e as Error).message); } }}
+        />
+      )}
+
       <OutsideBanner outside={state.outside ?? []} busy={busy} onError={onError} onDone={(m) => { setNotice(m); load(); }} />
 
       {(error || notice) && (
@@ -159,7 +180,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="grid gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <main className={`grid gap-4 px-4 py-4 sm:px-6 ${chatOpen ? "lg:grid-cols-[minmax(0,1fr)_380px]" : ""}`}>
         <Tabs value={tab === "chat" && wide ? "tokens" : tab} onValueChange={(v) => setTab(v as Tab)} className="min-w-0 gap-4">
           <TabsList className="h-auto flex-wrap">
             <TabsTrigger value="chat" className="lg:hidden">Chat{state.chat?.working ? " · working" : ""}</TabsTrigger>
@@ -174,10 +195,10 @@ export default function App() {
             <ChatPanel chat={state.chat} onError={onError} className="h-[75vh]" />
           </TabsContent>
           <TabsContent value="tokens">
-            <TokensView state={state} brand={brand} busy={busy} onFixContrast={() => act(async () => { await api.fixContrast(); setTab("changes"); }, "Contrast fixes proposed. Review them in Changes.")} />
+            {graph && <TokenGraph state={state} brand={brand} mode={tokenMode} selected={selectedToken} onSelect={setSelectedToken} draft={draft} onEdit={addToDraft} onProposed={(m) => { setNotice(m); setTab("changes"); load(); }} onError={onError} />}
           </TabsContent>
           <TabsContent value="components">
-            <ComponentsView state={state} brand={brand} mode={mode} busy={busy} onStartStorybook={() => act(async () => { const r = await api.startStorybook(); if (r.error) throw new Error(`${r.error} ${r.next ?? ""}`); }, "Storybook started.")} onInstall={() => act(() => api.install(), "Installing dependencies.")} />
+            <ComponentsView state={state} brand={brand} mode={mode} busy={busy} graph={graph} draft={draft} onEdit={addToDraft} onOpenToken={openToken} onStartStorybook={() => act(async () => { const r = await api.startStorybook(); if (r.error) throw new Error(`${r.error} ${r.next ?? ""}`); }, "Storybook started.")} onInstall={() => act(() => api.install(), "Installing dependencies.")} />
           </TabsContent>
           <TabsContent value="guidelines">
             <GuidelinesView state={state} brand={brand} />
@@ -198,7 +219,7 @@ export default function App() {
           </TabsContent>
         </Tabs>
         {/* Wide screens: the chat stays beside whatever tab is open. */}
-        <ChatPanel chat={state.chat} onError={onError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />
+        {chatOpen && <ChatPanel chat={state.chat} onError={onError} className="sticky top-20 hidden h-[calc(100vh-6rem)] lg:flex" />}
       </main>
 
       {publishing && <PublishDialog state={state} onClose={() => setPublishing(false)} onError={onError} />}

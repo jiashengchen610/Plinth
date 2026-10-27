@@ -250,3 +250,40 @@ test("MCP server in child mode: tools over the UI's workspace, long processes fo
   assert.deepEqual(st.brands, ["acme"]);
   assert.equal(child.stderr().includes("Assertion"), false, child.stderr());
 });
+
+test("UI edits: draft preview, proposal by the user, opacity", async (t) => {
+  const ws = mkdtempSync(join(tmpdir(), "plinth-ui-edit-"));
+  const s = startServer(ws, { PLINTH_PORT: "4394" });
+  t.after(() => { s.stop(); rmSync(ws, { recursive: true, force: true }); });
+  await s.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+  await s.call("create_design_system", { name: "Edits", brand: "acme", context: "saas-dashboard" });
+  const ui = (await s.call("open_ui")).url;
+  const api = async (path, body) => { const r = await fetch(new URL(path, ui), { method: body ? "POST" : "GET", headers: { "X-Plinth-Token": "test-token", "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json() }; };
+
+  const ops = [
+    { op: "set", file: "brands/acme/tokens.json", path: "color/primary", value: "{color.red.700}" },
+    { op: "set", file: "tokens/components/button.tokens.json", path: "button/destructive/background", alpha: 0.25 },
+    { op: "set", file: "tokens/components/button.tokens.json", path: "button/destructive/background", mode: "dark", alpha: 0.4 },
+  ];
+  // Preview writes nothing.
+  const preview = await api("api/preview", { ops });
+  assert.equal(preview.status, 200, JSON.stringify(preview.json));
+  assert.ok(preview.json.distinctFailures.some((d) => d.a === "primary" && d.b === "destructive"), "red primary next to red destructive is a reminder");
+  assert.equal(JSON.parse(readFileSync(join(ws, "brands/acme/tokens.json"), "utf8")).color.primary.$value, "{color.neutral.900}", "preview writes nothing");
+  // Sent: a proposal by the user, applied like any other.
+  const created = await api("api/changes", { title: "Red primary, stronger destructive tint", ops });
+  assert.equal(created.status, 200);
+  const st = (await api("api/state")).json;
+  assert.equal(st.pending[0].by, "you");
+  assert.equal((await api(`api/changes/${created.json.id}/apply`, {})).status, 200);
+  const button = JSON.parse(readFileSync(join(ws, "tokens/components/button.tokens.json"), "utf8"));
+  assert.deepEqual(button.button.destructive.background.$extensions.plinth.alpha, { default: 0.25, dark: 0.4 });
+  assert.match(readFileSync(join(ws, "src/styles/tokens.css"), "utf8"), /--button-destructive-background: color-mix\(in oklab, var\(--destructive\) 25%, transparent\);/);
+  // Opacity back to 100% removes it.
+  await api("api/changes", { title: "Opaque", ops: [{ op: "set", file: "tokens/components/button.tokens.json", path: "button/destructive/background", alpha: 1 }, { op: "set", file: "tokens/components/button.tokens.json", path: "button/destructive/background", mode: "dark", alpha: 1 }] });
+  const second = (await api("api/state")).json.pending[0];
+  await api(`api/changes/${second.id}/apply`, {});
+  assert.equal(JSON.parse(readFileSync(join(ws, "tokens/components/button.tokens.json"), "utf8")).button.destructive.background.$extensions, undefined);
+  // Opacity on a token that does not exist is refused instead of creating an empty one.
+  assert.equal((await api("api/preview", { ops: [{ op: "set", file: "tokens/components/button.tokens.json", path: "button/nope", alpha: 0.5 }] })).status, 400);
+});

@@ -257,13 +257,31 @@ function applyOp(root, op, files) {
       const node = getNode(tree, op.path, true);
       if (op.type) node.$type = op.type;
       if (op.description !== undefined) node.$description = op.description;
-      if (!op.mode || op.mode === "default" || op.mode === "light") node.$value = op.value;
-      else {
+      const light = !op.mode || op.mode === "default" || op.mode === "light";
+      if (op.value !== undefined) {
+        if (light) node.$value = op.value;
+        else {
+          node.$extensions ??= {};
+          node.$extensions.plinth ??= {};
+          node.$extensions.plinth.modes ??= {};
+          node.$extensions.plinth.modes[op.mode] = op.value;
+        }
+      }
+      // Opacity (0..1) of a color token, for this mode; 1 removes it.
+      if (op.alpha !== undefined) {
+        if (!("$value" in node)) throw new Error(`${op.path} needs a value before an opacity`);
         node.$extensions ??= {};
         node.$extensions.plinth ??= {};
-        node.$extensions.plinth.modes ??= {};
-        node.$extensions.plinth.modes[op.mode] = op.value;
+        const ext = node.$extensions.plinth;
+        const prev = ext.alpha === undefined ? {} : typeof ext.alpha === "number" ? { default: ext.alpha } : { ...ext.alpha };
+        prev[light ? "default" : op.mode] = Number(op.alpha);
+        const vals = Object.values(prev);
+        if (vals.every((a) => a === 1)) delete ext.alpha;
+        else ext.alpha = Object.keys(prev).length === 1 && prev.default !== undefined ? prev.default : prev;
+        if (!Object.keys(ext).length) delete node.$extensions.plinth;
+        if (node.$extensions && !Object.keys(node.$extensions).length) delete node.$extensions;
       }
+      if (!("$value" in node)) throw new Error(`${op.path} has no value: set one first`);
       files.set(rel, tree);
       break;
     }
