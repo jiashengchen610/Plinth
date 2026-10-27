@@ -12,7 +12,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   `httpJson`), no `cpSync` (use `copyDir`; a test enforces it), and verify through an npx install in a `D:\` folder.
 - Anything the model could guess but a program can compute (contrast, CSS output, YAML) is computed in `engine/`.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
-- After changing `engine/` or `server/`, run `npm test`.
+- After changing `engine/` or `server/`, run `npm test` (12 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (42 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the

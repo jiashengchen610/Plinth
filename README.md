@@ -1,14 +1,28 @@
 # Plinth
 
 Create and maintain a multi-brand design system by talking to Claude. Describe the product, paste a screenshot,
-and get design tokens, design and writing guidelines, and shadcn/ui components, reviewed change by change in a
-local UI and published as Storybook on GitHub Pages. One UI does the whole loop: describe → review → apply → check
-→ publish.
+and get design tokens, design and writing guidelines, and shadcn/ui components. You review every change in a local
+UI before it is written, and publish the result as Storybook on GitHub Pages. The whole loop happens in one UI:
+describe → review → apply → check → publish.
 
-See [PRD.md](PRD.md) for the product definition.
+See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early.** The engine, server, UI and template are tested (`npm test`, plus the story tests in a generated
-> workspace). Few people have used it end to end yet. Expect rough edges; issues and pull requests are welcome.
+> **Status: early (0.3).** Tested by `npm test` (12 tests), by the 42 story tests in a generated workspace, and by
+> end-to-end runs with real Claude Code from an `npx` install on Windows 11. Few people have used it yet, and the
+> first real publish to GitHub has not been exercised outside dry runs. Expect rough edges; issues and pull
+> requests are welcome.
+
+## Contents
+
+- [How it works](#how-it-works)
+- [Use it](#use-it)
+- [What you get](#what-you-get)
+- [Checks and the publish gate](#checks-and-the-publish-gate)
+- [What stays in sync](#what-stays-in-sync)
+- [Data flow and privacy](#data-flow-and-privacy)
+- [Reference: MCP tools, skills, configuration](#reference)
+- [Limitations and known issues](#limitations-and-known-issues)
+- [Develop](#develop)
 
 ## How it works
 
@@ -21,45 +35,67 @@ See [PRD.md](PRD.md) for the product definition.
            │                         │ propose_change, run_checks, …
            │◀────────────────────────┘
            ▼
-       your design-system repo (git): tokens/, brands/<id>/, DESIGN.md, WRITING.md,
-                                      src/components/<name>/, .storybook/, .github/workflows/
+       your design-system repo (git)
 ```
 
-- The chat runs **Claude Code** on your computer for each message, with the Plinth plugin loaded and only Plinth's
-  tools plus read-only file tools allowed. Plinth has no model of its own and no API key; usage counts on your
-  Claude plan. The thread resumes across messages and restarts.
-- Claude never writes files directly. It **proposes** a change; you review it in **Changes** (old → new values,
-  contrast before → after, look-alike role colors, guideline sentences that would go stale) and press **Apply**.
-  Every applied change is a git commit; **History** restores any version.
-- Tokens are DTCG. Each brand has its own semantic values for light and dark; all brands share the same components.
-  Fonts named in tokens load automatically (Google Fonts); the CSS is generated from the tokens on every change.
-- **Checks** run on every change: WCAG contrast for every brand × mode (with deterministic fixes that keep the hue),
-  role colors that must stay distinguishable, token consistency across brands, no hardcoded values in components.
-  A finding you accept on purpose is recorded as an exception and listed at publish.
-- **Publish** runs the checks and the workspace's own tests (TypeScript, every story's interaction and
-  accessibility tests), writes a complete DESIGN.md per brand (Google's DESIGN.md format), pushes to GitHub and
-  deploys Storybook with GitHub Actions, which runs the tests again before deploying.
+Three rules shape everything:
+
+1. **Claude proposes, the program verifies, you apply.** Claude cannot write files. It calls `propose_change`; the
+   engine dry-runs the change and attaches a preview (old → new values, contrast before → after, look-alike role
+   colors, guideline sentences that would go stale). Nothing is written until you press **Apply**, and every applied
+   change is a git commit you can restore from **History**.
+2. **Anything a program can compute is computed, not guessed.** Contrast ratios and fixes, CSS output, font loading,
+   the DESIGN.md YAML, and rename follow-through are deterministic code in `engine/`. Claude writes the parts that
+   need judgement: values, prose, components.
+3. **Tokens are the single source of truth.** Components use semantic token names only (`bg-primary`,
+   `text-muted-foreground`), so the same components render every brand in light and dark.
+
+The chat runs **Claude Code** on your computer, once per message, with the Plinth plugin loaded. Only Plinth's
+tools and read-only file tools (`Read`, `Glob`, `Grep`) are allowed; `Write`, `Edit` and `Bash` are disallowed.
+Plinth has no model and no API key of its own, and usage counts against your Claude plan. A thread resumes across
+messages and restarts; **New thread** starts over, and **Stop** interrupts a running turn.
 
 ## Use it
 
-Requirements: Node 20+, git, [Claude Code](https://claude.com/claude-code) installed and signed in (run `claude`
-once). For publishing: the GitHub CLI (`gh auth login --web`).
+### Requirements
 
-**From the UI** (recommended), in an empty folder for your design system:
+| Need | Why | Check |
+|---|---|---|
+| Node 20+ | runs Plinth | `node --version` |
+| git | every applied change is a commit | `git --version` |
+| [Claude Code](https://claude.com/claude-code), signed in | drives the chat | run `claude` once and sign in |
+| GitHub CLI, signed in (publishing only) | creates the repo, enables Pages | `gh auth login --web` |
+
+Tested on Windows 11 with Node 24. macOS and Linux should work, but nobody has tested them yet.
+
+### From the UI (recommended)
+
+In an empty folder for your design system:
 
 ```bash
 npx -y github:jiashengchen610/Plinth
 ```
 
-The Plinth UI opens at http://localhost:4319. Type the brief in the chat:
+The UI opens at http://localhost:4319. Keep the terminal window open while you use it. Type the brief in the chat,
+for example:
 
 > Create a design system for a budgeting app for young professionals. Warm and trustworthy, dark mode matters.
 
-Claude scaffolds the repo and proposes tokens and guidelines; review them in **Changes** and press Apply. Then:
-"make a pricing card from this screenshot", "add a kids brand", "use Inter", and **Publish**. Keep the terminal
-window open while you use the UI.
+Claude scaffolds the repo (about 20 seconds) and proposes tokens and guidelines (about a minute). Then:
 
-**From the Claude Code terminal** (plugin), if you prefer to talk in the terminal and use the UI for review:
+1. **Changes**: read each proposal and press **Apply** (or **Discard**).
+2. **Install dependencies** (banner at the top, 1–3 minutes, once): Storybook and the test browser.
+3. **Components**: start Storybook, switch brand and light/dark in the header.
+4. Keep talking: "make the primary blue", "use Inter", "add a kids brand", "make a pricing card from this
+   screenshot" (attach or paste images in the chat).
+5. **Checks**: fix or accept what fails; **Run tests**.
+6. **Publish**: confirm the repository name and visibility the first time.
+
+Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open`.
+
+### From a Claude Code session (plugin)
+
+To talk in the terminal and use the UI for review:
 
 ```bash
 claude plugin marketplace add jiashengchen610/Plinth
@@ -67,40 +103,178 @@ claude plugin install plinth@plinth
 cd my-design-system && claude
 ```
 
-The plugin starts the same UI; ask Claude for the link or open http://localhost:4319. Both ways can be used on the
-same folder.
+The plugin starts the same UI; ask Claude for the link. The terminal conversation and the UI chat are separate
+sessions on the same folder. This path is less tested than the UI path.
+
+## What you get
+
+The folder becomes a normal git repository that you own. It contains no Plinth code.
+
+```
+my-design-system/
+├── tokens/base.tokens.json        shared scales: radius, fonts, typography, shadows, motion (DTCG)
+├── brands/<id>/
+│   ├── tokens.json                the brand's semantic colors, light and dark (DTCG)
+│   └── DESIGN.md                  the brand's style, intent, do's and don'ts
+├── DESIGN.md                      guidelines shared by all brands
+├── WRITING.md                     voice, tone, interface copy rules, terminology
+├── design-system.json             name, context, brands, accepted exceptions
+├── src/
+│   ├── styles/tokens.css          generated: CSS variables per brand × mode + Tailwind v4 @theme
+│   ├── styles/fonts.css           generated: Google Fonts imports for the font tokens
+│   └── components/<name>/         <name>.tsx, <name>.stories.tsx, <name>.spec.md
+├── exports/<brand>/DESIGN.md      written at publish: complete DESIGN.md per brand (Google format)
+├── .storybook/                    brand and mode toolbar
+└── .github/workflows/storybook.yml   typecheck + story tests, then deploy to GitHub Pages
+```
+
+- **Starting point**: Button, Input, Card, Badge and Label from shadcn/ui; semantic colors from shadcn plus
+  `success`, `warning` and `info` (each with a `-foreground`).
+- **Modes**: a token's `$value` is light; other modes live in `$extensions.plinth.modes.<mode>`.
+- **New components** are written spec first (`<name>.spec.md`: parts, states, props, tokens, accessibility), and
+  the code follows after you approve the spec. Supported: variants of existing components, compositions of them,
+  and known accessible patterns on Radix (dialog, tabs, combobox, date picker …). Novel interactions are not
+  supported yet.
+- **DESIGN.md** follows Google's format. You write prose in two layers (shared + per brand); at publish the engine
+  merges them and generates the YAML front matter from the tokens, one file per brand.
+- `.ds/` holds Plinth's working state: pending changes, chat history, attached images. It is gitignored and never
+  pushed.
+
+## Checks and the publish gate
+
+| Check | When | Blocks publish | Fix |
+|---|---|---|---|
+| Token consistency: every brand defines the same names, aliases resolve | every change | yes | ask Claude |
+| WCAG AA contrast (4.5:1) for every `X` / `X-foreground` pair, `foreground` and `muted-foreground` on `background`, in every brand × mode | every change, and in the proposal preview | yes | **Propose fixes**: moves the foreground's OKLCH lightness, keeps the hue |
+| No hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change | yes | ask Claude |
+| Look-alike roles: primary, destructive, success, warning and info too close (ΔE_OK < 0.08 or < 20° of hue) | every change, and in the preview | **no**, advisory | move one, or mark the pair as intended |
+| TypeScript and every story's interaction + accessibility tests (Vitest browser mode, axe) | **Run tests**, publish, GitHub Actions | yes | ask Claude |
+
+Only text-on-surface pairs are checked for contrast; borders, rings and shadows are decorative and are not. When
+a pair is decorative in your product, or you accept a finding on purpose, **Accept** it in Checks with a reason.
+The exception is recorded in `design-system.json` (`*` matches any brand or mode) and listed at publish.
+
+Publish runs: checks → `exports/<brand>/DESIGN.md` → commit → typecheck and story tests → push (creating the repo
+on first publish) → enable GitHub Pages. GitHub Actions runs the tests again and deploys Storybook only if they
+pass, so a failing push leaves the previous Storybook online.
+
+## What stays in sync
+
+| You change | Updated automatically |
+|---|---|
+| any token | `src/styles/tokens.css` on apply |
+| a font token (any Google Fonts family) | `src/styles/fonts.css` on apply |
+| a token's name (`rename`) | aliases in all token files, and utilities in components (`bg-old` → `bg-new`, `text-old/80`, `var(--old)`) |
+| a color's hue family (pink → blue) | the preview lists sentences in DESIGN.md that still name the old hue; Claude rewrites them in the same change |
+| tokens or brand prose | the DESIGN.md YAML at publish |
+
+## Data flow and privacy
+
+| Step | Goes to | Leaves your computer? |
+|---|---|---|
+| Your messages, attached images, and the token / guideline / component content Claude reads through the tools | Anthropic, through your Claude Code sign-in | **Yes**, the same as any Claude Code session. Plinth's own code is never sent. |
+| Plinth UI, engine, checks, tests | localhost (127.0.0.1 only, per-session token) | No |
+| Install dependencies | the npm registry, and Playwright's browser download | Package requests only |
+| Fonts | Google Fonts, from the browser showing Storybook or your app | Font requests only (no content) |
+| Publish | GitHub (your account, private by default) | Yes, your design-system repo |
+
+The UI accepts requests only from localhost, with a token issued per session, and refuses other host names to
+block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out of git.
+
+## Reference
+
+### MCP tools
+
+| Tool | What it does |
+|---|---|
+| `status` | Brands, components, pending changes, versions, gate, dependencies, last test run, URLs |
+| `create_design_system` | Scaffold from the template and make the first commit |
+| `install_dependencies` | `npm install` plus the Playwright browser |
+| `get_tokens`, `get_guidelines`, `list_components` | Read the system (per brand) |
+| `propose_change` | Queue ops (`set`, `delete`, `rename`, `write`) with a preview; nothing is written |
+| `list_pending_changes`, `apply_change`, `discard_change` | Review queue |
+| `run_checks`, `propose_contrast_fixes` | Deterministic checks; computed contrast fixes as a proposal |
+| `run_tests` | Typecheck and story tests in the workspace |
+| `list_versions`, `restore_version` | History; a restore is a new commit |
+| `export_design_md` | The complete DESIGN.md for one brand, with lint |
+| `start_storybook`, `open_ui` | Previews and the UI link |
+| `publish` | The full publish (or `dryRun`) |
+
+Changes may only touch token files, guideline files, `design-system.json` and `src/components/`. Everything else
+is refused.
+
+### Skills
+
+| Skill | Used when you ask to |
+|---|---|
+| `create-design-system` | create a design system from a description or images |
+| `change-design-system` | change values, fonts, names, brands, guidelines; undo |
+| `create-component` | make or change a component (spec → code → checks → tests) |
+| `publish-design-system` | publish to GitHub and Pages |
+
+`hooks/` adds a guardrail for terminal sessions: it flags hardcoded values in files Claude writes inside a
+design-system folder.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PLINTH_PORT` | 4319 | UI port (the next free port is used if taken) |
+| `PLINTH_WORKSPACE` | current folder | Design-system folder |
+| `PLINTH_MODEL` | Claude Code's default | Model for the UI chat, e.g. `sonnet` |
+| `PLINTH_CLAUDE_BIN` | `claude` | Claude Code executable |
+
+In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinctRoles`, `distinctMin`,
+`distinctHue`, `exceptions`, `hardcoded.allowFiles`.
+
+## Limitations and known issues
+
+- Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
+- Not built yet, although the PRD lists them: importing DTCG / Tokens Studio / DESIGN.md files, the token usage
+  index ("used by these components"), screenshot previews, behavior that depends on the context (mobile vs
+  dashboard), touch-target and same-radius checks, a CHANGELOG at publish, and publishing through a pull request.
+- Fonts load from Google Fonts at runtime. Self-hosted fonts are not supported yet.
+- The UI chat and a terminal Claude Code session are separate conversations.
+- One chat message runs at a time.
+- Windows with Node 24: two runtime bugs abort Node without an error (`fs.cpSync` into `D:\<folder>`, and
+  `process.exit()` right after `fetch`). Plinth avoids both, and a test keeps `cpSync` out. If you see
+  "Connection closed" from Plinth's tools, please open an issue with the folder path and your Node version.
 
 ## Repository layout
 
 | Path | What |
 |---|---|
-| `engine/` | Deterministic core, zero dependencies: color math and contrast repair, token build (multi-brand × mode CSS, Tailwind v4 `@theme`), font loader, checks (contrast, distinct roles, hardcoded values, exceptions), DESIGN.md composition, workspace and versioning |
-| `server/` | MCP server (stdio, zero dependencies), the UI's HTTP API, the headless Claude Code chat, tests runner, publish |
-| `app/` | The UI (React, shadcn/ui). `app/dist` is committed so the plugin needs no build step |
-| `template/` | Skeleton of a user's design-system repo (`gitignore` without the dot: npm drops dotted ones; the engine renames it) |
-| `skills/` | How Claude uses the tools: create, change, create a component, publish |
-| `hooks/` | Guardrail for terminal sessions: flags hardcoded values Claude writes into a design-system workspace |
-| `test/` | `npm test`: engine unit tests, MCP end-to-end, chat end-to-end (with a stand-in for `claude`) |
+| `engine/` | Deterministic core, zero dependencies: color math and contrast repair, token build, font loader, checks and exceptions, prose staleness, DESIGN.md composition, workspace and versioning |
+| `server/` | MCP server (stdio), the UI's HTTP API, the headless Claude Code chat, the test runner, publish, the `plinth` launcher (`cli.mjs`). Zero dependencies |
+| `app/` | The UI (React, shadcn/ui). `app/dist` is committed so nothing needs building at install |
+| `template/` | Skeleton of a user's design-system repo (`gitignore` has no dot because npm drops dotted ones; the engine renames it) |
+| `skills/`, `hooks/` | How Claude uses the tools; the hardcoded-value guardrail |
+| `test/` | `npm test` |
 
 ## Develop
 
 ```bash
-npm test              # engine + MCP + chat end to end (no install needed)
-npm run build:app     # rebuild app/dist after UI changes
-npm run dev:app       # UI with hot reload; proxies /api to a running server on :4319
-node server/cli.mjs <folder>                 # run the UI against a folder
-claude --plugin-dir . # load the plugin from this checkout in a Claude Code session
+npm test                        # 12 tests: engine, scaffold from an npx-style install, MCP end to end
+                                #   (parent and child server), UI chat end to end with a stand-in for `claude`
+npm run build:app               # rebuild app/dist after changing app/src
+npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319
+node server/cli.mjs <folder>    # the UI against a folder, from this checkout
+claude --plugin-dir .           # the plugin from this checkout in a Claude Code session
 ```
+
+Before a release, also: create a workspace from `template/` and run `npm ci && npm run typecheck && npm test`
+(42 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
+showed up only in that setup.
 
 ## Contributing
 
 Issues and pull requests are welcome. Before opening a pull request:
 
-- Read [PRD.md](PRD.md); changes outside its scope (Figma sync, non-React frameworks, other model providers) belong
-  in a separate project.
-- Keep `engine/` and `server/` free of dependencies; the plugin must run without `npm install`.
+- Read [PRD.md](PRD.md). Changes outside its scope (Figma sync, non-React frameworks, other model providers)
+  belong in a separate project.
+- Keep `engine/` and `server/` free of dependencies, `fetch` and `fs.cpSync` (see [CLAUDE.md](CLAUDE.md)).
 - Run `npm test`. If you change `app/src`, run `npm run build:app` and commit `app/dist`.
-- If you change `template/`, create a workspace from it and run its tests (`npm ci && npm run typecheck && npm test`).
+- If you change `template/`, run its tests as described above.
 
 ## License
 

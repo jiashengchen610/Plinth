@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Plinth: a natural-language design system generator for Claude Code.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "plinth",
       "source": "./",
       "description": "Create and maintain a multi-brand design system from natural language and images in Claude Code: DTCG tokens, DESIGN.md and WRITING.md guidelines, shadcn/ui components, a local review UI, Storybook on GitHub Pages.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "MIT",
       "homepage": "https://github.com/jiashengchen610/Plinth"
     }
