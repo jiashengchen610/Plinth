@@ -9,7 +9,7 @@ import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { publishDefaults } from "./publish.mjs";
-import { freePort } from "./storybook.mjs";
+import { freePort, httpJson } from "./storybook.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".woff2": "font/woff2", ".json": "application/json" };
@@ -97,7 +97,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     // Storybook's index, proxied so the UI needs no cross-origin access. Lists story ids per component.
     "GET /api/storybook/index": async () => {
       if (!ctx.storybook.url) return { running: false, entries: [] };
-      const idx = await (await fetch(`${ctx.storybook.url}/index.json`)).json();
+      const idx = (await httpJson(`${ctx.storybook.url}/index.json`)).json;
       return { running: true, url: ctx.storybook.url, entries: Object.values(idx.entries ?? {}).map((e) => ({ id: e.id, title: e.title, name: e.name, type: e.type, importPath: e.importPath })) };
     },
   };

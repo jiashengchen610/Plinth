@@ -4,6 +4,30 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createServer } from "node:net";
+import { request as httpRequest } from "node:http";
+
+/**
+ * JSON over HTTP without the global fetch. undici keeps sockets alive; a synchronous spawn (git, npm) while one
+ * is closing trips a libuv assertion on Node 24 / Windows and kills the process silently. node:http with
+ * agent: false leaves nothing behind.
+ */
+export function httpJson(url, { method = "GET", headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const data = body === undefined ? undefined : JSON.stringify(body);
+    const req = httpRequest(
+      { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, agent: false, headers: { ...headers, ...(data ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {}) } },
+      (res) => {
+        let out = "";
+        res.setEncoding("utf8");
+        res.on("data", (d) => (out += d));
+        res.on("end", () => { try { resolve({ status: res.statusCode, json: out ? JSON.parse(out) : {} }); } catch (e) { reject(e); } });
+      },
+    );
+    req.on("error", reject);
+    req.end(data);
+  });
+}
 
 const isWin = process.platform === "win32";
 
@@ -99,17 +123,29 @@ export function createStorybook(root, deps, bump = () => {}) {
 
 /**
  * Inside the headless Claude session the Plinth UI spawns, a second server instance runs for the tools.
- * Long-lived processes (install, Storybook) stay with the UI's server; this proxy forwards to it.
+ * Long-lived processes (install, Storybook, tests) stay with the UI's server; this proxy forwards to it.
+ * Nothing is requested at construction: the first request happens inside a tool call, on demand.
  */
-export function createRemote(parentUrl, token) {
-  const post = async (path) => {
-    const res = await fetch(new URL(path, parentUrl), { method: "POST", headers: { "X-Plinth-Token": token } });
-    return res.json();
+export function createRemote(root, parentUrl, token) {
+  const call = async (path, method = "POST") => {
+    if (!parentUrl) throw new Error("The Plinth UI server is not reachable from this session.");
+    const r = await httpJson(new URL(path, parentUrl).href, { method, headers: { "X-Plinth-Token": token } });
+    if (r.status >= 400) throw new Error(r.json.error ?? `Plinth UI server answered ${r.status}`);
+    return r.json;
   };
   let url = null;
-  const refresh = async () => { try { url = (await (await fetch(new URL("api/state", parentUrl), { headers: { "X-Plinth-Token": token } })).json()).storybook ?? null; } catch { /* parent gone */ } };
-  refresh();
-  const deps = { get installed() { return false; }, installing: false, state: () => ({}), install: () => post("api/install?wait=1") };
-  const storybook = { get url() { return url; }, async start() { const r = await post("api/storybook/start"); url = r.url ?? url; return r; }, stop() {} };
-  return { deps, storybook };
+  const deps = {
+    get installed() { return existsSync(join(root, "node_modules", ".package-lock.json")); },
+    installing: false,
+    state: () => ({}),
+    install: () => call("api/install?wait=1"),
+  };
+  const storybook = {
+    get url() { return url; },
+    async refresh() { try { url = (await call("api/state", "GET")).storybook ?? null; } catch { /* parent gone */ } return url; },
+    async start() { const r = await call("api/storybook/start"); url = r.url ?? url; return r; },
+    stop() {},
+  };
+  const tests = { running: false, last: null, state: () => ({}), run: () => call("api/tests?wait=1") };
+  return { deps, storybook, tests };
 }

@@ -11,9 +11,9 @@ import { createInterface } from "node:readline";
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..", "server", "index.mjs");
 
-function startServer(workspace) {
+function startServer(workspace, extraEnv = {}) {
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, PLINTH_WORKSPACE: workspace, PLINTH_TOKEN: "test-token", PLINTH_PORT: "4390" },
+    env: { ...process.env, PLINTH_WORKSPACE: workspace, PLINTH_TOKEN: "test-token", PLINTH_PORT: "4390", ...extraEnv },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const pending = new Map();
@@ -204,6 +204,7 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   await api("api/exceptions", { check: "contrast", key: "*|*|*|muted-foreground", reason: "decorative text" });
 
   // Publish dry run: checks pass, exports written and committed, tests skipped (no node_modules), nothing pushed.
+  // (continued below)
   const pub = await s.call("publish", { dryRun: true });
   assert.equal(pub.dryRun, true, JSON.stringify(pub));
   assert.ok(existsSync(join(ws, "exports/acme/DESIGN.md")));
@@ -211,4 +212,36 @@ test("MCP server: create, propose, apply, restore, fix contrast, export, publish
   assert.ok(pub.steps.find((x) => x.name === "tests")?.detail?.skipped, "tests are skipped without dependencies, and say so");
   st = await (await api("api/state")).json();
   assert.equal(st.publish.result.dryRun, true);
+});
+
+test("MCP server in child mode: tools over the UI's workspace, long processes forwarded to the parent", async (t) => {
+  const ws = mkdtempSync(join(tmpdir(), "plinth-child-"));
+  const parent = startServer(ws, { PLINTH_PORT: "4392" });
+  t.after(() => { parent.stop(); rmSync(ws, { recursive: true, force: true }); });
+  await parent.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
+  const ui = (await parent.call("open_ui")).url;
+
+  // The nested instance: no UI of its own, same workspace, parent reachable only for install/Storybook/tests.
+  const child = startServer(ws, { PLINTH_CHILD: "1", PLINTH_PARENT_URL: ui, PLINTH_PARENT_TOKEN: "test-token", PLINTH_PORT: "4393" });
+  t.after(() => child.stop());
+  await child.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude", version: "0" } });
+  assert.equal((await child.call("open_ui")).url, ui, "the child hands out the parent's UI");
+  assert.equal((await child.call("status")).exists, false);
+  // Scaffolding runs git synchronously right after the connection was set up: must not take the process down.
+  const created = await child.call("create_design_system", { name: "Child Made", brand: "acme", context: "marketing-site" });
+  assert.match(created.version, /^[0-9a-f]{7}$/);
+  const status = await child.call("status");
+  assert.equal(status.exists, true);
+  assert.equal(status.storybook, null);
+  assert.equal(status.dependenciesInstalled, false);
+  const sb = await child.call("start_storybook");
+  assert.equal(sb.started, false, JSON.stringify(sb));
+  assert.match(sb.error, /not installed/);
+  const tests = await child.call("run_tests");
+  assert.match(tests.error, /not installed/);
+  // The parent sees the workspace the child created.
+  const st = await (await fetch(new URL("api/state", ui), { headers: { "X-Plinth-Token": "test-token" } })).json();
+  assert.equal(st.exists, true);
+  assert.deepEqual(st.brands, ["acme"]);
+  assert.equal(child.stderr().includes("Assertion"), false, child.stderr());
 });

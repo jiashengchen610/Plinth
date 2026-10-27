@@ -45,10 +45,11 @@ export const TOOLS = [
     name: "status",
     description: "Summary of the design system in this folder: brands, components, pending changes, latest versions, quality gate, dependencies, last test run, and the local UI and Storybook URLs. Call this first.",
     inputSchema: { type: "object", properties: {} },
-    run: (_a, ctx) => {
+    run: async (_a, ctx) => {
       if (!existsSync(join(ctx.root, "design-system.json"))) return { workspace: ctx.root, exists: false, next: "Call create_design_system to scaffold a new design system here.", ui: ctx.ui.url };
       const checks = runChecks(ctx.root);
-      return { exists: true, ...ws.summary(ctx.root), gate: checks.gate, checks: checks.summary, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: existsSync(join(ctx.root, "node_modules")), tests: ctx.tests.last ?? null };
+      if (ctx.storybook.refresh) await ctx.storybook.refresh();
+      return { exists: true, ...ws.summary(ctx.root), gate: checks.gate, checks: checks.summary, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
     },
   },
   {

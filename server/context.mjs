@@ -10,8 +10,7 @@ export function createContext({ root = resolve(process.env.PLINTH_WORKSPACE || p
   const bump = () => ctx.notify();
   if (child) {
     // Tools run inside the headless session the UI spawned: forward long-lived processes to the UI's server.
-    Object.assign(ctx, createRemote(ctx.ui.url, ctx.ui.token));
-    ctx.tests = { running: false, last: null, state: () => ({}), run: async () => { const r = await fetch(new URL("api/tests?wait=1", ctx.ui.url), { method: "POST", headers: { "X-Plinth-Token": ctx.ui.token } }); return r.json(); } };
+    Object.assign(ctx, createRemote(root, ctx.ui.url, ctx.ui.token));
   } else {
     ctx.deps = createDeps(root, bump);
     ctx.storybook = createStorybook(root, ctx.deps, bump);
