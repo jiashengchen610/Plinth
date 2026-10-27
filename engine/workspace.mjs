@@ -1,7 +1,7 @@
 // Workspace operations: scaffold from the template, edit token files, keep a queue of proposed
 // changes, apply them as git commits, list versions and restore any of them. Zero dependencies
 // (shells out to git).
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, mkdtempSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, mkdtempSync, readdirSync, statSync, renameSync } from "node:fs";
 import { join, resolve, relative, dirname, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -54,13 +54,19 @@ export function restore(root, sha) {
  * Create a new workspace from the template. `brand` becomes the first brand id.
  * Does not install dependencies (see installDependencies).
  */
-export function initWorkspace(root, { name = "my-design-system", brand = "default", context = "saas-dashboard", naming = "shadcn" } = {}) {
+export function initWorkspace(root, { name = "my-design-system", brand = "default", context = "saas-dashboard", naming = "shadcn", templateDir = TEMPLATE_DIR } = {}) {
   if (existsSync(join(root, "design-system.json"))) throw new Error(`${root} already contains a design system`);
   mkdirSync(root, { recursive: true });
   // Hidden entries (.git, .claude, .mcp.json, .vscode …) are editor or tool settings, not content.
   const nonEmpty = readdirSync(root).filter((f) => !f.startsWith(".")).length > 0;
   if (nonEmpty) throw new Error(`${root} is not empty`);
-  cpSync(TEMPLATE_DIR, root, { recursive: true, filter: (src) => !/node_modules|storybook-static|[\\/]dist([\\/]|$)/.test(src) });
+  if (!existsSync(join(templateDir, "design-system.json"))) throw new Error(`template not found at ${templateDir}`);
+  // Filter on the path inside the template: the install itself may live under a node_modules folder (npx).
+  const skip = /(^|[\\/])(node_modules|storybook-static|dist)([\\/]|$)/;
+  cpSync(templateDir, root, { recursive: true, filter: (src) => !skip.test(relative(templateDir, src)) });
+  // npm drops .gitignore files from packages, so the template ships it without the dot.
+  if (existsSync(join(root, "gitignore"))) renameSync(join(root, "gitignore"), join(root, ".gitignore"));
+  if (!existsSync(join(root, ".gitignore"))) throw new Error("template is missing its gitignore");
   if (brand !== "default") {
     cpSync(join(root, "brands", "default"), join(root, "brands", brand), { recursive: true });
     rmSync(join(root, "brands", "default"), { recursive: true, force: true });

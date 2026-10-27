@@ -1,0 +1,4 @@
+# What ships is listed in package.json "files"; this file only stops npm from applying .gitignore rules
+# (which would drop the template's own files) and silences the gitignore-fallback warning.
+node_modules
+*.log

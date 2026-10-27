@@ -77,7 +77,7 @@ same folder.
 | `engine/` | Deterministic core, zero dependencies: color math and contrast repair, token build (multi-brand × mode CSS, Tailwind v4 `@theme`), font loader, checks (contrast, distinct roles, hardcoded values, exceptions), DESIGN.md composition, workspace and versioning |
 | `server/` | MCP server (stdio, zero dependencies), the UI's HTTP API, the headless Claude Code chat, tests runner, publish |
 | `app/` | The UI (React, shadcn/ui). `app/dist` is committed so the plugin needs no build step |
-| `template/` | Skeleton of a user's design-system repo |
+| `template/` | Skeleton of a user's design-system repo (`gitignore` without the dot: npm drops dotted ones; the engine renames it) |
 | `skills/` | How Claude uses the tools: create, change, create a component, publish |
 | `hooks/` | Guardrail for terminal sessions: flags hardcoded values Claude writes into a design-system workspace |
 | `test/` | `npm test`: engine unit tests, MCP end-to-end, chat end-to-end (with a stand-in for `claude`) |
