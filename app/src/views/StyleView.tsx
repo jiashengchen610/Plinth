@@ -255,8 +255,13 @@ export function Sample({ vars }: { vars: React.CSSProperties }) {
   const v = (n: string) => `var(--${n})`;
   // The three font roles (older design systems have one font: font-sans).
   const heading = { fontFamily: "var(--heading-font, var(--sans-font))" }, label = { fontFamily: "var(--label-font, var(--sans-font))" };
+  // The screen's corners follow the card inside it, one gap (p-5, 20px) wider, so the space between stays even;
+  // square cards get a square screen.
+  const px = (v: unknown) => { const m = /^([\d.]+)(px|rem)$/.exec(String(v ?? "").trim()); return m ? Number(m[1]) * (m[2] === "rem" ? 16 : 1) : null; };
+  const card = px((vars as Record<string, unknown>)["--card-radius"]);
+  const screen = card === null ? undefined : card > 0 ? `${card + 20}px` : "0px";
   return (
-    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))" }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
+    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))", borderRadius: screen }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
         <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
@@ -264,7 +269,7 @@ export function Sample({ vars }: { vars: React.CSSProperties }) {
       <div className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
         <span className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
         <span className="text-[28px] leading-tight font-bold" style={heading}>$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
-        <span className="mt-2 block h-2 rounded-full" style={{ background: v("muted") }}><span className="block h-2 w-[62%] rounded-full" style={{ background: v("primary") }} /></span>
+        <span className="mt-2 block h-2 rounded-full" style={{ background: v("muted"), borderRadius: v("pill-radius") }}><span className="block h-2 w-[62%] rounded-full" style={{ background: v("primary"), borderRadius: v("pill-radius") }} /></span>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-semibold" style={{ ...label, color: v("label-text-foreground") }}>Search</label>
