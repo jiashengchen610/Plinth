@@ -11,7 +11,7 @@ steps in one UI, with Claude in a chat beside them: Describe → Style → Compo
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.9.0).** Tested by `npm test` (34 tests), by the 86 story tests in a generated workspace, and
+> **Status: early (0.10.0).** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -125,7 +125,9 @@ its main button in the bar at the bottom of the screen:
    or **That's on purpose**. **Glass** tunes the frosted material (color, how much of it shows, blur, how vivid what
    shows through is, edge light, a ripple in Chrome and Edge) live over color, text, black and white, with how its
    text reads over the darkest and the lightest backdrop and the least color that keeps it readable; **Save glass**
-   writes it as one change.
+   writes it as one change. **Chart colors** shows the three sets Plinth makes from the palette for the Chart
+   component (eight categories, low to high, around a middle), seen with normal vision or as red-, green- or
+   blue-blind; they follow the main color until someone picks one by hand.
 3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
    (roles) → base colors (the whole palette: your own colors first, then Tailwind's). Click a part, then one of your
    colors, to connect them; click a base color to change that color itself (every component using it changes, the
@@ -290,6 +292,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `set_style` | Main color, grays, corners (preset, outer, inner, whether parts inside fit), text font, headings font, what buttons and labels follow (what the Style step does): roles re-pointed at readable palette steps, new fonts added to the palette |
 | `set_role_color` | One role on a palette step in one mode (what clicking a base color in Components does); the other mode follows in the same family |
 | `set_glass` | The glass material (preset, color, opacity, blur, saturation, edge light, ripple), with how its text reads over black and white |
+| `make_chart_colors` | Make the chart colors from the palette again (categories kept apart for color vision deficiencies, low to high, around a middle) |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |
@@ -366,7 +369,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 34 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 37 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319
@@ -376,7 +379,7 @@ claude --plugin-dir .           # the plugin from this checkout in a Claude Code
 ```
 
 Before a release, also: create a workspace from `template/` and run `npm ci && npm run typecheck && npm test`
-(86 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
+(93 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
 showed up only in that setup. Then tag the release (`v<version>` from `package.json`) and push the tag: the deploy
 workflow of every published design system runs `plinth check` from that tag.
 

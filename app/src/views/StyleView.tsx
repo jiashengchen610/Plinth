@@ -5,6 +5,7 @@ import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from 
 import { buildGraph, dependents, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
 import { GlassTool } from "@/views/GlassTool";
+import { ChartColors } from "@/views/ChartColors";
 
 type Props = {
   state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
@@ -65,7 +66,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const headingFonts = [...new Set([...preset.filter((f) => f.kind === "serif").map((f) => f.family), ...(st.headingFont ? [st.headingFont] : []), ...preset.filter((f) => f.kind !== "serif").map((f) => f.family)])].filter((f) => f !== st.font);
   const moodOf = (f: string) => preset.find((x) => x.family === f)?.mood ?? "Your font";
   const href = fontsHref([...fonts, ...headingFonts]);
-  const roleRows = rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/"));
+  const roleRows = rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/") && !r.path.startsWith("color/chart/"));
   const usedBy = (r: TokenRow) => new Set(dependents(g, r.path).filter((d) => d.layerId === "components").map((d) => d.path.split("/")[0])).size;
   const famUsed = (fam: string) => roleRows.some((r) => Object.values(r.values).some((v) => typeof v.raw === "string" && v.raw.includes(`{color.${fam}.`)));
   const vars = previewVars(rows, tmode);
@@ -257,6 +258,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
         </div>
       </div>
       <GlassTool state={state} presets={presets} brand={brand} mode={tmode} rows={rows} onChanged={onChanged} onError={onError} />
+      <ChartColors state={state} brand={brand} mode={tmode} page={(vars as Record<string, string>)["--background"]} onChanged={onChanged} onError={onError} />
       <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
     </div>
   );

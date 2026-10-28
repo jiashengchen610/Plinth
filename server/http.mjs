@@ -15,6 +15,7 @@ import { createSetup, presets, suggest } from "./start.mjs";
 import { draftVersionMessage } from "./quick.mjs";
 import { colorName } from "../engine/color-names.mjs";
 import { readStyle } from "../engine/style.mjs";
+import { chartView } from "../engine/chart.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".woff2": "font/woff2", ".json": "application/json" };
@@ -160,6 +161,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },
     "POST /api/glass": async (req) => { needsWorkspace(); return tool("set_glass", { ...(await readJson(req)), by: "you" }); },
+    "GET /api/chart": (_req, url) => { needsWorkspace(); return { chart: chartView(ctx.root, url.searchParams.get("brand") || loadConfig(ctx.root).defaultBrand || listBrands(ctx.root)[0]) }; },
+    "POST /api/chart": async (req) => { needsWorkspace(); return tool("make_chart_colors", { ...(await readJson(req)), by: "you" }); },
     // The glass tool's live readout while sliders move (nothing is written): its text over black and white.
     "GET /api/glass-check": (_req, url) => {
       needsWorkspace();

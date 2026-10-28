@@ -24,6 +24,10 @@ This repository is a design system maintained with Plinth. Follow these rules.
   where the browser cannot blur, with a recipe tuned by `set_glass`), text on it the glass's foreground; or the Glass
   component. Never write `backdrop-filter` or translucent colors by hand: the engine checks glass text over black and
   white and falls back to solid for `prefers-reduced-transparency`.
+- Charts: the Chart component (Recharts). Series colors come from the chart roles Plinth makes from the palette,
+  passed in the config: `var(--chart-1)` … `var(--chart-8)` for categories (in order: the first ones stay apart best),
+  `var(--chart-seq-1…7)` for low to high, `var(--chart-div-1…7)` around a middle. Never pick series colors by hand;
+  `make_chart_colors` remakes them. Give every chart an `aria-label`, and label series (legend or marks).
 - Corners inside corners: a part that sits inside a rounded container near its corner (tabs in a bar, options in a
   list, a close button in a corner) gets its own radius token with
   `"$extensions": { "plinth": { "fit": { "outer": "{<name>.radius}", "spacing": <padding steps>, "border": <px> } } }`

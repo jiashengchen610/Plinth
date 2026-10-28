@@ -22,7 +22,8 @@ const pmid = (k: number) => TOP + k * PROW + PROW / 2;
 const swatch = (t: TokenRow | null | undefined, mode: Mode) => (t ? valueIn(t, mode)?.resolved ?? "transparent" : "transparent");
 
 export function NodeGraph({ g, mode, parts, selected, onSelect, onEdit, onRoleColor }: Props) {
-  const roles = useMemo(() => g.rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/")), [g]);
+  // Chart colors are a set of their own (Style → Chart colors), not parts' colors.
+  const roles = useMemo(() => g.rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/") && !r.path.startsWith("color/chart/")), [g]);
   // The whole palette, one row per color: your own colors first, then Tailwind's, then white and black.
   const palette = useMemo(() => {
     const hues = paletteHues(g);

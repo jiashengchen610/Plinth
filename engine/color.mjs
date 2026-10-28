@@ -134,6 +134,24 @@ export function deltaE(aValue, bValue) {
   const [l2, a2, b2] = linearSrgbToOklab([b.r, b.g, b.b].map(toLinear));
   return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
 }
+// ---------- color vision deficiency ----------
+// Machado, Oliveira and Fernandes (2009), full severity, applied in linear sRGB.
+const CVD = {
+  protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+  tritan: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.3039]],
+};
+export const CVD_TYPES = Object.keys(CVD);
+/** How a color looks to someone with protanopia, deuteranopia or tritanopia, as hex. null if unparseable. */
+export function simulateCvd(value, type) {
+  const c = parseColor(value);
+  const m = CVD[type];
+  if (!c || !m) return null;
+  const lin = [c.r, c.g, c.b].map(toLinear);
+  const out = m.map((row) => clamp01(row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]));
+  return formatHex({ r: fromLinear(out[0]), g: fromLinear(out[1]), b: fromLinear(out[2]) });
+}
+
 /** Shortest hue difference in degrees, or null when either color is (near) achromatic. */
 export function hueDifference(aValue, bValue, minChroma = 0.05) {
   const a = parseColor(aValue), b = parseColor(bValue);

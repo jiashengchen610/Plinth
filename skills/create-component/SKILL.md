@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.5.2
+version: 0.5.3
 ---
 
 # Create a component
@@ -13,7 +13,7 @@ with hardcoded values or an icon package (`plinth check`). The spec comes before
 ## 0. Ready-made first
 
 Plinth ships a catalog: button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast,
-tooltip, card, tabs, dialog, separator. If the user asks for one of these and `list_components` does not have it,
+tooltip, card, tabs, dialog, separator, glass, chart. If the user asks for one of these and `list_components` does not have it,
 call `add_component` (free, instant, one undoable change, in the system's style at once) instead of writing it. Then
 adjust it like any existing component (tier 1).
 
@@ -68,7 +68,8 @@ Component rules:
   and invalid states may use roles (`ring-ring`, `border-destructive`). Elevation, motion and stacking come from the
   base roles: `shadow-card`, `shadow-overlay`, `duration-(--duration-fast)`, `ease-enter`, `ease-exit`,
   `z-(--layer-dialog)` (layers: sticky, dropdown, dialog, toast, tooltip); glass over imagery is `material-glass` with
-  `text-material-glass-foreground` (never a hand-written `backdrop-filter`). No hex, `oklch()`, arbitrary values
+  `text-material-glass-foreground` (never a hand-written `backdrop-filter`); charts use the Chart component with
+  series colors `var(--chart-1…8)`, `var(--chart-seq-1…7)`, `var(--chart-div-1…7)`. No hex, `oklch()`, arbitrary values
   (`p-[13px]`), inline styles or magic pixel values.
 - Variants with `cva`; `data-slot` on the root; forward `className`; type props explicitly.
 - Copy follows WRITING.md (verbs on buttons, sentence case, specific errors).

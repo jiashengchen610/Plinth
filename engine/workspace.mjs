@@ -12,6 +12,7 @@ import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { hueFamily, staleMentions } from "./prose.mjs";
 import { iconsModule } from "./icons.mjs";
+import { chartOps } from "./chart.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const TEMPLATE_DIR = resolve(here, "..", "template");
@@ -798,7 +799,44 @@ export function catalogComponentOps(root, id, templateDir = TEMPLATE_DIR) {
   for (const group of ["duration", "layer"]) if (tpl[group] && !base[group]) for (const [k, v] of Object.entries(tpl[group])) if (!k.startsWith("$")) missing.push([`${group}/${k}`, v, tpl[group].$type]);
   for (const k of ["enter", "exit"]) if (tpl.ease?.[k] && !base.ease?.[k]) missing.push([`ease/${k}`, tpl.ease[k], "cubicBezier"]);
   for (const [path, t, type] of missing) ops.push({ op: "set", file: "tokens/base.tokens.json", path, value: t.$value, type, ...(t.$description ? { description: t.$description } : {}) });
+  // Chart colors, made from this design system's palette, in each brand that lacks them.
+  if (existsSync(tokens) && readFileSync(tokens, "utf8").includes("\"chart\"")) {
+    const config = loadConfig(root);
+    for (const brand of listBrands(root, config)) {
+      const own = JSON.parse(readFileSync(join(root, "brands", brand, "tokens.json"), "utf8"));
+      if (!own.color?.chart) ops.push(...chartOps(root, brand));
+    }
+  }
   return ops;
+}
+
+/**
+ * npm packages a catalog component imports that this design system's package.json lacks, at the template's version:
+ * { recharts: "^3.8.0" }. Design systems made before the component shipped need them.
+ */
+export function missingPackages(root, id, templateDir = TEMPLATE_DIR) {
+  const tpl = JSON.parse(readFileSync(join(templateDir, "package.json"), "utf8"));
+  const mine = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const have = { ...mine.dependencies, ...mine.devDependencies };
+  const out = {};
+  const dir = join(templateDir, "src", "components", id);
+  for (const f of existsSync(dir) ? readdirSync(dir) : []) {
+    for (const m of readFileSync(join(dir, f), "utf8").matchAll(/from\s+["']([^"'.@][^"']*|@[^/"']+\/[^/"']+)["']/g)) {
+      const name = m[1].startsWith("@") ? m[1] : m[1].split("/")[0];
+      if (!have[name] && tpl.dependencies?.[name]) out[name] = tpl.dependencies[name];
+    }
+  }
+  return out;
+}
+
+/** Add packages to package.json (dependencies, sorted); installing them is the caller's (npm install). */
+export function addPackages(root, pkgs) {
+  if (!Object.keys(pkgs).length) return false;
+  const file = join(root, "package.json");
+  const pkg = JSON.parse(readFileSync(file, "utf8"));
+  pkg.dependencies = Object.fromEntries(Object.entries({ ...pkg.dependencies, ...pkgs }).sort(([a], [b]) => a.localeCompare(b)));
+  writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
+  return true;
 }
 
 /** Source files outside a component's folder that import it (the Foundations pages, the app shell, other components). */

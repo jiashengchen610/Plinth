@@ -11,6 +11,7 @@ import { loadConfig, listBrands } from "../engine/tokens.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { CORNERS, fontPickFor, GLASS_PRESETS, styleOps, readStyle } from "../engine/style.mjs";
 import { typographyUpgrade } from "../engine/upgrade.mjs";
+import { chartFollowOps } from "../engine/chart.mjs";
 
 export const KINDS = [
   { id: "mobile-app", label: "Mobile app" },
@@ -60,6 +61,7 @@ export const COMPONENTS = [
   { id: "dialog", name: "Dialog", hint: "A window that asks for a decision", ready: true },
   { id: "separator", name: "Divider", hint: "A line between sections", ready: true },
   { id: "glass", name: "Glass", hint: "A frosted panel over photos and color", ready: true },
+  { id: "chart", name: "Chart", hint: "Bars, lines, areas, donuts and radar for numbers", ready: true },
 ];
 /** What each kind of product usually needs beyond the core five; the starting selection in Describe. */
 export const KIND_COMPONENTS = {
@@ -201,7 +203,9 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
           // Catalog components take their text from text styles: an older design system gets them first.
           const fonts = add.length ? typographyUpgrade(ctx.root, ws.TEMPLATE_DIR) : null;
           if (fonts) ws.change(ctx.root, { title: fonts.title, ops: fonts.ops, by: "engine" });
+          const pkgs = Object.assign({}, ...add.map((id) => ws.missingPackages(ctx.root, id)));
           if (add.length) ws.change(ctx.root, { title: `Add ${add.map((id) => COMPONENTS.find((c) => c.id === id)?.name ?? id).join(", ")}`, ops: add.flatMap((id) => ws.catalogComponentOps(ctx.root, id)), by: "engine" });
+          if (ws.addPackages(ctx.root, pkgs)) ctx.deps.install().catch(() => {});
         }
         set("scaffold", "done");
         set("style", "active");
@@ -218,7 +222,7 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         const font = FONTS.some((f) => f.family === a.font) ? a.font : "Inter";
         // A serif becomes the headings font; a sans is the text font, with headings in it too. Before font roles: one font.
         const fonts = readStyle(ctx.root, brand).fontRoles ? { headingFont: "", ...fontPickFor(font) } : { font };
-        const ops = styleOps(ctx.root, brand, { main, gray, corners, ...fonts });
+        const ops = [...styleOps(ctx.root, brand, { main, gray, corners, ...fonts }), ...chartFollowOps(ctx.root, brand, { main, gray })];
         const cfg = JSON.parse(readFileSync(join(ctx.root, "design-system.json"), "utf8"));
         const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
         cfg.brief = brief;

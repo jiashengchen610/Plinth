@@ -1,0 +1,88 @@
+{
+  "chart": {
+    "$type": "color",
+    "key": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.small}",
+        "$description": "Corners of the color keys in the tooltip and legend"
+      }
+    },
+    "grid": {
+      "$value": "{color.border}",
+      "$description": "Grid lines, axis lines and the line under the pointer"
+    },
+    "surface": {
+      "$value": "{color.background}",
+      "$description": "The gaps between slices and around points: the page color"
+    },
+    "cursor": {
+      "$value": "{color.muted}",
+      "$description": "The band behind the bar under the pointer"
+    },
+    "axis": {
+      "foreground": {
+        "$value": "{color.muted-foreground}",
+        "$description": "Axis labels"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Axis labels"
+      }
+    },
+    "legend": {
+      "foreground": {
+        "$value": "{color.foreground}",
+        "$description": "Legend labels"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Legend labels"
+      }
+    },
+    "tooltip": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.control}",
+        "$description": "Tooltip corners"
+      },
+      "background": {
+        "$value": "{color.popover}",
+        "$description": "Tooltip"
+      },
+      "foreground": {
+        "$value": "{color.popover-foreground}",
+        "$description": "Tooltip values"
+      },
+      "border": {
+        "$value": "{color.border}",
+        "$description": "Tooltip outline"
+      },
+      "label": {
+        "$value": "{color.muted-foreground}",
+        "$description": "Series names in the tooltip"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Tooltip text"
+      },
+      "title": {
+        "font": {
+          "$type": "typography",
+          "$value": "{typography.label.sm}",
+          "$description": "The tooltip's heading (the category or date)"
+        }
+      },
+      "value": {
+        "font": {
+          "$type": "typography",
+          "$value": "{typography.label.sm}",
+          "$description": "Numbers in the tooltip"
+        }
+      }
+    }
+  }
+}

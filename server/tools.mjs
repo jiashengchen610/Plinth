@@ -13,6 +13,7 @@ import { GLASS_PRESETS, glassOps, readGlass, readStyle, roleColorOps, styleOps, 
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
 import { deployStatus } from "./publish.mjs";
+import { chartFollowOps, chartOps, chartView } from "../engine/chart.mjs";
 
 /** Change titles use the name people see in the UI (Text box, Dropdown); components outside the catalog keep their id. */
 const componentName = (id) => COMPONENTS.find((c) => c.id === id)?.name ?? id;
@@ -188,7 +189,8 @@ export const TOOLS = [
       // headingFont "" is a choice (same as text); the others count when given.
       const pick = Object.fromEntries(["main", "gray", "corners", "outer", "inner", "fitInside", "font", "headingFont", "labelFont"].filter((k) => a[k] !== undefined && (a[k] !== "" || k === "headingFont")).map((k) => [k, a[k]]));
       if (!Object.keys(pick).length) throw new Error("set_style needs main, gray, corners, outer, inner, fitInside, font, headingFont or labelFont");
-      const ops = styleOps(ctx.root, brand, pick);
+      // Chart colors follow a new main color or grays while still the ones Plinth made.
+      const ops = [...styleOps(ctx.root, brand, pick), ...chartFollowOps(ctx.root, brand, { main: pick.main, gray: pick.gray })];
       if (!ops.length) return { title: styleTitle(pick), files: [], unchanged: true, style: readStyle(ctx.root, brand) };
       return { ...write(ctx, { title: styleTitle(pick), ops, by: a.by ?? "claude" }), style: readStyle(ctx.root, brand) };
     },
@@ -219,6 +221,19 @@ export const TOOLS = [
     },
   },
   {
+    name: "make_chart_colors",
+    description: "Make the chart colors from the palette (what the Chart component's series use: chart-1…8 for categories, chart-seq-1…7 for low to high values, chart-div-1…7 around a middle): series start from the main color and each next one stays furthest from the others for normal vision and protan, deutan and tritan deficiencies, at a step that reads 3:1 on the page. Overwrites chart colors someone picked by hand. Returns the colors, how many series stay apart for everyone, and what does not. Written at once; undoable.",
+    inputSchema: { type: "object", properties: { brand: { type: "string", description: "Brand id; default: every brand" } } },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brands = a.brand ? [a.brand] : listBrands(ctx.root, config);
+      const ops = brands.flatMap((b) => chartOps(ctx.root, b));
+      const result = ops.length ? write(ctx, { title: "Chart colors made from the palette", ops, by: a.by ?? "claude" }) : { title: "Chart colors made from the palette", files: [], unchanged: true };
+      return { ...result, chart: Object.fromEntries(brands.map((b) => [b, chartView(ctx.root, b)])) };
+    },
+  },
+  {
     name: "set_role_color",
     description: "Point one color role (primary, destructive, border …) at a palette step in one mode, the way the UI's Components step does when a base color is clicked. The other mode moves to the same family at the step it already uses, so light and dark stay one color. Every component using the role changes. Written at once; undoable. Prefer this over hand-made ops for re-pointing a role.",
     inputSchema: {
@@ -244,13 +259,19 @@ export const TOOLS = [
   },
   {
     name: "add_component",
-    description: "Add a component from Plinth's ready-made catalog (button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast, tooltip, card, tabs, dialog, separator): its code, story, spec, component tokens and the icons it uses, in the design system's style at once, as one undoable change. Free and instant: always prefer this over writing a component the catalog has.",
+    description: "Add a component from Plinth's ready-made catalog (button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast, tooltip, card, tabs, dialog, separator, glass, chart): its code, story, spec, component tokens and the icons it uses, in the design system's style at once, as one undoable change. Free and instant: always prefer this over writing a component the catalog has.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Catalog id, e.g. dialog" } }, required: ["name"] },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
       // Catalog components take their text from text styles: a design system from before those upgrades first.
       upgradeTypographyFirst(ctx);
-      return write(ctx, { title: `Add ${componentName(a.name)}`, ops: ws.catalogComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
+      const pkgs = ws.missingPackages(ctx.root, a.name);
+      const r = write(ctx, { title: `Add ${componentName(a.name)}`, ops: ws.catalogComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
+      // A package the component needs that this design system does not have yet (a chart needs Recharts).
+      if (!ws.addPackages(ctx.root, pkgs)) return r;
+      ctx.deps?.install?.().catch(() => {});
+      ctx.notify();
+      return { ...r, packages: pkgs, message: `Added ${componentName(a.name)}. Installing ${Object.keys(pkgs).join(", ")} for it (about a minute); its preview shows after that.` };
     },
   },
   {

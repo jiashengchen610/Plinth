@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { contrastRatio, fixContrast, deltaE, hueDifference, tint, parseColor, rgbToOklch } from "./color.mjs";
 import { loadConfig, listBrands, resolveBrand, buildCss } from "./tokens.mjs";
 import { scan } from "./check-hardcoded.mjs";
+import { checkChart } from "./chart.mjs";
 
 /**
  * Foreground/background pairs that must meet contrast. Derived from naming conventions:
@@ -356,6 +357,7 @@ export function runChecks(root) {
   const structure = markAccepted(checkStructure(root, config), "structure", exceptions);
   const componentsDir = join(root, "src", "components");
   const hardcoded = markAccepted(existsSync(componentsDir) ? scan(["src/components"], root) : [], "hardcoded", exceptions);
+  const chart = checkChart(root, listBrands(root, config));
   const open = (list) => list.filter((c) => !c.pass && !c.accepted);
   const summary = {
     tokens: { ok: css.issues.length === 0, issues: css.issues },
@@ -363,8 +365,9 @@ export function runChecks(root) {
     hardcoded: { ok: hardcoded.every((f) => f.accepted), advisory: true, count: hardcoded.filter((f) => !f.accepted).length, accepted: hardcoded.filter((f) => f.accepted).length },
     distinct: { ok: open(distinct).length === 0, advisory: true, failing: open(distinct).length, accepted: distinct.filter((c) => !c.pass && c.accepted).length, total: distinct.length },
     structure: { ok: open(structure).length === 0, advisory: true, failing: open(structure).length, accepted: structure.filter((c) => c.accepted).length },
+    chart: { ok: chart.every((c) => c.pass), advisory: true, failing: chart.filter((c) => !c.pass).length, total: chart.length },
   };
   const gate = Object.values(summary).every((s) => s.ok || s.advisory);
   const warnings = Object.entries(summary).filter(([, s]) => s.advisory && !s.ok).map(([k, s]) => ({ check: k, count: s.failing ?? s.count ?? 0 }));
-  return { gate, summary, warnings, contrast, distinct, structure, hardcoded, tokenIssues: css.issues, exceptions };
+  return { gate, summary, warnings, contrast, distinct, structure, hardcoded, chart, tokenIssues: css.issues, exceptions };
 }
