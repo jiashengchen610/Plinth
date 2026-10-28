@@ -75,6 +75,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
       unsaved: ws.unsavedChanges(ctx.root),
       lastChange: ws.lastChange(ctx.root),
       versions: ws.versions(ctx.root, 40),
+      // This round: what differs from the published version, per step (the UI's step marks and status line).
+      round: ws.sincePublish(ctx.root),
       storybook: ctx.storybook.url,
     };
   };

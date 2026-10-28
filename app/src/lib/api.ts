@@ -124,6 +124,8 @@ export type State = {
   /** What Upgrade would do for a design system made by an older Plinth. */
   upgradeAvailable: "layers" | "typography" | "components" | false;
   versions: Version[];
+  /** This round of work: what differs from the published version (null published: never published). */
+  round: { published: string | null; versions?: number; files?: number; steps?: { style: boolean; components: boolean } };
   storybook: string | null;
 };
 export const inboxUrl = (path: string) => `/inbox/${path.split("/").pop()}?t=${encodeURIComponent(token)}`;

@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.12.0.** Tested by `npm test` (41 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.12.1.** Tested by `npm test` (42 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -168,7 +168,14 @@ its main button in the bar at the bottom of the screen:
    online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
    While it works, the page shows each step (here, then on GitHub); once the site is online a success page lists where
    to check it (the component site, DESIGN.md for AI tools, the repository, the test results) and your versions as a
-   tree.
+   tree. **Make more changes** starts the next round.
+
+   **Rounds.** Work goes in rounds, from one publish to the next. The line under the design system's name says where
+   the round stands: Not published yet, Live · nothing changed since, Changed since it went live (with the saved
+   versions waiting to be published), Publishing · GitHub is testing, or Last publish stopped. The steps start over
+   after each publish: Style and Components get their check again when you go through them, a blue dot marks a step
+   this round changed, an amber dot one with things to look at, and Publish is checked only while the live version
+   is what you have.
 
 The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
 kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
@@ -403,7 +410,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 41 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 42 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

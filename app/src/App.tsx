@@ -9,7 +9,7 @@ import { DescribeView } from "@/views/DescribeView";
 import { CreatingView } from "@/views/CreatingView";
 import { StyleView } from "@/views/StyleView";
 import { ComponentsView } from "@/views/ComponentsView";
-import { PublishView } from "@/views/PublishView";
+import { PublishView, useDeploy } from "@/views/PublishView";
 import { HistoryView } from "@/views/HistoryView";
 
 const SCREENS = ["describe", "creating", "style", "components", "publish", "history"] as const;
@@ -74,9 +74,11 @@ export default function App() {
   }, []);
   useEffect(() => { history.replaceState(null, "", `#${screen}`); }, [screen]);
 
-  // A step is checked once the user went through it with its Next button. Remembered per design system (a new one in
-  // the same folder, or new answers, start unchecked), in this browser only.
-  const stepsKey = state?.exists ? `plinth-steps:${state.workspace}:${state.config.brief?.answeredAt ?? ""}` : null;
+  // A step is checked once the user went through it with its Next button in this round of work: until the next
+  // publish. Remembered per design system and round (a new one in the same folder, new answers, or a publish start
+  // unchecked), in this browser only.
+  const stepsKey = state?.exists ? `plinth-steps:${state.workspace}:${state.config.brief?.answeredAt ?? ""}:${state.round?.published ?? "new"}` : null;
+  const { deploy: live } = useDeploy(state?.round?.published ?? "", Boolean(state?.exists && state?.round?.published));
   const [confirmed, setConfirmed] = useState<Set<Screen>>(new Set());
   useEffect(() => {
     try { setConfirmed(new Set(stepsKey ? JSON.parse(localStorage.getItem(stepsKey) ?? "[]") : [])); } catch { setConfirmed(new Set()); }
@@ -122,8 +124,22 @@ export default function App() {
   const exists = state.exists;
   const chatOn = exists;
   const unsaved = state.unsaved?.length ?? 0;
-  const everPublished = state.versions?.some((v) => v.published);
-  const done = (id: Screen) => (id === "describe" ? exists : id === "publish" ? everPublished : confirmed.has(id));
+  // This round: Publish is checked only while the live version is what you have; Style and Components show a dot when
+  // this round changed something there, or when there is something to look at.
+  const round = state.round ?? { published: null };
+  const deploying = state.publish?.running || (live && (live.status === "waiting" || live.status === "running"));
+  const stopped = live?.status === "failed";
+  const upToDate = Boolean(round.published) && round.files === 0 && !deploying && !stopped;
+  const done = (id: Screen) => (id === "describe" ? exists : id === "publish" ? upToDate : confirmed.has(id));
+  const toLook: Partial<Record<Screen, number>> = exists ? {
+    style: state.checks.contrast.filter((c) => !c.pass && !c.accepted).length + state.checks.distinct.filter((d) => !d.pass && !d.accepted).length + state.checks.tokenIssues.length,
+    components: state.checks.hardcoded.filter((h) => !h.accepted).length,
+  } : {};
+  const changed = (id: Screen) => (id === "style" || id === "components" ? Boolean(round.steps?.[id]) : false);
+  const status = !exists ? { text: "Not created yet", tone: "" } : deploying ? { text: "Publishing · GitHub is testing", tone: "bg-info" }
+    : stopped ? { text: "Last publish stopped", tone: "bg-destructive" } : !round.published ? { text: "Not published yet", tone: "bg-muted-foreground" }
+    : upToDate ? { text: "Live · nothing changed since", tone: "bg-success" }
+    : { text: `Changed since it went live${round.versions ? ` · ${round.versions} saved version${round.versions > 1 ? "s" : ""} to publish` : ""}`, tone: "bg-warning" };
   const compName = componentLabel(state.components?.[0]?.id ?? "button", presets?.components);
   const tips = effective === "components" ? [`Make the ${compName.toLowerCase()} a bit bigger`, "Add a loading state to Button", "Add a date picker"] : TIPS[effective] ?? [];
   const placeholder = effective === "style" ? "Tell Claude how the style should change" : effective === "components" ? "Tell Claude what to change in a component" : effective === "publish" ? "Ask Claude about your changes" : "Tell Claude what to change";
@@ -135,7 +151,7 @@ export default function App() {
           <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="17" width="22" height="7" rx="2" fill="currentColor" /><rect x="8" y="5" width="12" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
           <div className="flex min-w-0 flex-col leading-tight">
             <strong className="truncate text-[15px]">{exists ? state.config.name : "New design system"}</strong>
-            <span className="text-xs text-muted-foreground">{exists ? (state.checks.gate ? "Style guide up to date" : "Some colors need fixing") : "Not created yet"}</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{status.tone && <span aria-hidden="true" className={`size-2 flex-none rounded-full ${status.tone}`} />}{status.text}</span>
           </div>
           {exists && state.brands.length > 1 && (
             <select aria-label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className="h-10 rounded-lg border bg-background px-2 text-sm">
@@ -148,12 +164,17 @@ export default function App() {
             const current = effective === s.id || (s.id === "describe" && effective === "creating");
             const locked = !exists && s.id !== "describe";
             const isDone = !current && done(s.id);
+            const look = toLook[s.id] ?? 0;
+            const note = locked ? "Available after you create your design system" : look ? `${look} thing${look > 1 ? "s" : ""} to look at` : changed(s.id) ? "Changed since it went live" : s.id === "publish" && upToDate ? "Your site has the latest version" : undefined;
             return (
               <span key={s.id} className="inline-flex items-center gap-1">
                 {i > 0 && <span aria-hidden="true" className="block h-px w-4 bg-border" />}
-                <button type="button" disabled={locked || state.setup?.running} aria-current={current ? "step" : undefined} title={locked ? "Available after you create your design system" : undefined} onClick={() => go(s.id)}
+                <button type="button" disabled={locked || state.setup?.running} aria-current={current ? "step" : undefined} title={note} aria-label={note && !locked ? `${s.label}: ${note}` : undefined} onClick={() => go(s.id)}
                   className={`inline-flex h-11 items-center gap-2 rounded-full pr-3.5 pl-2 text-sm font-medium disabled:cursor-not-allowed ${current ? "bg-primary text-primary-foreground" : locked ? "text-muted-foreground" : "hover:bg-muted"}`}>
-                  <span className={`grid size-6 place-items-center rounded-full text-xs font-semibold ${isDone ? "bg-success text-white" : current ? "border-[1.5px] border-primary-foreground" : "border-[1.5px] border-muted-foreground/60"}`}>{isDone ? "✓" : i + 1}</span>
+                  <span className={`relative grid size-6 place-items-center rounded-full text-xs font-semibold ${isDone ? "bg-success text-white" : current ? "border-[1.5px] border-primary-foreground" : "border-[1.5px] border-muted-foreground/60"}`}>
+                    {isDone ? "✓" : i + 1}
+                    {!locked && (look > 0 || changed(s.id)) && <span aria-hidden="true" className={`absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-background ${look ? "bg-warning" : "bg-info"}`} />}
+                  </span>
                   {s.label}
                 </button>
               </span>
@@ -192,7 +213,7 @@ export default function App() {
                 {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
                 {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => { confirmStep("style"); go("components"); }} onAsk={ask} />}
                 {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => { confirmStep("components"); go("publish"); }} />}
-                {effective === "publish" && exists && <PublishView state={state} onError={onError} onAsk={ask} onBack={() => go("components")} onSaved={(m) => { setNotice(m); load(); }} />}
+                {effective === "publish" && exists && <PublishView state={state} onError={onError} onAsk={ask} onBack={() => go("components")} onSaved={(m) => { setNotice(m); load(); }} onNewRound={() => go("style")} />}
                 {effective === "history" && exists && (
                   <HistoryView state={state} busy={busy} backLabel={STEPS.find((s) => s.id === lastStep)?.label ?? "Style"} onBack={() => go(lastStep)}
                     onSave={(m) => act(() => api.save(m), "Saved a version.")} onDiscard={() => act(() => api.discardUnsaved(), "Threw away the changes.")}

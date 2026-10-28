@@ -7,11 +7,11 @@ import { fileName, isGenerated, roleName } from "@/lib/plain";
 import { Reply } from "@/views/ChatPanel";
 import { isPublishCommit, versionTitle, VersionTree } from "@/views/VersionTree";
 
-type Props = { state: State; onError: (m: string) => void; onAsk: (text: string) => void; onBack: () => void; onSaved: (m: string) => void };
+type Props = { state: State; onError: (m: string) => void; onAsk: (text: string) => void; onBack: () => void; onSaved: (m: string) => void; onNewRound: () => void };
 
 const STEP_LABEL: Record<string, string> = { "unsaved changes": "Saved versions", unsaved: "Saved versions", checks: "Checks", exports: "Style guide for other tools", commit: "Version", tests: "Testing every component", "create repository": "Creating the GitHub repository", push: "Sending to GitHub", pages: "Building your component site" };
 
-export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
+export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound }: Props) {
   const [defaults, setDefaults] = useState<PublishDefaults | null>(null);
   const [repo, setRepo] = useState("");
   const [visibility, setVisibility] = useState<"private" | "public">("public");
@@ -78,7 +78,9 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
   const latest = state.versions.find((v) => !isPublishCommit(v));
   const subject = savedText || (latest ? versionTitle(latest) : "your design system");
   if (phase === "progress") return <PublishProgress subject={subject} savedNow={savedNow} saving={saving} steps={publish.running || result ? publish.steps : []} github={github} deploy={deploy} startedAt={startedAt} onBack={onBack} />;
-  if (phase === "success" && deploy) return <PublishSuccess subject={subject} deploy={deploy} state={state} onBack={onBack} />;
+  if (phase === "success" && deploy) return <PublishSuccess subject={subject} deploy={deploy} state={state} onNewRound={onNewRound} />;
+  // Nothing new since the live version: this round is done; the next one starts with more changes.
+  const nothingNew = published && !sinceLast.filter((v) => !isPublishCommit(v)).length && !unsaved.length && (!deploy || deploy.status === "live");
 
   return (
     <div className="flex flex-col gap-4">
@@ -201,8 +203,9 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved }: Props) {
           </div>
         )}
       </section>
-      <Cta back={{ label: "← Components", onClick: onBack }} status={publish.running ? "Publishing… about a minute" : blocked || (deploy?.status === "running" || deploy?.status === "waiting" ? "GitHub is testing, then putting it online" : deploy?.status === "failed" ? "GitHub stopped the last publish: see the top of the page" : deploy?.status === "live" ? "Your site is online" : "")}
-        next={{ label: saving ? "Saving…" : publish.running ? "Publishing…" : `${unsaved.length ? "Save and " : ""}${defaults?.remote ? "publish" : "create the repository and publish"}`.replace(/^./, (c) => c.toUpperCase()), disabled: Boolean(blocked) || publish.running || saving, onClick: start }} />
+      {nothingNew ? <Cta back={{ label: "← Components", onClick: onBack }} status="Your site has the latest version" next={{ label: "Make more changes →", onClick: onNewRound }} />
+        : <Cta back={{ label: "← Components", onClick: onBack }} status={publish.running ? "Publishing… about a minute" : blocked || (deploy?.status === "running" || deploy?.status === "waiting" ? "GitHub is testing, then putting it online" : deploy?.status === "failed" ? "GitHub stopped the last publish: see the top of the page" : deploy?.status === "live" ? "Your site is online" : "")}
+        next={{ label: saving ? "Saving…" : publish.running ? "Publishing…" : `${unsaved.length ? "Save and " : ""}${defaults?.remote ? "publish" : "create the repository and publish"}`.replace(/^./, (c) => c.toUpperCase()), disabled: Boolean(blocked) || publish.running || saving, onClick: start }} />}
     </div>
   );
 }
@@ -326,7 +329,7 @@ function PublishProgress({ subject, savedNow, saving, steps, github, deploy, sta
 }
 
 /** Once GitHub put the site online: where to look, and the versions so far. */
-function PublishSuccess({ subject, deploy, state, onBack }: { subject: string; deploy: NonNullable<Deploy>; state: State; onBack: () => void }) {
+function PublishSuccess({ subject, deploy, state, onNewRound }: { subject: string; deploy: NonNullable<Deploy>; state: State; onNewRound: () => void }) {
   const [copied, setCopied] = useState(false);
   const site = deploy.site;
   const copy = async () => {
@@ -369,7 +372,7 @@ function PublishSuccess({ subject, deploy, state, onBack }: { subject: string; d
         <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-base font-semibold">Your versions</h2><span className="text-sm text-muted-foreground">Newest on top. History has all of them.</span></div>
         <VersionTree versions={state.versions} unsaved={(state.unsaved?.length ?? 0) > 0} deploy={deploy} limit={8} />
       </section>
-      <Cta status="Online" next={{ label: "Keep editing", onClick: onBack }} />
+      <Cta status="Online · the steps start over for your next changes" next={{ label: "Make more changes →", onClick: onNewRound }} />
     </div>
   );
 }

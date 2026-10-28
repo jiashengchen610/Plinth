@@ -115,6 +115,26 @@ export function changesSinceSave(root) {
   };
 }
 
+/**
+ * This round of work: what differs from the last published version (saved versions and unsaved work), and which
+ * step it belongs to: style (palette, roles, fonts, corners, guidelines, settings) or components (their tokens, code
+ * and icons). { published: null } before the first publish.
+ * @returns {{ published: string | null, versions?: number, files?: number, steps?: { style: boolean, components: boolean } }}
+ */
+export function sincePublish(root) {
+  const published = publishedRef(root);
+  if (!published) return { published: null };
+  let committed = [], count = 0;
+  try { committed = git(root, ["diff", "--name-only", published, "--"]).split("\n").filter(Boolean); } catch { /* not a commit here */ }
+  try { count = Number(git(root, ["rev-list", "--count", `${published}..HEAD`])) || 0; } catch { /* idem */ }
+  const files = [...new Set([...committed, ...unsavedChanges(root).map((c) => c.file)])].filter((f) => !generatedFile(f) && !f.startsWith(".ds/"));
+  const components = (f) => /^(tokens\/components\/|src\/components\/|icons\/)/.test(f);
+  const style = (f) => /^(tokens\/|brands\/|design-system\.json$|DESIGN\.md$|WRITING\.md$)/.test(f) && !components(f);
+  // Versions Plinth makes by itself (the exports of a publish, the lock file of an install) are not work of this round.
+  const work = count ? git(root, ["log", "--pretty=format:%s", `${published}..HEAD`]).split("\n").filter((s) => s && !/^Publish: update exports$|^Installed the preview tools/.test(s)).length : 0;
+  return { published, versions: work, files: files.length, steps: { style: files.some(style), components: files.some(components) } };
+}
+
 /** A description of the next version made from the change titles, for when Claude can't write one. */
 export function versionDraft({ titles, files }) {
   const list = [...new Set(titles)];
