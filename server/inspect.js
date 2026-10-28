@@ -52,6 +52,8 @@
       document.documentElement.style.cursor = on ? "crosshair" : "";
       if (!on) { hovered = null; picked = null; place(hover, null); place(chosen, null); }
     }
+    // Where a token is used (the Style map): only these components' sections, these classes outlined. null shows all.
+    if (e.data.type === "focus") { focus = { sheets: Array.isArray(e.data.sheets) ? e.data.sheets : null, classes: Array.isArray(e.data.classes) ? e.data.classes : [] }; applyFocus(true); }
     // Bring one component's section into view and mark it (the UI's list of components).
     if (e.data.type === "reveal" && typeof e.data.sheet === "string") {
       const section = [...document.querySelectorAll("[data-sheet]")].find((s) => s.dataset.sheet === e.data.sheet);
@@ -61,5 +63,23 @@
       place(chosen, picked);
     }
   });
+  // The focus is applied again when the page changes (the page of every component renders after loading its stories).
+  let focus = null;
+  const marks = document.createElement("style");
+  document.head.append(marks);
+  const applyFocus = (scroll) => {
+    if (!focus) return;
+    const only = focus.sheets ? new Set(focus.sheets) : null;
+    for (const s of document.querySelectorAll("[data-sheet]")) s.style.display = !only || only.has(s.dataset.sheet) ? "" : "none";
+    for (const g of document.querySelectorAll("[data-sheet-group]")) g.style.display = [...g.querySelectorAll("[data-sheet]")].some((s) => s.style.display !== "none") ? "" : "none";
+    const selector = focus.classes.map((c) => `[class~="${CSS.escape(c)}"]`).join(",");
+    const css = selector ? `${selector}{outline:2px solid #2563eb !important;outline-offset:2px !important}` : "";
+    if (marks.textContent !== css) marks.textContent = css;
+    if (!scroll) return;
+    const target = (selector && document.querySelector(selector)) || document.querySelector("[data-sheet]:not([style*='none'])");
+    if (target) { target.scrollIntoView({ block: "center" }); pending = false; } else pending = true;
+  };
+  let queued = false, pending = false;
+  new MutationObserver(() => { if (!focus || queued) return; queued = true; requestAnimationFrame(() => { queued = false; applyFocus(pending); }); }).observe(document.body, { childList: true, subtree: true });
   send({ type: "ready" });
 })();

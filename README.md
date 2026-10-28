@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.13.1.** Tested by `npm test` (43 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.14.0.** Tested by `npm test` (43 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -128,12 +128,15 @@ when the step is done:
    decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
    and asks Claude in the chat to write the style guides and any extra components you picked. The result is saved as
    your first version. Dependencies for the preview install in the background (1–3 minutes, once).
-2. **Style.** Quick picks for the main color, grays, corners and fonts (a text font, a headings font or the same, and
-   whether buttons and labels follow text or headings), then **Everything in your style**: every layer side by side,
-   in tabs for colors, text, corners and effects. The base values show only the ones in use (**All** shows the whole
-   palette); then your colors and other shared settings; then the parts of components that use them, grouped by
-   component. Click anything to highlight what it points at and what uses it, and change it in the edit panel (below);
-   base values never change. There is no sample screen: the real components are in Components. Corners: a preset, then outer (cards,
+2. **Style.** **Everything in your style**: a map of every token you plan to use, in tabs for colors, text, corners
+   and effects. Three columns, joined by faint lines: the base values in use (**All** shows the whole palette), your
+   colors and other shared settings (the chart colors folded into one), and the components that use them (open one
+   for its parts). Click a token and its whole chain lights up while the rest fades. On the right, **Where it is
+   used** shows the real components that use it (the page of every component, narrowed, with the parts outlined; a
+   list while the preview is not running), and below it the edit panel to change it; with nothing selected, the
+   things to look at. Base values never change. The quick picks open from the top of the map: main color and grays
+   (Colors), fonts (a text font, a headings font or the same, and whether buttons and labels follow text or headings;
+   Text), corners (Corners). There is no sample screen. Corners: a preset, then outer (cards,
    dialogs, menus) and inner (buttons, fields) fine-tuned apart, and whether parts inside a container (tabs in the bar,
    options in a menu, close buttons in a corner) fit its corners: the container's radius minus the gap, so the space
    between stays even. Each pick re-points the roles at palette steps the engine chooses for readable text; a new font

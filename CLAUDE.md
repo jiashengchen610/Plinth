@@ -41,7 +41,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - One edit at a time: UI calls that write go through `edit()` in `app/src/lib/lock.ts` (`api.ts` wraps them), which
   locks the page until the write is done and the page has reloaded; a Claude reply locks it for the whole reply.
 - Every step opens with `<StepIntro>`: what you decide, how to change it, when it is done (PRD 下一版 item 19). Style
-  has no sample screen: its main view is `TokenSheet` (every layer side by side; base values only when used).
+  has no sample screen: its main view is `TokenMap` (every layer in three columns joined by lines measured from the
+  nodes; a click lights the chain; base values only when used; components and the chart colors folded; quick picks
+  open from the top; on the right the sticker sheet narrowed to where the token is used, via the picker's `focus`).
   Components shows the managed sticker sheet (`src/foundations/sticker-sheet.stories.tsx`: every component's stories
   on one page, loaded when the page renders, never imported eagerly, and skipping stories that open an overlay).
 - Picking to edit: a story in Components loads `server/inspect.js` from the Plinth UI (the managed

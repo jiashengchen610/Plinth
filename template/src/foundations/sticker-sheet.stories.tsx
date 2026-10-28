@@ -41,7 +41,7 @@ function StickerSheet() {
   return (
     <div className="flex flex-col gap-10 bg-background p-8 text-foreground">
       {groups.map((group) => (
-        <section key={group} className="flex flex-col gap-6">
+        <section key={group} data-sheet-group={group} className="flex flex-col gap-6">
           <h2 className="type-heading-sm border-b pb-2">{group}</h2>
           {stickers.filter((s) => s.group === group).map((s) => (
             <section key={s.id} data-sheet={s.id} aria-label={s.name} className="flex scroll-mt-4 flex-col gap-3">
