@@ -20,6 +20,11 @@ This repository is a design system maintained with Plinth. Follow these rules.
   `text-sm`, `font-medium`, `leading-*` or `tracking-*` in components; fields add `max-md:text-base` so phones do not
   zoom. Text styles (`typography.*`) use font roles (`font.heading`, `font.body`, `font.label`, `font.code`), which
   point at fonts in the palette; change fonts with `set_style`.
+- Corners inside corners: a part that sits inside a rounded container near its corner (tabs in a bar, options in a
+  list, a close button in a corner) gets its own radius token with
+  `"$extensions": { "plinth": { "fit": { "outer": "{<name>.radius}", "spacing": <padding steps>, "border": <px> } } }`
+  and uses `rounded-<name>-<part>`: its corners become the container's minus the gap, so the gap stays even
+  (`radius.fit-inside` switches this for the whole system). Never put the container's own `rounded-<name>` on it.
 - Every component has `<name>.tsx`, `<name>.stories.tsx` and `<name>.spec.md` in `src/components/<name>/`, and its
   tokens in `tokens/components/<name>.tokens.json`. GitHub refuses to deploy a component without its tokens or story,
   or with hardcoded values.

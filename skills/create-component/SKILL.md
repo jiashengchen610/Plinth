@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.5.0
+version: 0.5.1
 ---
 
 # Create a component
@@ -46,7 +46,11 @@ asked you to go ahead without checking.
 
 Component tokens first: one per part and property the component styles, pointing at roles, e.g.
 `{ "<name>": { "$type": "color", "container": { "background": { "$value": "{color.card}" }, "foreground": … } } }`
-and `"radius": { "$type": "dimension", "$value": "{radius.container}" }`. Name color parts `<part>/background`,
+and `"radius": { "$type": "dimension", "$value": "{radius.container}" }`. A part inside the rounded component near its
+corner (a tab in the bar, an option in the list) gets its own radius that fits:
+`"item": { "radius": { "$type": "dimension", "$value": "{radius.control}", "$extensions": { "plinth": { "fit": { "outer": "{<name>.radius}", "spacing": 1, "border": 1 } } } } }`
+(spacing: the padding in Tailwind steps; border: the container's border in px), used as `rounded-<name>-item`; never the
+container's own corners. Name color parts `<part>/background`,
 `<part>/foreground`, `<part>/border`, `<part>/background-hover` (background and foreground pairs are checked for
 contrast automatically). Opacity: `"$extensions": { "plinth": { "alpha": 0.1 } }`. Text: one text token per part with
 text, `"<part>": { "font": { "$type": "typography", "$value": "{typography.label.md}" } }`, pointing at a text style:

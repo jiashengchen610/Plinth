@@ -394,6 +394,17 @@ function applyOp(root, op, files) {
         if (!Object.keys(ext).length) delete node.$extensions.plinth;
         if (node.$extensions && !Object.keys(node.$extensions).length) delete node.$extensions;
       }
+      // A part inside a rounded container: { outer: "{tabs.radius}", spacing: 1, border?: 1, min?: "{radius.small}" }
+      // makes its corners the container's minus the gap while radius.fit-inside is on (tokens.mjs); null removes it.
+      if (op.fit !== undefined) {
+        if (op.fit !== null && (typeof op.fit !== "object" || typeof op.fit.outer !== "string" || !Number.isFinite(Number(op.fit.spacing ?? 0)))) throw new Error(`${op.path}: fit needs { outer: "{…radius}", spacing: <steps> }`);
+        node.$extensions ??= {};
+        node.$extensions.plinth ??= {};
+        if (op.fit === null) delete node.$extensions.plinth.fit;
+        else node.$extensions.plinth.fit = op.fit;
+        if (!Object.keys(node.$extensions.plinth).length) delete node.$extensions.plinth;
+        if (!Object.keys(node.$extensions).length) delete node.$extensions;
+      }
       if (!("$value" in node)) throw new Error(`${op.path} has no value: set one first`);
       files.set(rel, tree);
       break;
@@ -768,6 +779,7 @@ export function catalogComponentOps(root, id, templateDir = TEMPLATE_DIR) {
   const tpl = JSON.parse(readFileSync(join(templateDir, "tokens", "base.tokens.json"), "utf8"));
   const missing = [];
   if (tpl.radius?.small && !base.radius?.small) missing.push(["radius/small", tpl.radius.small, "dimension"]);
+  if (tpl.radius?.["fit-inside"] && !base.radius?.["fit-inside"]) missing.push(["radius/fit-inside", tpl.radius["fit-inside"], "number"]);
   for (const group of ["duration", "layer"]) if (tpl[group] && !base[group]) for (const [k, v] of Object.entries(tpl[group])) if (!k.startsWith("$")) missing.push([`${group}/${k}`, v, tpl[group].$type]);
   for (const k of ["enter", "exit"]) if (tpl.ease?.[k] && !base.ease?.[k]) missing.push([`ease/${k}`, tpl.ease[k], "cubicBezier"]);
   for (const [path, t, type] of missing) ops.push({ op: "set", file: "tokens/base.tokens.json", path, value: t.$value, type, ...(t.$description ? { description: t.$description } : {}) });

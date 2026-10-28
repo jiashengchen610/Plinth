@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry, type TokenRow } from "@/lib/api";
 import { Cta } from "@/lib/cta";
 import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
-import { buildGraph, componentOf, remindersByToken, targetIn, type Mode } from "@/lib/tokens";
+import { buildGraph, componentOf, remindersByToken, targetIn, valueIn, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
 import { NodeGraph } from "@/views/NodeGraph";
 import { TypeGraph } from "@/views/TypeGraph";
@@ -41,6 +41,10 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const tokens = g.rows.filter((r) => componentOf(r) === component.id);
   const colorParts = tokens.filter((t) => t.type === "color");
   const textParts = tokens.filter((t) => t.type === "typography");
+  const fitted = tokens.filter((t) => t.fit);
+  // "tabs/trigger/radius" → "Trigger corners"; lengths in px.
+  const cornersOf = (path: string) => `${partName(path).replace(/ · Corners$/, "")} corners`;
+  const px = (s: string | null | undefined) => { const m = /^([\d.]+)(px|rem)$/.exec(s ?? ""); return m ? `${Number(m[1]) * (m[2] === "rem" ? 16 : 1)}px` : s ?? "?"; };
   const variants = [...new Set(colorParts.map((t) => variantOf(t.path)))];
   const shown = variants.length > 1 ? colorParts.filter((t) => variantOf(t.path) === (variant || variants[0])) : colorParts;
   const radius = tokens.find((t) => t.path === `${component.id}/radius`);
@@ -158,6 +162,9 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
             {addingColor ? <AddColor hint="Plinth makes lighter and darker versions of it; they show up first in the base colors." onAdded={(r) => { onChanged(r, `Added ${r.name}.`); setAddingColor(false); }} onError={onError} />
               : <button type="button" onClick={() => setAddingColor(true)} className="min-h-10 self-start text-sm font-medium text-info underline underline-offset-2">Add your own base color</button>}
             {radius && <p className="text-sm text-muted-foreground">{partName(radius.path)} follow the corners you picked in Style.</p>}
+            {fitted.map((f) => (
+              <p key={f.path} className="text-sm text-muted-foreground">{cornersOf(f.path)}: {px(valueIn(f, tmode)?.resolved)}, {f.fit!.on ? <>fitting inside {f.fit!.outer === `${component.id}/radius` ? `the corners of ${name}` : `the ${cornersOf(f.fit!.outer).toLowerCase()}`} ({px(g.byKey.get(f.fit!.outer) ? valueIn(g.byKey.get(f.fit!.outer)!, tmode)?.resolved : null)}) so the gap stays even.</> : <>its own. Turn on "Fit its corners" in Style to keep the gap to its container even.</>}</p>
+            ))}
           </section>
 
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">

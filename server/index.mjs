@@ -14,7 +14,7 @@ import { startUi } from "./http.mjs";
 import { createChat, createReview } from "./claude.mjs";
 import { findOwner, claimOwner, releaseOwner, callOwner } from "./owner.mjs";
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const log = (...a) => process.stderr.write(`[plinth] ${a.join(" ")}\n`);
 

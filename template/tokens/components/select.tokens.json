@@ -48,6 +48,11 @@
       },
       "border": {
         "$value": "{color.border}"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "{select.radius}",
+        "$description": "The open list"
       }
     },
     "item": {
@@ -64,6 +69,20 @@
         "$type": "typography",
         "$value": "{typography.body.md}",
         "$description": "Options in the list"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.control}",
+        "$description": "Option corners: inside the list they fit its corners",
+        "$extensions": {
+          "plinth": {
+            "fit": {
+              "outer": "{select.content.radius}",
+              "spacing": 1,
+              "border": 1
+            }
+          }
+        }
       }
     },
     "group-label": {

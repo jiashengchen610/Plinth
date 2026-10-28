@@ -50,7 +50,7 @@ function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastP
   return (
     <ToastPrimitive.Action
       data-slot="toast-action"
-      className={cn("inline-flex h-8 shrink-0 items-center justify-center rounded-toast border border-current/30 bg-transparent px-3 type-toast-action transition-colors duration-(--duration-fast) outline-none hover:bg-current/10 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
+      className={cn("inline-flex h-8 shrink-0 items-center justify-center rounded-toast-action border border-current/30 bg-transparent px-3 type-toast-action transition-colors duration-(--duration-fast) outline-none hover:bg-current/10 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       {...props}
     />
   )
@@ -61,7 +61,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
     <ToastPrimitive.Close
       data-slot="toast-close"
       aria-label="Close"
-      className={cn("absolute top-2 right-2 rounded-xs p-1 opacity-60 transition-opacity duration-(--duration-fast) outline-none hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
+      className={cn("absolute top-2 right-2 rounded-toast-close p-1 opacity-60 transition-opacity duration-(--duration-fast) outline-none hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       {...props}
     >
       <XIcon className="size-4" />

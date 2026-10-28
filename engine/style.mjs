@@ -112,11 +112,24 @@ export function readStyle(root, brand) {
   const step = (n) => ref(radius[n]?.$value)?.split(".")[1];
   const corners = Object.entries(CORNERS).find(([, p]) => p.control === step("control") && p.container === step("container") && p.pill === step("pill"))?.[0] ?? "custom";
   const fonts = readFonts(root, brand);
+  const fit = radius["fit-inside"]?.$value;
   return {
     main, gray, corners, ...fonts,
+    // Outer corners (cards, dialogs, menus) and inner ones (buttons, fields) as steps of the radius scale (null when
+    // not a step), and whether parts inside a container fit its corners (null: a design system from before that).
+    outer: step("container") ?? null, inner: step("control") ?? null, fitInside: fit === undefined ? null : Number(fit) !== 0,
+    radiusSteps: radiusSteps(root),
     hues: Object.keys(fams).filter((f) => !GRAYS.includes(f)),
     grays: Object.keys(fams).filter((f) => GRAYS.includes(f)),
   };
+}
+
+/** The radius scale in the palette, smallest first: [{ step: "none", px: 0 }, { step: "xs", px: 2 }, …]. */
+export function radiusSteps(root) {
+  const scale = readJson(root, PRIMITIVES).radius ?? {};
+  return Object.entries(scale).filter(([k, v]) => !k.startsWith("$") && v?.$value && typeof v.$value === "object")
+    .map(([step, v]) => ({ step, px: v.$value.unit === "rem" ? v.$value.value * 16 : Number(v.$value.value) }))
+    .sort((a, b) => a.px - b.px);
 }
 
 /** The first step of `order` whose color reaches 4.5:1 against `against`, else the one that comes closest. */
@@ -142,7 +155,7 @@ function readable(steps, order, against) {
  *   template's black-on-white look (900 / 200).
  * gray: every role pointing at one gray family moves to the same step of the new one (main color roles included).
  */
-export function styleOps(root, brand, { main, gray, corners, font, headingFont, labelFont } = {}) {
+export function styleOps(root, brand, { main, gray, corners, outer, inner, fitInside, font, headingFont, labelFont } = {}) {
   const file = brandFile(brand);
   if (!existsSync(join(root, file))) throw new Error(`no brand ${brand}`);
   const fams = families(root);
@@ -190,6 +203,17 @@ export function styleOps(root, brand, { main, gray, corners, font, headingFont, 
     if (!preset) throw new Error(`no corner preset ${corners}`);
     const radius = readJson(root, BASE).radius ?? {};
     for (const [role, s] of Object.entries(preset)) if (radius[role] && ref(radius[role].$value) !== `radius.${s}`) ops.push({ op: "set", file: BASE, path: `radius/${role}`, value: `{radius.${s}}` });
+  }
+  // Fine-tuning after a preset: outer corners (cards, dialogs, menus) and inner ones (buttons, fields) separately.
+  for (const [role, s] of [["container", outer], ["control", inner]]) {
+    if (s === undefined) continue;
+    if (!radiusSteps(root).some((x) => x.step === s)) throw new Error(`no radius step ${s}`);
+    const radius = readJson(root, BASE).radius ?? {};
+    if (ref(radius[role]?.$value) !== `radius.${s}` && !ops.some((o) => o.path === `radius/${role}` && o.value === `{radius.${s}}`)) ops.push({ op: "set", file: BASE, path: `radius/${role}`, value: `{radius.${s}}` });
+  }
+  if (fitInside !== undefined) {
+    const cur = (readJson(root, BASE).radius ?? {})["fit-inside"];
+    if (!cur || (Number(cur.$value) !== 0) !== Boolean(fitInside)) ops.push({ op: "set", file: BASE, path: "radius/fit-inside", type: "number", value: fitInside ? 1 : 0, ...(cur ? {} : { description: FIT_DESCRIPTION }) });
   }
   const checkFamily = (f) => {
     const family = String(f).trim();
@@ -270,13 +294,18 @@ export function roleColorOps(root, brand, { role, color, mode = "default" } = {}
   return ops;
 }
 
+export const FIT_DESCRIPTION = "1: parts inside a rounded container (tabs in the tab bar, options in a menu, close buttons in a corner) take its corners minus the gap, so the space between stays even. 0: they keep their own corners.";
+
 const CORNER_NAMES = { square: "square", slight: "slightly rounded", round: "rounded", pill: "pill" };
 /** A short title for a style change, in words the UI shows: "Main color: teal", "Corners: pill, font: Inter". */
-export function styleTitle({ main, gray, corners, font, headingFont, labelFont } = {}) {
+export function styleTitle({ main, gray, corners, outer, inner, fitInside, font, headingFont, labelFont } = {}) {
   const parts = [];
   if (main !== undefined) parts.push(`main color: ${main}`);
   if (gray !== undefined) parts.push(`grays: ${gray}`);
   if (corners !== undefined) parts.push(`corners: ${CORNER_NAMES[corners] ?? corners}`);
+  if (outer !== undefined) parts.push(`outer corners: ${outer}`);
+  if (inner !== undefined) parts.push(`inner corners: ${inner}`);
+  if (fitInside !== undefined) parts.push(fitInside ? "parts inside fit their container" : "parts inside keep their own corners");
   if (font !== undefined) parts.push(`text font: ${font}`);
   if (headingFont !== undefined) parts.push(headingFont ? `headings: ${headingFont}` : "headings: same font as text");
   if (labelFont !== undefined) parts.push(`buttons and labels: like ${labelFont === "heading" ? "headings" : "text"}`);

@@ -43,7 +43,7 @@ function SelectContent({ className, children, position = "popper", align = "cent
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "relative z-(--layer-dropdown) max-h-(--radix-select-content-available-height) min-w-32 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-select border border-select-content-border bg-select-content-background text-select-content-foreground shadow-select duration-(--duration-normal) ease-enter data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2",
+          "relative z-(--layer-dropdown) max-h-(--radix-select-content-available-height) min-w-32 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-select-content border border-select-content-border bg-select-content-background text-select-content-foreground shadow-select duration-(--duration-normal) ease-enter data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2",
           position === "popper" && "data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
           className
         )}
@@ -70,7 +70,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-select py-1.5 pr-8 pl-2 type-select-item outline-hidden select-none focus:bg-select-item-highlight-background focus:text-select-item-highlight-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex w-full cursor-default items-center gap-2 rounded-select-item py-1.5 pr-8 pl-2 type-select-item outline-hidden select-none focus:bg-select-item-highlight-background focus:text-select-item-highlight-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

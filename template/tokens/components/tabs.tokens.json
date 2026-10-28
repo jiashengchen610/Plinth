@@ -34,6 +34,19 @@
         "$type": "typography",
         "$value": "{typography.label.md}",
         "$description": "Tab names"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.control}",
+        "$description": "Tab corners: inside the tab bar they fit its corners",
+        "$extensions": {
+          "plinth": {
+            "fit": {
+              "outer": "{tabs.radius}",
+              "spacing": 1
+            }
+          }
+        }
       }
     }
   }

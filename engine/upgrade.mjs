@@ -105,25 +105,10 @@ export function typographyUpgrade(root, templateDir) {
     ops.push({ op: "set", file: BASE, path, type: "typography", value, description: t.$description });
   }
 
-  // Component text tokens, for the components this design system has.
-  const tplComponents = join(templateDir, "tokens", "components");
-  for (const f of readdirSync(tplComponents)) {
-    const rel = `tokens/components/${f}`;
-    if (!existsSync(join(root, rel))) continue;
-    for (const [path, t] of styles(readJson(templateDir, rel), "").map(([p, t]) => [p.slice(1), t])) {
-      if (t.$type === "typography") ops.push({ op: "set", file: rel, path, type: "typography", value: t.$value, description: t.$description });
-    }
-  }
-
-  // Component code: replaced only while exactly as shipped; edited files are kept (the text-size check reminds).
-  const kept = [];
-  for (const [rel, hashes] of Object.entries(SHIPPED)) {
-    if (!existsSync(join(root, rel)) || !existsSync(join(templateDir, rel))) continue;
-    const now = readFileSync(join(root, rel), "utf8"), want = readFileSync(join(templateDir, rel), "utf8");
-    if (lfHash(now) === lfHash(want)) continue;
-    if (hashes.includes(lfHash(now))) ops.push({ op: "write", file: rel, content: want });
-    else kept.push(rel);
-  }
+  // Component text tokens (and anything else newer), and component code while exactly as shipped.
+  const refresh = componentRefresh(root, templateDir);
+  ops.push(...refresh.ops);
+  const kept = refresh.kept;
   // Code that used the old body style by name.
   const references = [];
   const walk = (dir) => {
@@ -143,6 +128,46 @@ export function typographyUpgrade(root, templateDir) {
     kept,
     references,
   };
+}
+
+/**
+ * What newer Plinth templates bring to the components a design system already has: component tokens it lacks
+ * (text, corners that fit inside…), the base switch for fitting corners, and component files replaced while
+ * exactly as Plinth shipped them. Tokens it has are never changed; edited files are kept.
+ * @returns {{ ops, kept: string[], updated: string[] }}
+ */
+export function componentRefresh(root, templateDir) {
+  const readJson = (dir, rel) => (existsSync(join(dir, rel)) ? JSON.parse(readFileSync(join(dir, rel), "utf8")) : {});
+  const leaves = (node, path = [], type) => Object.entries(node).filter(([k]) => !k.startsWith("$")).flatMap(([k, v]) => {
+    if (!v || typeof v !== "object") return [];
+    const t = v.$type ?? node.$type ?? type;
+    return "$value" in v ? [[[...path, k].join("/"), v, t]] : leaves(v, [...path, k], t);
+  });
+  const has = (tree, path) => { let n = tree; for (const s of path.split("/")) { n = n?.[s]; if (!n) return false; } return "$value" in n; };
+  const ops = [], updated = [];
+  const tplComponents = join(templateDir, "tokens", "components");
+  for (const f of existsSync(tplComponents) ? readdirSync(tplComponents) : []) {
+    const rel = `tokens/components/${f}`;
+    if (!existsSync(join(root, rel))) continue;
+    const mine = readJson(root, rel);
+    for (const [path, t, type] of leaves(readJson(templateDir, rel))) {
+      if (has(mine, path)) continue;
+      const fit = t.$extensions?.plinth?.fit;
+      ops.push({ op: "set", file: rel, path, ...(type ? { type } : {}), value: t.$value, ...(t.$description ? { description: t.$description } : {}), ...(fit ? { fit } : {}) });
+    }
+  }
+  const base = readJson(root, "tokens/base.tokens.json"), tplBase = readJson(templateDir, "tokens/base.tokens.json");
+  const fitSwitch = tplBase.radius?.["fit-inside"];
+  if (fitSwitch && base.radius && !base.radius["fit-inside"]) ops.push({ op: "set", file: "tokens/base.tokens.json", path: "radius/fit-inside", type: "number", value: fitSwitch.$value, description: fitSwitch.$description });
+  const kept = [];
+  for (const [rel, hashes] of Object.entries(SHIPPED)) {
+    if (!existsSync(join(root, rel)) || !existsSync(join(templateDir, rel))) continue;
+    const now = readFileSync(join(root, rel), "utf8"), want = readFileSync(join(templateDir, rel), "utf8");
+    if (lfHash(now) === lfHash(want)) continue;
+    if (hashes.includes(lfHash(now))) { ops.push({ op: "write", file: rel, content: want }); updated.push(rel); }
+    else kept.push(rel);
+  }
+  return { ops, kept, updated };
 }
 
 /**

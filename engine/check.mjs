@@ -58,7 +58,8 @@ export function checkRepo(root) {
     lookAlike: open(checks.distinct).map(({ brand, mode, a, b, reason }) => `${brand} ${mode === "default" ? "light" : mode}: ${a} and ${b} look alike (${reason})`),
     structure: open(checks.structure).map(({ brand, detail }) => `${brand}: ${detail}`),
     hardcodedOutsideComponents: checks.hardcoded.filter((h) => !h.accepted && !slash(h.file).startsWith("src/components/")).map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
-    textWithoutTokens: checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/") && REMINDER_RULES.has(h.rule)).map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
+    textWithoutTokens: checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/") && h.rule === "tw-type").map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
+    nestedCorners: checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/") && h.rule === "nested-radius").map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
   };
   return { ok: blocking.length === 0, blocking, reminders };
 }
@@ -70,7 +71,7 @@ export function checkMarkdown(result) {
   const rem = Object.entries(result.reminders).filter(([, list]) => list.length);
   if (rem.length) {
     lines.push("", "### Reminders (do not stop the deploy)", "");
-    const names = { contrast: "Contrast", lookAlike: "Look-alike roles", structure: "Layer structure", hardcodedOutsideComponents: "Hardcoded values outside components", textWithoutTokens: "Text sizes not from text tokens" };
+    const names = { contrast: "Contrast", lookAlike: "Look-alike roles", structure: "Layer structure", hardcodedOutsideComponents: "Hardcoded values outside components", textWithoutTokens: "Text sizes not from text tokens", nestedCorners: "Parts inside a container with the container's own corners" };
     for (const [k, list] of rem) {
       lines.push(`**${names[k] ?? k}** (${list.length})`, "");
       for (const item of list.slice(0, 20)) lines.push(`- ${item}`);

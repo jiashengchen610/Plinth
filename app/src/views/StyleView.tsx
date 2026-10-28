@@ -49,7 +49,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const [adding, setAdding] = useState(false);
 
   const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
-  const pick = async (p: { main?: string; gray?: string; corners?: string; font?: string; headingFont?: string; labelFont?: "body" | "heading" }, label: string) => {
+  const pick = async (p: { main?: string; gray?: string; corners?: string; outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string; labelFont?: "body" | "heading" }, label: string) => {
     setBusy(true);
     try { onChanged(await api.style(brand, p), label); } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
@@ -138,7 +138,30 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
                 </button>
               ))}
             </div>
-            {st.corners === "custom" && <p className="text-sm text-muted-foreground">Your corners are custom right now. Picking a preset replaces them.</p>}
+            {st.corners === "custom" && <p className="text-sm text-muted-foreground">Your corners are fine-tuned. Picking a preset replaces them.</p>}
+            {st.outer !== null && st.inner !== null && (
+              <div className="flex flex-col gap-3 border-t pt-3">
+                <h3 className="text-sm font-semibold">Fine-tune</h3>
+                <RadiusSteps label="Outer: cards, dialogs, menus" steps={st.radiusSteps.filter((s) => s.step !== "full")} value={st.outer} disabled={busy} onPick={(s) => pick({ outer: s }, `Outer corners: ${s}.`)} />
+                <RadiusSteps label="Inner: buttons, fields, the tab bar" steps={st.radiusSteps} value={st.inner} disabled={busy} onPick={(s) => pick({ inner: s }, `Inner corners: ${s}.`)} />
+              </div>
+            )}
+            {st.fitInside !== null && (
+              <div className="flex flex-col gap-2 border-t pt-3">
+                <div><h3 className="text-sm font-semibold">Parts inside a container</h3><p className="text-sm text-muted-foreground">Tabs in the tab bar, options in a menu, close buttons in a corner.</p></div>
+                <div role="group" aria-label="Parts inside a container" className="flex flex-wrap gap-2">
+                  {([true, false] as const).map((on) => (
+                    <button key={String(on)} type="button" disabled={busy} aria-pressed={st.fitInside === on} onClick={() => pick({ fitInside: on }, on ? "Parts inside fit their container." : "Parts inside keep their own corners.")} className={`flex flex-[1_1_200px] items-center gap-3 rounded-xl border-2 p-3 text-left ${ring(st.fitInside === on)}`}>
+                      <svg width="44" height="32" viewBox="0 0 44 32" aria-hidden="true" className="flex-none">
+                        <rect x="1" y="1" width="42" height="30" rx="12" fill="none" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.5" />
+                        <rect x="6" y="6" width="22" height="20" rx={on ? 7 : 12} fill="currentColor" fillOpacity="0.85" />
+                      </svg>
+                      <span className="flex flex-col leading-tight"><span className="text-sm font-semibold">{on ? "Fit its corners" : "Keep their own corners"}</span><span className="text-sm text-muted-foreground">{on ? "The gap between stays even" : "Inner corners as set above"}</span></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {st.fontRoles ? (
@@ -239,6 +262,24 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
 
 const GRAYS_SET = new Set(["slate", "gray", "zinc", "neutral", "stone", "mauve", "olive", "mist", "taupe"]);
 
+/** A row of radius steps to pick from, each drawn as a corner at that size. */
+function RadiusSteps({ label, steps, value, disabled, onPick }: { label: string; steps: { step: string; px: number }[]; value: string; disabled: boolean; onPick: (step: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm">{label}</span>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+        {steps.map((s) => (
+          <button key={s.step} type="button" disabled={disabled} aria-pressed={value === s.step} title={`${s.step}: ${s.step === "full" ? "fully round" : `${s.px}px`}`} onClick={() => onPick(s.step)}
+            className={`flex min-h-11 w-12 flex-col items-center justify-center gap-1 rounded-lg border-2 text-xs ${ring(value === s.step)}`}>
+            <span aria-hidden="true" className="block size-5 border-t-2 border-l-2 border-foreground" style={{ borderTopLeftRadius: Math.min(s.px, 20) }} />
+            {s.step === "full" ? "Full" : s.px}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** One font to pick: "Aa" in the font, its name and what it feels like. */
 function FontChoice({ family, name, mood, on, disabled, onPick }: { family: string; name?: string; mood: string; on: boolean; disabled: boolean; onPick: () => void }) {
   return (
@@ -265,6 +306,12 @@ export function Sample({ vars }: { vars: React.CSSProperties }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
         <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
+      </div>
+      {/* A tab bar: the selected tab sits inside it, so it shows whether parts inside fit their container. */}
+      <div className="flex gap-1 p-1 text-[13px]" style={{ ...label, background: v("tabs-list-background"), color: v("tabs-list-foreground"), borderRadius: v("tabs-radius") }}>
+        {["Week", "Month", "Year"].map((t) => (
+          <span key={t} className="flex h-7 flex-1 items-center justify-center font-medium" style={t === "Month" ? { background: v("tabs-trigger-active-background"), color: v("tabs-trigger-active-foreground"), borderRadius: "var(--tabs-trigger-radius, var(--tabs-radius))" } : undefined}>{t}</span>
+        ))}
       </div>
       <div className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
         <span className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>

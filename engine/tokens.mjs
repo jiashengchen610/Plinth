@@ -11,6 +11,8 @@
 // Modes: a token's $value is the default (light) mode; other modes live in $extensions.plinth.modes.<mode>.
 // Transparency: $extensions.plinth.alpha (0..1, or { default, <mode> }) draws a color token at that opacity,
 //   so "destructive at 10%" stays an alias of destructive.
+// Corners that fit: $extensions.plinth.fit = { outer, spacing, border?, min? } on a radius token makes it the outer
+//   radius minus the gap (spacing steps plus border px), at least min, while radius.fit-inside is not 0.
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -74,6 +76,7 @@ function flatten(tree, source, out, path = [], inheritedType, layer = { layer: 0
       description: tree.$description ?? "",
       values: { default: tree.$value, ...(ds.modes ?? {}) },
       alpha: ds.alpha ?? null,
+      fit: ds.fit ?? null,
       deprecated: Boolean(tree.$deprecated),
     };
     if (t.type === "typography" && tree.$value && typeof tree.$value === "object") {
@@ -164,6 +167,8 @@ function colorCss(v) {
   return String(v);
 }
 const dim = (v) => (v && typeof v === "object" && "value" in v ? `${v.value}${v.unit ?? "px"}` : typeof v === "number" ? (v === 0 ? "0" : `${v}px`) : String(v ?? 0));
+/** A CSS length in px: "0.75rem" → 12, "4px" → 4, "0" → 0; null for anything else (calc, %). */
+const toPx = (s) => { const m = /^(-?[\d.]+)(px|rem)?$/.exec(String(s ?? "").trim()); return m ? Number(m[1]) * (m[2] === "rem" ? 16 : 1) : null; };
 const fontList = (v) => (Array.isArray(v) ? v : [v]).map((f) => (/[^a-zA-Z0-9-]/.test(f) ? `'${f}'` : f)).join(", ");
 const weight = (v) => (typeof v === "number" ? String(v) : String(WEIGHTS[String(v).trim().toLowerCase()] ?? v));
 
@@ -261,6 +266,9 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
     return resolve;
   };
 
+  // radius.fit-inside (1 or 0; on when missing): parts inside a rounded container fit its corners.
+  const fitFlag = map.get("radius/fit-inside");
+  const fitInside = !fitFlag || Number(resolveRaw(fitFlag, "default")) !== 0;
   const tokens = [...map.values()].map((t) => {
     const values = {};
     for (const mode of modes) {
@@ -283,9 +291,25 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
       if (resolved !== null && alpha < 1) resolved = withAlpha(resolved, alpha);
       values[mode] = { raw: v, css, resolved, alpha };
     }
+    // A part inside a rounded container (tabs in the tab bar, options in a menu): its corners are the container's
+    // minus the gap between them, so the space stays even. CSS computes it, so it follows any later change.
+    const fit = t.fit && typeof t.fit.outer === "string" ? { outer: targetOf(t.fit.outer), min: typeof t.fit.min === "string" ? targetOf(t.fit.min) : null, spacing: Number(t.fit.spacing ?? 0), border: Number(t.fit.border ?? 0) } : null;
+    if (t.fit && !fit?.outer) issues.push(`${t.key}: fit.outer ${t.fit.outer} does not exist`);
+    if (fit?.outer && fitInside) {
+      for (const mode of Object.keys(values)) {
+        const gap = `var(--spacing) * ${fit.spacing}${fit.border ? ` - ${fit.border}px` : ""}`;
+        values[mode].css = `max(${fit.min ? `var(--${names.get(fit.min)})` : "0px"}, calc(var(--${names.get(fit.outer)}) - ${gap}))`;
+        const px = (tok) => (tok ? toPx(literal(resolveRaw(tok, mode), tok.type ?? "dimension", refResolvedIn(mode))) : 0);
+        const outerPx = px(fit.outer), minPx = px(fit.min), spacingPx = px(map.get("spacing"));
+        values[mode].resolved = [outerPx, minPx, spacingPx].every((n) => n !== null) ? `${Math.max(minPx, outerPx - spacingPx * fit.spacing - fit.border)}px` : values[mode].css;
+      }
+    }
     const first = valueIn(t, "default");
-    const refs = [...new Set(Object.values(t.values).filter(isAlias).map((v) => targetOf(v)?.key).filter(Boolean))];
-    return { key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, layer: t.layer, layerId: t.layerId, refs, linked: isAlias(first), derived: t.derived, deprecated: t.deprecated, values };
+    const refs = [...new Set([...Object.values(t.values).filter(isAlias).map((v) => targetOf(v)?.key), fit?.outer?.key, fit?.min?.key].filter(Boolean))];
+    return {
+      key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, layer: t.layer, layerId: t.layerId, refs, linked: isAlias(first), derived: t.derived, deprecated: t.deprecated, values,
+      ...(fit?.outer ? { fit: { outer: fit.outer.key, min: fit.min?.key ?? null, spacing: fit.spacing, border: fit.border, on: fitInside } } : {}),
+    };
   });
 
   const seen = new Map();
@@ -304,7 +328,7 @@ function themeEntries(tokens) {
   for (const t of tokens) {
     const n = t.name, last = t.path.at(-1);
     if (t.type === "color") add(`color-${n}`, n);
-    else if (/^radius/.test(n) || /radius$/.test(n)) { if (n !== "radius") add(`radius-${n.replace(/^radius-/, "").replace(/-radius$/, "")}`, n); }
+    else if (t.type === "dimension" && (/^radius/.test(n) || /radius$/.test(n))) { if (n !== "radius") add(`radius-${n.replace(/^radius-/, "").replace(/-radius$/, "")}`, n); }
     else if (t.type === "shadow") add(`shadow-${n.replace(/-shadow$/, "")}`, n);
     else if (t.type === "cubicBezier") add(`ease-${n.replace(/-ease$/, "")}`, n);
     else if (t.type === "fontFamily" && !t.derived) add(`font-${n.replace(/-font$/, "")}`, n);

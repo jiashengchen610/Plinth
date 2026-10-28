@@ -59,7 +59,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     const tokens = {};
     for (const b of brands) {
       const r = resolveBrand(ctx.root, b, config);
-      tokens[b] = { modes: r.modes, layers: r.layers, issues: r.issues, rows: r.tokens.map((t) => ({ name: t.name, path: t.key, type: t.type, source: t.source, layer: t.layer, layerId: t.layerId, refs: t.refs, linked: t.linked, description: t.description, derived: Boolean(t.derived), values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [m, { raw: v.raw, css: v.css, resolved: v.resolved, alpha: v.alpha }])) })) };
+      tokens[b] = { modes: r.modes, layers: r.layers, issues: r.issues, rows: r.tokens.map((t) => ({ name: t.name, path: t.key, type: t.type, source: t.source, layer: t.layer, layerId: t.layerId, refs: t.refs, linked: t.linked, description: t.description, derived: Boolean(t.derived), ...(t.fit ? { fit: t.fit } : {}), values: Object.fromEntries(Object.entries(t.values).map(([m, v]) => [m, { raw: v.raw, css: v.css, resolved: v.resolved, alpha: v.alpha }])) })) };
     }
     const checks = runChecks(ctx.root);
     return {

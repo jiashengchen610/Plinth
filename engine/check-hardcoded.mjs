@@ -76,8 +76,15 @@ const RULES = [
   },
 ];
 
+const NESTED_RADIUS = {
+  id: "nested-radius", level: "warn", reminder: true,
+  re: /(?<![\w-])rounded-(?!(?:t|b|l|r|s|e|tl|tr|bl|br|ss|se|es|ee)-)([a-z][a-z0-9-]*)/g,
+  hint: "The same corners on two elements of one component. A part inside its container should fit its corners: give it a radius token with \"$extensions\": { \"plinth\": { \"fit\": { \"outer\": \"{<name>.radius}\", \"spacing\": <padding steps> } } } and use rounded-<name>-<part>.",
+};
+const SCALE = new Set(["none", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl", "full"]);
+
 /** Rules whose findings are reminders: they never stop a deploy. */
-export const REMINDER_RULES = new Set(RULES.filter((r) => r.reminder).map((r) => r.id));
+export const REMINDER_RULES = new Set([...RULES.filter((r) => r.reminder).map((r) => r.id), NESTED_RADIUS.id]);
 
 function globToRegExp(glob) {
   let re = "";
@@ -175,6 +182,20 @@ export function scanFile(absPath, cwd, cfg) {
           hint: rule.hint,
           snippet: lines[i].trim().slice(0, 160),
         });
+      }
+    });
+  }
+  // The same component corners on two elements: usually a part inside its container (tabs in the bar, options in a
+  // list). Its corners should fit inside (the container's minus the gap): a radius token of its own with fit.
+  if (!allowed && /\.[jt]sx$/.test(ext)) {
+    const seen = new Map();
+    stripped.forEach((line, i) => {
+      NESTED_RADIUS.re.lastIndex = 0;
+      let m;
+      while ((m = NESTED_RADIUS.re.exec(line)) !== null) {
+        if (SCALE.has(m[1])) continue;
+        if (seen.has(m[1])) findings.push({ file: toPosix(rel), line: i + 1, col: m.index + 1, rule: NESTED_RADIUS.id, level: NESTED_RADIUS.level, match: m[0], hint: NESTED_RADIUS.hint, snippet: lines[i].trim().slice(0, 160) });
+        else seen.set(m[1], i);
       }
     });
   }

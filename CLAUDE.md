@@ -20,7 +20,10 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   `label`, `code`), text styles (`typography.*`, whose family is a role), and a text token per component part
   (`<part>.font` → a style) used as `type-<component>-<part>` (one `@utility` per typography token, from `buildCss`).
   Template components never use `text-sm`, `font-medium`, `leading-*` or `tracking-*` (the `tw-type` check, a
-  reminder only).
+  reminder only). Corners inside corners: a nested part's radius token carries `$extensions.plinth.fit` (outer radius,
+  gap in spacing steps, border px, min); `buildCss` emits container radius minus the gap while `radius.fit-inside`
+  is not 0 (the `nested-radius` check reminds when a component reuses its container's `rounded-<name>`).
+  `componentRefresh` (engine/upgrade.mjs) brings older design systems what newer template components use.
 - One Plinth per folder (`server/owner.mjs`): whichever process starts first serves the UI and runs every write;
   others forward tool calls to it. Writes go through `engine/workspace.mjs` `change` (validated, undoable); the user
   saves versions. Nothing restricts direct edits: checks run on the state, and `plinth check` (`engine/check.mjs`)
@@ -41,7 +44,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (30 tests).
+- After changing `engine/` or `server/`, run `npm test` (32 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (83 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the

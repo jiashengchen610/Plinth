@@ -177,7 +177,7 @@ export default function App() {
       )}
       {exists && state.upgradeAvailable && (
         <div role="status" className="flex flex-none flex-wrap items-center gap-3 border-b bg-info/5 px-4 py-2 text-sm">
-          <span className="min-w-0 flex-1">This design system was made by an older Plinth. {state.upgradeAvailable === "layers" ? "Upgrade it so each component gets its own colors and fonts." : "Upgrade it so headings, text and buttons can each have their own font."} Components you or Claude changed stay as they are. Undo takes it back.</span>
+          <span className="min-w-0 flex-1">This design system was made by an older Plinth. {state.upgradeAvailable === "layers" ? "Upgrade it so each component gets its own colors and fonts." : state.upgradeAvailable === "typography" ? "Upgrade it so headings, text and buttons can each have their own font." : "Newer versions of its components are ready, for example corners that fit inside their containers."} Components you or Claude changed stay as they are. Undo takes it back.</span>
           <Button onClick={() => act(() => api.upgrade(), "Upgraded. Undo takes it back.")} disabled={busy}>Upgrade</Button>
         </div>
       )}

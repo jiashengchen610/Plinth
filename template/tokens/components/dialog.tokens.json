@@ -50,6 +50,23 @@
         "$value": "{typography.heading.md}",
         "$description": "Dialog title"
       }
+    },
+    "close": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.small}",
+        "$description": "The close button in the corner",
+        "$extensions": {
+          "plinth": {
+            "fit": {
+              "outer": "{dialog.radius}",
+              "spacing": 4,
+              "border": 1,
+              "min": "{radius.small}"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -16,7 +16,9 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 }
 
 export type ModeValue = { raw: unknown; css: string | null; resolved: string | null; alpha?: number };
-export type TokenRow = { name: string; path: string; type: string; source: string; layer?: number; layerId?: string; refs?: string[]; linked?: boolean; description: string; derived: boolean; values: Record<string, ModeValue> };
+export type TokenRow = { name: string; path: string; type: string; source: string; layer?: number; layerId?: string; refs?: string[]; linked?: boolean; description: string; derived: boolean; values: Record<string, ModeValue>;
+  /** Corners that fit inside a container: its radius minus the gap, while on. */
+  fit?: { outer: string; min: string | null; spacing: number; border: number; on: boolean } };
 export type ContrastResult = { brand: string; mode: string; bg: string; fg: string; min: number; ratio: number | null; pass: boolean; accepted?: boolean; exceptionReason?: string };
 export type DistinctResult = { brand: string; mode: string; a: string; b: string; deltaE: number; hueDiff: number | null; pass: boolean; reason: string | null; accepted?: boolean; exceptionReason?: string };
 export type Hardcoded = { file: string; line: number; rule: string; match: string; hint?: string; snippet?: string; accepted?: boolean; exceptionReason?: string };
@@ -39,7 +41,7 @@ export type UnsavedFile = { file: string; status: "modified" | "added" | "delete
 export type LastChange = { title: string; by: string; at: string; files: string[] };
 export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null; usedBy: string[] };
-export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; hues: string[]; grays: string[] };
+export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; outer: string | null; inner: string | null; fitInside: boolean | null; radiusSteps: { step: string; px: number }[]; hues: string[]; grays: string[] };
 export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
 export type SetupStep = { id: string; label: string; who: string; status: "waiting" | "active" | "done" | "error"; detail?: string };
 export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
@@ -107,7 +109,7 @@ export type State = {
   lastChange: LastChange | null;
   layers: { id: string; name?: string; files: string[] }[] | null;
   /** What Upgrade would do for a design system made by an older Plinth. */
-  upgradeAvailable: "layers" | "typography" | false;
+  upgradeAvailable: "layers" | "typography" | "components" | false;
   versions: Version[];
   storybook: string | null;
 };
@@ -144,7 +146,7 @@ export const api = {
   presets: () => call<Presets>("GET", "/api/presets"),
   suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
-  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
+  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
   removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),
   roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
   addComponent: (name: string) => edit("Adding the component", () => call<ChangeResult>("POST", "/api/add-component", { name })),
