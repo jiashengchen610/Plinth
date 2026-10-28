@@ -39,12 +39,12 @@ export type UnsavedFile = { file: string; status: "modified" | "added" | "delete
 export type LastChange = { title: string; by: string; at: string; files: string[] };
 export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null; usedBy: string[] };
-export type Style = { main: string; gray: string; corners: string; font: string | null; hues: string[]; grays: string[] };
+export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; hues: string[]; grays: string[] };
 export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
 export type SetupStep = { id: string; label: string; who: string; status: "waiting" | "active" | "done" | "error"; detail?: string };
 export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
 export type Presets = {
-  kinds: { id: string; label: string }[]; feels: string[]; fonts: { family: string; mood: string }[];
+  kinds: { id: string; label: string }[]; feels: string[]; fonts: { family: string; mood: string; kind?: "sans" | "serif" }[];
   components: { id: string; name: string; hint: string; ready?: boolean; core?: boolean }[];
   kindComponents: Record<string, string[]>;
   palettes: { id: string; name: string; mood: string; main: string; gray: string; swatches: (string | null)[]; main600: string | null }[];
@@ -106,7 +106,8 @@ export type State = {
   unsaved: UnsavedFile[];
   lastChange: LastChange | null;
   layers: { id: string; name?: string; files: string[] }[] | null;
-  upgradeAvailable: boolean;
+  /** What Upgrade would do for a design system made by an older Plinth. */
+  upgradeAvailable: "layers" | "typography" | false;
   versions: Version[];
   storybook: string | null;
 };
@@ -143,7 +144,7 @@ export const api = {
   presets: () => call<Presets>("GET", "/api/presets"),
   suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
-  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
+  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
   removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),
   roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
   addComponent: (name: string) => edit("Adding the component", () => call<ChangeResult>("POST", "/api/add-component", { name })),

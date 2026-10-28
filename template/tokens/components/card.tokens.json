@@ -19,11 +19,21 @@
             "alpha": 0.1
           }
         }
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Text in the card"
       }
     },
     "description": {
       "foreground": {
         "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Card description"
       }
     },
     "footer": {
@@ -34,6 +44,20 @@
             "alpha": 0.5
           }
         }
+      }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.heading.sm}",
+        "$description": "Card title"
+      }
+    },
+    "title-small": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.heading.xs}",
+        "$description": "Card title in the small card"
       }
     }
   }

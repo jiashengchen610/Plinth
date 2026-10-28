@@ -9,7 +9,11 @@ import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
-import { readStyle, roleColorOps, styleOps } from "../engine/style.mjs";
+import { fontPickFor, readStyle, roleColorOps, styleOps } from "../engine/style.mjs";
+import { resolveBrand } from "../engine/tokens.mjs";
+import { fontsToLoad } from "../engine/fonts.mjs";
+
+const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 import * as wsx from "../engine/workspace.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,10 +32,28 @@ test("style: a pick re-points roles at readable palette steps; component removal
     assert.equal(roles.primary.$value, "{color.teal.700}", "teal-600 is too light for white text, so 700");
     assert.equal(roles["primary-foreground"].$value, "{color.white}");
     assert.equal(roles.border.$value, "{color.stone.200}", "grays move to the same step of the new family");
-    const base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
-    assert.deepEqual(base.font.sans.$value, ["Source Serif 4", "serif"]);
-    assert.deepEqual(base.typography.body.$value.fontFamily, ["Source Serif 4", "serif"]);
+    // Fonts are layered: the pick joins the palette, the text role points at it, text styles keep pointing at roles.
+    let base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
+    assert.equal(base.font.body.$value, "{font.source-serif-4}");
+    assert.equal(base.font.code.$value, "{font.jetbrains-mono}", "code follows the text font");
+    assert.deepEqual(JSON.parse(readFileSync(join(root, "tokens/primitives.tokens.json"), "utf8")).font["source-serif-4"].$value, ["Source Serif 4", "serif"]);
+    assert.equal(base.typography.body.md.$value.fontFamily, "{font.body}");
     assert.equal(base.radius.control.$value, "{radius.full}");
+    // Headings in their own font, buttons and labels following them; then headings back to the text font.
+    wsx.change(root, { title: "fonts", ops: styleOps(root, "probe", { font: "Inter", headingFont: "Playfair Display", labelFont: "heading" }), by: "test" });
+    assert.deepEqual(pick(readStyle(root, "probe"), ["font", "headingFont", "labelFont", "codeFont"]), { font: "Inter", headingFont: "Playfair Display", labelFont: "heading", codeFont: "JetBrains Mono" });
+    const button = resolveBrand(root, "probe").tokens.find((t) => t.key === "button/label/font");
+    assert.equal(button.values.default.resolved, "500 0.875rem/1.25 'Playfair Display', serif", "a component's text follows style → role → font");
+    assert.deepEqual(styleOps(root, "probe", { font: "Inter", headingFont: "Playfair Display", labelFont: "heading" }), [], "nothing to change");
+    wsx.change(root, { title: "same", ops: styleOps(root, "probe", { headingFont: "" }), by: "test" });
+    base = JSON.parse(readFileSync(join(root, "tokens/base.tokens.json"), "utf8"));
+    assert.equal(base.font.heading.$value, "{font.body}");
+    assert.deepEqual(fontPickFor("Playfair Display"), { headingFont: "Playfair Display" }, "Describe's serif pick becomes the headings font");
+    assert.deepEqual(fontPickFor("Nunito"), { font: "Nunito" });
+    const css = readFileSync(join(root, "src/styles/tokens.css"), "utf8");
+    assert.match(css, /@utility type-button-label \{\n  font: var\(--button-label-font\);\n  letter-spacing: var\(--label-md-letter-spacing\);\n\}/);
+    assert.match(css, /--font-heading: var\(--heading-font\);/);
+    assert.deepEqual(fontsToLoad(root).map((f) => f.family), ["Inter", "JetBrains Mono"], "fonts load only when a role uses them");
     assert.throws(() => styleOps(root, "probe", { main: "not-a-color" }), /no palette color/);
 
     // A base color clicked in Components: the mode shown takes it, the other moves to the same family at its own step.

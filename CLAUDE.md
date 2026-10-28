@@ -16,6 +16,11 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   roles, component tokens. Template components use only component tokens, and icons only from `@/icons` (SVGs in
   `icons/`; the shipped Lucide set is `engine/icon-sets/lucide.json`, regenerate with `scripts/lucide-icons.mjs`).
   Catalog components may import only the five core ones (a test enforces it). Fixes never edit the palette.
+  Fonts are layered the same way: fonts in the palette (`primitives → font`), font roles (`font.heading`, `body`,
+  `label`, `code`), text styles (`typography.*`, whose family is a role), and a text token per component part
+  (`<part>.font` → a style) used as `type-<component>-<part>` (one `@utility` per typography token, from `buildCss`).
+  Template components never use `text-sm`, `font-medium`, `leading-*` or `tracking-*` (the `tw-type` check, a
+  reminder only).
 - One Plinth per folder (`server/owner.mjs`): whichever process starts first serves the UI and runs every write;
   others forward tool calls to it. Writes go through `engine/workspace.mjs` `change` (validated, undoable); the user
   saves versions. Nothing restricts direct edits: checks run on the state, and `plinth check` (`engine/check.mjs`)
@@ -32,13 +37,16 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
 - One edit at a time: UI calls that write go through `edit()` in `app/src/lib/lock.ts` (`api.ts` wraps them), which
   locks the page until the write is done and the page has reloaded; a Claude reply locks it for the whole reply.
+- Before a release that changes template component files, run `node scripts/shipped-hashes.mjs` (the previous
+  release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (29 tests).
+- After changing `engine/` or `server/`, run `npm test` (30 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (83 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
-  Write/Edit tools.
+  Write/Edit tools. Never pass text with backticks inside double quotes to Bash (`node -e "…"`): the shell runs the
+  backticked words as commands, and Windows has a `label` command that renames drives. Edit docs with Edit.
 
 ## Verified facts this code relies on (2026-10)
 

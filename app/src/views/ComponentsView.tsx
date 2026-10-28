@@ -6,6 +6,7 @@ import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
 import { buildGraph, componentOf, remindersByToken, targetIn, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
 import { NodeGraph } from "@/views/NodeGraph";
+import { TypeGraph } from "@/views/TypeGraph";
 import { ModeSwitch } from "@/views/StyleView";
 
 type Props = {
@@ -19,6 +20,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const tmode: Mode = mode === "dark" ? "dark" : "default";
   const [selected, setSelected] = useState<string | null>(state.components[0]?.id ?? null);
   const [part, setPart] = useState<string | null>(null);
+  const [textPart, setTextPart] = useState<string | null>(null);
   const [variant, setVariant] = useState("");
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -32,12 +34,13 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   }, [state.storybook, state.rev]);
 
   const component = state.components.find((c) => c.id === selected) ?? state.components[0];
-  useEffect(() => { setPart(null); setVariant(""); setConfirmRemove(false); }, [component?.id]);
+  useEffect(() => { setPart(null); setTextPart(null); setVariant(""); setConfirmRemove(false); }, [component?.id]);
   const reminders = useMemo(() => remindersByToken(state, brand, tmode), [state, brand, tmode]);
   if (!component) return <p className="text-muted-foreground">No components yet. Ask Claude to add one.</p>;
 
   const tokens = g.rows.filter((r) => componentOf(r) === component.id);
   const colorParts = tokens.filter((t) => t.type === "color");
+  const textParts = tokens.filter((t) => t.type === "typography");
   const variants = [...new Set(colorParts.map((t) => variantOf(t.path)))];
   const shown = variants.length > 1 ? colorParts.filter((t) => variantOf(t.path) === (variant || variants[0])) : colorParts;
   const radius = tokens.find((t) => t.path === `${component.id}/radius`);
@@ -66,7 +69,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-muted-foreground">Step 3 of 4</span>
         <h1 className="text-2xl font-semibold tracking-tight">Components</h1>
-        <p className="text-muted-foreground">Check each component and fine-tune its colors.</p>
+        <p className="text-muted-foreground">Check each component and fine-tune its colors and text.</p>
       </div>
       <div className="flex flex-wrap items-start gap-5">
         <nav aria-label="Your components" className="flex min-w-0 flex-[1_1_190px] flex-col gap-0.5 rounded-2xl border bg-background p-2 md:max-w-56">
@@ -155,6 +158,15 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
             {addingColor ? <AddColor hint="Plinth makes lighter and darker versions of it; they show up first in the base colors." onAdded={(r) => { onChanged(r, `Added ${r.name}.`); setAddingColor(false); }} onError={onError} />
               : <button type="button" onClick={() => setAddingColor(true)} className="min-h-10 self-start text-sm font-medium text-info underline underline-offset-2">Add your own base color</button>}
             {radius && <p className="text-sm text-muted-foreground">{partName(radius.path)} follow the corners you picked in Style.</p>}
+          </section>
+
+          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+            <div>
+              <h2 className="text-base font-semibold">How {name} sets its text</h2>
+              <p className="text-sm text-muted-foreground">Pick a part, then click a text style to use it, or a font to change that style's font. Or tell Claude in the chat.</p>
+            </div>
+            {textParts.length || !state.upgradeAvailable ? <TypeGraph g={g} mode={tmode} parts={textParts} selected={textPart} onSelect={setTextPart} onEdit={onEdit} />
+              : <p className="text-sm text-muted-foreground">{name}'s text sizes are written in its code. Upgrade this design system (at the top) to give its text its own settings.</p>}
           </section>
         </div>
       </div>

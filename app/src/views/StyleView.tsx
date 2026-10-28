@@ -49,7 +49,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const [adding, setAdding] = useState(false);
 
   const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
-  const pick = async (p: { main?: string; gray?: string; corners?: string; font?: string }, label: string) => {
+  const pick = async (p: { main?: string; gray?: string; corners?: string; font?: string; headingFont?: string; labelFont?: "body" | "heading" }, label: string) => {
     setBusy(true);
     try { onChanged(await api.style(brand, p), label); } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
   };
@@ -58,8 +58,12 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const custom = st.hues.filter((h) => !TAILWIND_FAMILIES.has(h));
   const mains = [...new Set([...custom, ...(moreMain ? [...st.hues, ...st.grays] : MAIN_FIRST), st.main])].filter((f) => st.hues.includes(f) || st.grays.includes(f));
   const grays = [...new Set([...(moreGray ? st.grays : GRAY_FIRST), st.gray])].filter((f) => st.grays.includes(f));
-  const fonts = [...new Set([...(presets?.fonts.map((f) => f.family) ?? []), ...(st.font ? [st.font] : [])])];
-  const href = fontsHref(fonts);
+  // Text fonts: the sans presets first; headings: the serifs first, then the other sans ones.
+  const preset = presets?.fonts ?? [];
+  const fonts = [...new Set([...preset.filter((f) => f.kind !== "serif").map((f) => f.family), ...preset.filter((f) => f.kind === "serif").map((f) => f.family), ...(st.font ? [st.font] : [])])];
+  const headingFonts = [...new Set([...preset.filter((f) => f.kind === "serif").map((f) => f.family), ...(st.headingFont ? [st.headingFont] : []), ...preset.filter((f) => f.kind !== "serif").map((f) => f.family)])].filter((f) => f !== st.font);
+  const moodOf = (f: string) => preset.find((x) => x.family === f)?.mood ?? "Your font";
+  const href = fontsHref([...fonts, ...headingFonts]);
   const roleRows = rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/"));
   const usedBy = (r: TokenRow) => new Set(dependents(g, r.path).filter((d) => d.layerId === "components").map((d) => d.path.split("/")[0])).size;
   const famUsed = (fam: string) => roleRows.some((r) => Object.values(r.values).some((v) => typeof v.raw === "string" && v.raw.includes(`{color.${fam}.`)));
@@ -137,18 +141,46 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
             {st.corners === "custom" && <p className="text-sm text-muted-foreground">Your corners are custom right now. Picking a preset replaces them.</p>}
           </section>
 
-          <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
-            <div><h2 className="text-base font-semibold">Font</h2><p className="text-sm text-muted-foreground">Used for headings and text.</p></div>
-            <div className="flex flex-wrap gap-2">
-              {fonts.map((f) => (
-                <button key={f} type="button" disabled={busy} aria-pressed={st.font === f} onClick={() => pick({ font: f }, `Font: ${f}.`)} className={`flex flex-[1_1_130px] flex-col items-start gap-0.5 rounded-xl border-2 p-3 text-left ${ring(st.font === f)}`}>
-                  <span className="text-2xl font-bold leading-tight" style={{ fontFamily: `'${f}', sans-serif` }}>Aa</span>
-                  <span className="text-sm font-semibold">{f}</span>
-                  <span className="text-sm text-muted-foreground">{presets?.fonts.find((x) => x.family === f)?.mood ?? "Your font"}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+          {st.fontRoles ? (
+            <section className="flex flex-col gap-4 rounded-2xl border bg-background p-5">
+              <div><h2 className="text-base font-semibold">Fonts</h2><p className="text-sm text-muted-foreground">One font for text, and another for headings if you like. Buttons and labels follow either.</p></div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Text</h3>
+                <div className="flex flex-wrap gap-2">
+                  {fonts.map((f) => <FontChoice key={f} family={f} mood={moodOf(f)} on={st.font === f} disabled={busy} onPick={() => pick({ font: f }, `Text font: ${f}.`)} />)}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Headings</h3>
+                <div className="flex flex-wrap gap-2">
+                  <FontChoice family={st.font ?? "inherit"} name="Same as text" mood={st.font ?? ""} on={!st.headingFont} disabled={busy} onPick={() => pick({ headingFont: "" }, "Headings: same font as text.")} />
+                  {headingFonts.map((f) => <FontChoice key={f} family={f} mood={moodOf(f)} on={st.headingFont === f} disabled={busy} onPick={() => pick({ headingFont: f }, `Headings: ${f}.`)} />)}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Buttons and labels</h3>
+                <div role="group" aria-label="Buttons and labels" className="flex flex-wrap gap-2">
+                  {(["body", "heading"] as const).map((k) => {
+                    const family = k === "heading" ? st.headingFont ?? st.font : st.font;
+                    return (
+                      <button key={k} type="button" disabled={busy} aria-pressed={st.labelFont === k} onClick={() => pick({ labelFont: k }, `Buttons and labels: like ${k === "heading" ? "headings" : "text"}.`)} className={`flex flex-[1_1_160px] items-center gap-3 rounded-xl border-2 p-3 text-left ${ring(st.labelFont === k)}`}>
+                        <span className="rounded-md bg-foreground px-2.5 py-1 text-sm font-medium text-background" style={{ fontFamily: `'${family}', sans-serif` }}>Save</span>
+                        <span className="flex flex-col leading-tight"><span className="text-sm font-semibold">Like {k === "heading" ? "headings" : "text"}</span><span className="text-sm text-muted-foreground">{family}</span></span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!st.headingFont && <p className="text-xs text-muted-foreground">Headings use the text font now, so both look the same until you pick a headings font.</p>}
+              </div>
+            </section>
+          ) : (
+            <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+              <div><h2 className="text-base font-semibold">Font</h2><p className="text-sm text-muted-foreground">Used for headings and text. Upgrade this design system (at the top) to pick a font for headings and buttons too.</p></div>
+              <div className="flex flex-wrap gap-2">
+                {fonts.map((f) => <FontChoice key={f} family={f} mood={moodOf(f)} on={st.font === f} disabled={busy} onPick={() => pick({ font: f }, `Font: ${f}.`)} />)}
+              </div>
+            </section>
+          )}
 
           <section className="flex flex-col gap-2 rounded-2xl border bg-background p-5">
             <div><h2 className="text-base font-semibold">Your colors</h2><p className="text-sm text-muted-foreground">Every color your components use. To change one, pick it in Components or ask Claude.</p></div>
@@ -200,39 +232,52 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
           </section>
         </div>
       </div>
-      <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
+      <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
     </div>
   );
 }
 
 const GRAYS_SET = new Set(["slate", "gray", "zinc", "neutral", "stone", "mauve", "olive", "mist", "taupe"]);
 
+/** One font to pick: "Aa" in the font, its name and what it feels like. */
+function FontChoice({ family, name, mood, on, disabled, onPick }: { family: string; name?: string; mood: string; on: boolean; disabled: boolean; onPick: () => void }) {
+  return (
+    <button type="button" disabled={disabled} aria-pressed={on} onClick={onPick} className={`flex flex-[1_1_130px] flex-col items-start gap-0.5 rounded-xl border-2 p-3 text-left ${ring(on)}`}>
+      <span className="text-2xl leading-tight font-bold" style={{ fontFamily: `'${family}', sans-serif` }}>Aa</span>
+      <span className="text-sm font-semibold">{name ?? family}</span>
+      <span className="text-sm text-muted-foreground">{mood}</span>
+    </button>
+  );
+}
+
 /** A small budgeting screen drawn with the component tokens, so a change shows up the way components will show it. */
 export function Sample({ vars }: { vars: React.CSSProperties }) {
   const v = (n: string) => `var(--${n})`;
+  // The three font roles (older design systems have one font: font-sans).
+  const heading = { fontFamily: "var(--heading-font, var(--sans-font))" }, label = { fontFamily: "var(--label-font, var(--sans-font))" };
   return (
-    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--sans-font)" }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
+    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))" }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold">Your budget</span></div>
-        <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
+        <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
+        <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
       </div>
       <div className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
         <span className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
-        <span className="text-[28px] leading-tight font-bold">$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
+        <span className="text-[28px] leading-tight font-bold" style={heading}>$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
         <span className="mt-2 block h-2 rounded-full" style={{ background: v("muted") }}><span className="block h-2 w-[62%] rounded-full" style={{ background: v("primary") }} /></span>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold" style={{ color: v("label-text-foreground") }}>Search</label>
+        <label className="text-sm font-semibold" style={{ ...label, color: v("label-text-foreground") }}>Search</label>
         <span className="flex h-11 items-center border px-3.5 text-[15px]" style={{ background: v("input-field-background"), borderColor: v("input-field-border"), color: v("input-field-placeholder"), borderRadius: v("input-radius") }}>Search expenses</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {[["Groceries", "secondary"], ["Paid", "success"], ["Over budget", "destructive"]].map(([t, k]) => (
-          <span key={t} className="px-2.5 py-0.5 text-xs font-semibold" style={{ background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
+          <span key={t} className="px-2.5 py-0.5 text-xs font-semibold" style={{ ...label, background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
         ))}
       </div>
       <div className="flex gap-2.5">
-        <span className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
-        <span className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
+        <span className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ ...label, background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
+        <span className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ ...label, background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
       </div>
     </div>
   );

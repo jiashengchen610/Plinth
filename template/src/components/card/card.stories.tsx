@@ -122,8 +122,8 @@ export const ContentOnly: Story = {
   render: (args) => (
     <Card {...args} className="w-56">
       <CardContent>
-        <p className="text-sm text-muted-foreground">Active users</p>
-        <p className="font-heading text-2xl font-medium">4,812</p>
+        <p className="type-body-md text-muted-foreground">Active users</p>
+        <p className="type-display">4,812</p>
       </CardContent>
     </Card>
   ),

@@ -8,7 +8,7 @@ steps in one UI, with Claude in a chat beside them: Describe → Style → Compo
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.6.2).** Tested by `npm test` (29 tests), by the 83 story tests in a generated workspace, and
+> **Status: early (0.7.0).** Tested by `npm test` (30 tests), by the 83 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -50,9 +50,11 @@ Three rules shape everything:
    the DESIGN.md YAML, and rename follow-through are deterministic code in `engine/`. Claude writes the parts that
    need judgement: values, prose, components.
 3. **Tokens are the single source of truth, in layers.** The **palette** at the bottom is Tailwind's colors, radius
-   and shadow scales, plus colors you add (one color becomes a 50–950 scale). Semantic **roles** (`primary`,
-   `muted-foreground`, `radius/control`) point at palette steps, per brand and mode. **Component tokens**
-   (`button/default/background`) point at roles, and components use only those. Change a palette step, a role or one
+   and shadow scales, the fonts the system loads, plus colors you add (one color becomes a 50–950 scale). Semantic
+   **roles** (`primary`, `muted-foreground`, `radius/control`, the font roles `font/heading`, `font/body`,
+   `font/label`, `font/code`, and text styles such as `typography/label/md` that use them) point at the palette, per
+   brand and mode. **Component tokens** (`button/default/background`, `button/label/font`) point at roles, and
+   components use only those (text as `type-button-label`). Change a palette step, a role or one
    component's token, and everything above it follows. You can add your own layers in between.
 
 The chat runs **Claude Code** on your computer, once per message, with the Plinth plugin loaded. Only Plinth's
@@ -111,13 +113,16 @@ its main button in the bar at the bottom of the screen:
    decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
    and asks Claude in the chat to write the style guides and any extra components you picked. The result is saved as
    your first version. Dependencies for the preview install in the background (1–3 minutes, once).
-2. **Style.** Main color, grays, corners and font, with a sample screen in light and dark. Each pick re-points the
-   roles at palette steps the engine chooses for readable text. **Things to look at** lists text that is hard to read
+2. **Style.** Main color, grays, corners and fonts (a text font, a headings font or the same, and whether buttons and
+   labels follow text or headings), with a sample screen in light and dark. Each pick re-points the roles at palette
+   steps the engine chooses for readable text; a new font joins the palette. **Things to look at** lists text that is hard to read
    and colors that look alike, with **Fix it** or **That's on purpose**.
 3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
    (roles) → base colors (the whole palette: your own colors first, then Tailwind's). Click a part, then one of your
    colors, to connect them; click a base color to change that color itself (every component using it changes, the
-   other mode follows in the same family). **Add your own base color** makes a scale from one color. Add ready-made
+   other mode follows in the same family). **Add your own base color** makes a scale from one color. A second graph
+   shows its text: text parts → text styles → fonts; click a style to use it, or a font to change that style's font.
+   A design system made before 0.7 gets an **Upgrade** for this (components someone edited stay as they are). Add ready-made
    components (free, at once), ask Claude for others, or remove ones nothing else uses.
 4. **Publish** (optional). Claude drafts the description of your changes (change it if you like) and **Save and
    publish** saves and publishes in one step; Claude's review appears (suggestions only). The first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
@@ -272,13 +277,13 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `get_tokens`, `get_guidelines`, `list_components` | Read the system (per brand) |
 | `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
 | `undo` | Take back the newest change |
-| `set_style` | Main color, grays, corners, font in one step (what the Style step does): roles re-pointed at readable palette steps |
+| `set_style` | Main color, grays, corners, text font, headings font, what buttons and labels follow (what the Style step does): roles re-pointed at readable palette steps, new fonts added to the palette |
 | `set_role_color` | One role on a palette step in one mode (what clicking a base color in Components does); the other mode follows in the same family |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |
 | `add_palette_color` | Add a color to the palette as a 50–950 scale |
-| `upgrade_to_layers`, `link_to_palette` | Move a design system made before layers onto them; point fixed colors at the palette |
+| `upgrade_to_layers`, `link_to_palette` | Bring a design system made by an older Plinth up to date (layers, then font roles, text styles and text tokens; component files only while exactly as shipped); point fixed colors at the palette |
 | `run_checks`, `fix_contrast` | Deterministic checks; computed contrast fixes, applied |
 | `run_tests` | Typecheck and story tests in the workspace |
 | `review_changes` | Everything since the last publish, token by token, for the review |
@@ -350,7 +355,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 29 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 30 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

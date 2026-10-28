@@ -32,6 +32,11 @@
       },
       "placeholder": {
         "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "The chosen value"
       }
     },
     "content": {
@@ -54,6 +59,18 @@
       },
       "label": {
         "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Options in the list"
+      }
+    },
+    "group-label": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Group names in the list"
       }
     }
   }

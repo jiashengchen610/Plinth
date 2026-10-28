@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: (args) => (
-    <div className="w-72 text-sm">
+    <div className="w-72 type-body-md">
       <div className="py-2">Groceries</div>
       <Separator {...args} />
       <div className="py-2">Dining out</div>
@@ -31,7 +31,7 @@ export const Default: Story = {
 export const Vertical: Story = {
   args: { orientation: "vertical" },
   render: (args) => (
-    <div className="flex h-5 items-center gap-3 text-sm">
+    <div className="flex h-5 items-center gap-3 type-body-md">
       <span>Edit</span>
       <Separator {...args} />
       <span>Share</span>

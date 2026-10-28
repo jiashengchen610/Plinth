@@ -15,4 +15,6 @@ Calm, neutral and legible. Color is reserved for actions and status.
 
 ## Typography
 
-Geist for everything. Display style for page titles, body style for content.
+Geist for everything: headings, text, and buttons and labels use the same font until another is picked. Display for
+page titles and big numbers, heading styles for section, dialog and card titles, text styles for content, label styles
+for buttons, tabs and badges.

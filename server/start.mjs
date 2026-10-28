@@ -9,7 +9,8 @@ import { quickClaude } from "./quick.mjs";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands } from "../engine/tokens.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
-import { CORNERS, styleOps, readStyle } from "../engine/style.mjs";
+import { CORNERS, fontPickFor, styleOps, readStyle } from "../engine/style.mjs";
+import { typographyUpgrade } from "../engine/upgrade.mjs";
 
 export const KINDS = [
   { id: "mobile-app", label: "Mobile app" },
@@ -25,12 +26,15 @@ export const PALETTES = [
   { id: "violet-slate", name: "Violet and cool gray", mood: "Creative and modern", main: "violet", gray: "slate" },
   { id: "zinc-zinc", name: "Black and white", mood: "Simple and serious", main: "zinc", gray: "zinc" },
 ];
+/** Fonts the UI offers. A serif picked in Describe becomes the headings font (text stays a sans): fontPickFor. */
 export const FONTS = [
-  { family: "Inter", mood: "Clean and neutral" },
-  { family: "Nunito", mood: "Soft and friendly" },
-  { family: "Space Grotesk", mood: "Modern, a bit techy" },
-  { family: "Source Serif 4", mood: "Classic and calm" },
-  { family: "Geist", mood: "Crisp and technical" },
+  { family: "Inter", mood: "Clean and neutral", kind: "sans" },
+  { family: "Nunito", mood: "Soft and friendly", kind: "sans" },
+  { family: "Space Grotesk", mood: "Modern, a bit techy", kind: "sans" },
+  { family: "Geist", mood: "Crisp and technical", kind: "sans" },
+  { family: "Source Serif 4", mood: "Classic and calm", kind: "serif" },
+  { family: "Playfair Display", mood: "Elegant, for headings", kind: "serif" },
+  { family: "Fraunces", mood: "Warm, with character", kind: "serif" },
 ];
 export const FEELS = ["Warm and trustworthy", "Calm and professional", "Bright and playful", "Simple and focused"];
 /**
@@ -137,11 +141,11 @@ function setupPrompt(a, style, fresh) {
     `- What it's for: ${a.product}`,
     `- How it should feel: ${a.feel || "you choose"}`,
     `- Built for: ${label(KINDS, a.kind)}`,
-    `- Already applied by Plinth: main color ${style.main}, grays ${style.gray}, corners ${style.corners}, font ${style.font}.`,
+    `- Already applied by Plinth: main color ${style.main}, grays ${style.gray}, corners ${style.corners}, text font ${style.font}${style.headingFont ? `, headings font ${style.headingFont}` : ""}.`,
   ];
   if (a.palette === "claude") lines.push("- Colors: I let you choose. If another main color or gray fits better, change it with set_style.");
   if (a.corners === "claude") lines.push("- Corners: I let you choose; change them with set_style if another preset fits better.");
-  if (a.font === "claude") lines.push("- Font: I let you choose; change it with set_style if another family fits better.");
+  if (a.font === "claude") lines.push("- Fonts: I let you choose; change them with set_style (font, headingFont, labelFont) if others fit better.");
   lines.push("", "Please:", `1. ${fresh ? "Write" : "Rewrite"} the brand's DESIGN.md and the shared WRITING.md for this product and feel. Keep the applied style unless it contradicts the feel.`);
   if (a.extraText?.trim()) lines.push(`2. The ready-made components I picked are already there. Also add this, which the catalog doesn't have, as a component the Plinth way (component tokens, a story, a spec): ${a.extraText.trim()}`);
   lines.push(fresh ? "Don't save a version: Plinth saves it when you're done." : "Don't save a version: I'll decide when.");
@@ -192,6 +196,9 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
           // Answering again adds picked components that are missing; it never removes any (Remove does that).
           const have = new Set(ws.listComponents(ctx.root).map((c) => c.id));
           const add = picked.filter((id) => !have.has(id));
+          // Catalog components take their text from text styles: an older design system gets them first.
+          const fonts = add.length ? typographyUpgrade(ctx.root, ws.TEMPLATE_DIR) : null;
+          if (fonts) ws.change(ctx.root, { title: fonts.title, ops: fonts.ops, by: "engine" });
           if (add.length) ws.change(ctx.root, { title: `Add ${add.map((id) => COMPONENTS.find((c) => c.id === id)?.name ?? id).join(", ")}`, ops: add.flatMap((id) => ws.catalogComponentOps(ctx.root, id)), by: "engine" });
         }
         set("scaffold", "done");
@@ -207,7 +214,9 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         }
         const corners = CORNERS[a.corners] ? a.corners : "round";
         const font = FONTS.some((f) => f.family === a.font) ? a.font : "Inter";
-        const ops = styleOps(ctx.root, brand, { main, gray, corners, font });
+        // A serif becomes the headings font; a sans is the text font, with headings in it too. Before font roles: one font.
+        const fonts = readStyle(ctx.root, brand).fontRoles ? { headingFont: "", ...fontPickFor(font) } : { font };
+        const ops = styleOps(ctx.root, brand, { main, gray, corners, ...fonts });
         const cfg = JSON.parse(readFileSync(join(ctx.root, "design-system.json"), "utf8"));
         const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
         cfg.brief = brief;

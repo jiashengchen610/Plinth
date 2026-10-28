@@ -46,18 +46,21 @@ function frontMatter(brandName, description, resolved) {
       lines.push(`  ${t.name}: ${yamlString(rgb && (rgb.alpha ?? 1) === 1 ? formatHex(rgb) : val(t))}`);
     }
   }
-  const typo = resolved.tokens.filter((t) => t.type === "typography" && !t.derived);
+  // Text styles (the composites; component text tokens only point at them), with their parts resolved: a style's
+  // family is a font role, which is a font in the palette.
+  const typo = resolved.tokens.filter((t) => t.type === "typography" && !t.derived && t.values.default?.raw && typeof t.values.default.raw === "object");
   if (typo.length) {
+    const part = (t, name) => resolved.tokens.find((x) => x.key === `${t.key}/${name}`)?.values.default?.resolved ?? null;
     lines.push("typography:");
     for (const t of typo) {
-      const v = t.values.default.raw;
       const name = t.name.replace(/-font$/, "");
       lines.push(`  ${name}:`);
-      if (v.fontFamily) lines.push(`    fontFamily: ${yamlString(Array.isArray(v.fontFamily) ? v.fontFamily[0] : v.fontFamily)}`);
-      if (v.fontSize) lines.push(`    fontSize: ${typeof v.fontSize === "object" ? `${v.fontSize.value}${v.fontSize.unit}` : v.fontSize}`);
-      if (v.fontWeight) lines.push(`    fontWeight: ${v.fontWeight}`);
-      if (v.lineHeight) lines.push(`    lineHeight: ${typeof v.lineHeight === "object" ? `${v.lineHeight.value}${v.lineHeight.unit}` : v.lineHeight}`);
-      if (v.letterSpacing) lines.push(`    letterSpacing: ${typeof v.letterSpacing === "object" ? `${v.letterSpacing.value}${v.letterSpacing.unit}` : v.letterSpacing}`);
+      const family = part(t, "font-family");
+      if (family) lines.push(`    fontFamily: ${yamlString(family.split(",")[0].trim().replace(/^['"]|['"]$/g, ""))}`);
+      for (const [key, p] of [["fontSize", "font-size"], ["fontWeight", "font-weight"], ["lineHeight", "line-height"], ["letterSpacing", "letter-spacing"]]) {
+        const v = part(t, p);
+        if (v !== null && v !== "") lines.push(`    ${key}: ${v}`);
+      }
     }
   }
   const dims = (re) => resolved.tokens.filter((t) => t.type === "dimension" && re.test(t.name) && /(px|rem|em)$/.test(String(val(t))));

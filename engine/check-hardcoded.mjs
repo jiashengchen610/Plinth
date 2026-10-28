@@ -10,6 +10,7 @@
  *   hex-color      #fff / #ffffff / #ffffffff literals
  *   color-fn       rgb()/rgba()/hsl()/hsla()/oklch() with literal numbers
  *   tw-arbitrary   Tailwind arbitrary values: bg-[#fff], p-[13px], text-[14px]
+ *   tw-type        text-sm, font-medium, leading-*, tracking-* in components (a reminder: use text tokens)
  *   magic-px       Npx where N is not 0 or 1 (borders / hairlines are allowed)
  *
  * Config (optional): design-system.json in the workspace root
@@ -61,11 +62,22 @@ const RULES = [
     hint: "Tailwind arbitrary value. Prefer a theme utility backed by a token (bg-primary, p-4, text-sm).",
   },
   {
+    // Text size, weight, line height and letter spacing come from the component's text tokens. A reminder, not a
+    // deploy stop: components written before text tokens use these. max-md:text-base is fine: it keeps fields at
+    // 16px on phones so iOS does not zoom in.
+    id: "tw-type", level: "warn", reminder: true,
+    re: /(?<!max-md:)(?<![\w-])(?:text-(?:xs|sm|base|lg|xl|[2-9]xl)|font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black)|leading-(?:none|tight|snug|normal|relaxed|loose|\d+)|tracking-(?:tighter|tight|normal|wide|wider|widest))(?![\w-])/g,
+    hint: "Text size or weight in a component. Give the part a text token (tokens/components/<name>.tokens.json → <part>.font, pointing at a text style such as {typography.label.md}) and use type-<name>-<part>.",
+  },
+  {
     id: "magic-px", level: "warn", pxRule: true,
     re: /(?<![\w.-])(\d+(?:\.\d+)?)px\b/g,
     hint: "Magic pixel value. Use a spacing / size token or the theme scale.",
   },
 ];
+
+/** Rules whose findings are reminders: they never stop a deploy. */
+export const REMINDER_RULES = new Set(RULES.filter((r) => r.reminder).map((r) => r.id));
 
 function globToRegExp(glob) {
   let re = "";

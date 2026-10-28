@@ -300,9 +300,9 @@ test("typography: a part edited by path lands in the composite, and old child en
   assert.match(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--display-font: 600 2\.75rem\/1\.15 'Cormorant Garamond', serif;/);
 
   // A file written before the fix (children inside the composite) is read as intended.
-  base.typography.body["font-family"] = { $value: ["Work Sans", "sans-serif"] };
+  base.typography.body.md["font-family"] = { $value: ["Work Sans", "sans-serif"] };
   writeFileSync(join(root, "tokens/base.tokens.json"), JSON.stringify(base, null, 2));
   ws.regenerate(root);
-  assert.match(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--body-font-family: 'Work Sans', sans-serif;/);
+  assert.match(readFileSync(join(root, "src/styles/tokens.css"), "utf8"), /--body-md-font-family: 'Work Sans', sans-serif;/);
   assert.match(readFileSync(join(root, "src/styles/fonts.css"), "utf8"), /family=Work\+Sans/);
 });

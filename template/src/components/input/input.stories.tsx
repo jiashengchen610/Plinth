@@ -59,7 +59,7 @@ export const Invalid: Story = {
   render: (args) => (
     <div className="grid w-72 gap-2">
       <Input {...args} />
-      <p id="email-error" className="text-sm text-destructive">
+      <p id="email-error" className="type-body-md text-destructive">
         Enter a complete email address.
       </p>
     </div>

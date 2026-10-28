@@ -39,18 +39,18 @@ function Toast({ className, variant, ...props }: React.ComponentProps<typeof Toa
 }
 
 function ToastTitle({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Title>) {
-  return <ToastPrimitive.Title data-slot="toast-title" className={cn("text-sm font-semibold", className)} {...props} />
+  return <ToastPrimitive.Title data-slot="toast-title" className={cn("type-toast-title", className)} {...props} />
 }
 
 function ToastDescription({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Description>) {
-  return <ToastPrimitive.Description data-slot="toast-description" className={cn("text-sm", className)} {...props} />
+  return <ToastPrimitive.Description data-slot="toast-description" className={cn("type-toast-description", className)} {...props} />
 }
 
 function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Action>) {
   return (
     <ToastPrimitive.Action
       data-slot="toast-action"
-      className={cn("inline-flex h-8 shrink-0 items-center justify-center rounded-toast border border-current/30 bg-transparent px-3 text-sm font-medium transition-colors duration-(--duration-fast) outline-none hover:bg-current/10 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
+      className={cn("inline-flex h-8 shrink-0 items-center justify-center rounded-toast border border-current/30 bg-transparent px-3 type-toast-action transition-colors duration-(--duration-fast) outline-none hover:bg-current/10 focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       {...props}
     />
   )

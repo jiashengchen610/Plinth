@@ -36,6 +36,27 @@
       "description": {
         "$value": "{color.background}"
       }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Toast title"
+      }
+    },
+    "description": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Toast text"
+      }
+    },
+    "action": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Toast action button"
+      }
     }
   }
 }

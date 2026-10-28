@@ -192,8 +192,10 @@ function literal(value, type, ref) {
     }
     case "border": return `${dim(value.width)} ${value.style ?? "solid"} ${ref(value.color, "color")}`;
     case "typography": {
-      const lh = value.lineHeight !== undefined ? `/${typeof value.lineHeight === "object" ? dim(value.lineHeight) : value.lineHeight}` : "";
-      return `${weight(value.fontWeight ?? 400)} ${value.fontSize !== undefined ? dim(value.fontSize) : "1rem"}${lh} ${fontList(value.fontFamily ?? "inherit")}`;
+      // Each part may be a reference (a text style's family points at a font role): ref() emits var() or resolves it.
+      const lhv = value.lineHeight;
+      const lh = lhv !== undefined ? `/${ref(lhv, lhv && typeof lhv === "object" ? "dimension" : "number")}` : "";
+      return `${ref(value.fontWeight ?? 400, "fontWeight")} ${value.fontSize !== undefined ? ref(value.fontSize, "dimension") : "1rem"}${lh} ${ref(value.fontFamily ?? "inherit", "fontFamily")}`;
     }
     default: return typeof value === "object" ? null : String(value);
   }
@@ -247,6 +249,17 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
     }
     return literal(v, type, refCss) ?? String(v);
   };
+  // The same inside a composite, resolved down to plain values for one mode (previews, exports, font loading).
+  const refResolvedIn = (mode) => {
+    const resolve = (v, type, seen = new Set()) => {
+      if (!isAlias(v)) return literal(v, type, (x, tx) => resolve(x, tx, seen)) ?? String(v);
+      const target = targetOf(v);
+      if (!target || seen.has(target.key)) return type === "color" ? "currentColor" : "inherit";
+      const raw = resolveRaw(target, mode);
+      return raw === undefined ? "inherit" : literal(raw, target.type ?? type, (x, tx) => resolve(x, tx, new Set([...seen, target.key]))) ?? String(raw);
+    };
+    return resolve;
+  };
 
   const tokens = [...map.values()].map((t) => {
     const values = {};
@@ -265,7 +278,7 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
       const own = t.type === "color" ? alphaIn(t, mode) : 1;
       if (css !== null && own < 1) css = `color-mix(in oklab, ${css} ${Number((own * 100).toFixed(2))}%, transparent)`;
       const raw = resolveRaw(t, mode);
-      let resolved = raw === undefined ? null : literal(raw, t.type, refCss);
+      let resolved = raw === undefined ? null : literal(raw, t.type, refResolvedIn(mode));
       const alpha = t.type === "color" ? alphaChain(t, mode) : 1;
       if (resolved !== null && alpha < 1) resolved = withAlpha(resolved, alpha);
       values[mode] = { raw: v, css, resolved, alpha };
@@ -302,7 +315,28 @@ function themeEntries(tokens) {
     } else if (t.derived && last === "letter-spacing") add(`tracking-${n.replace(/-letter-spacing$/, "")}`, n);
     else if (t.type === "dimension" && /^spacing-|^space-/.test(n)) add(`spacing-${n.replace(/^spac(ing|e)-/, "")}`, n);
   }
+  // Workspaces from before font roles: font-heading (used by template components) stays the page font.
+  if (!have.has("heading-font") && have.has("sans-font")) lines.push("  --font-heading: var(--sans-font);");
   return [...new Set(lines)].sort();
+}
+
+/**
+ * One Tailwind utility per text style and per component text token: the whole style (weight, size, line height,
+ * family) through the font shorthand, plus the letter spacing of the style it ends at. Components write
+ * `type-button-label`; the style behind it can change without touching the component.
+ */
+function typeUtilities(tokens) {
+  const byKey = new Map(tokens.map((t) => [t.key, t]));
+  const out = [];
+  for (const t of tokens) {
+    if (t.type !== "typography" || t.derived) continue;
+    let s = t;
+    const seen = new Set();
+    while (s && typeof s.values.default?.raw === "string" && !seen.has(s.key)) { seen.add(s.key); s = byKey.get(s.refs?.[0]); }
+    const spacing = s ? byKey.get(`${s.key}/letter-spacing`) : null;
+    out.push(`@utility type-${t.name.replace(/-font$/, "")} {`, `  font: var(--${t.name});`, `  letter-spacing: ${spacing ? `var(--${spacing.name})` : "normal"};`, "}");
+  }
+  return out;
 }
 
 // ---------- stylesheet ----------
@@ -355,6 +389,8 @@ export function buildCss(root, config = loadConfig(root)) {
   }
   const theme = themeEntries(resolved.find((r) => r.brand === defaultBrand).tokens);
   if (theme.length) out.push("@theme inline {", ...theme, "}", "");
+  const types = typeUtilities(resolved.find((r) => r.brand === defaultBrand).tokens);
+  if (types.length) out.push(...types, "");
   // Reduced motion: every duration becomes 0, so anything animated with the motion tokens just appears.
   const motion = [...new Set(resolved.flatMap((r) => r.tokens.filter((t) => t.type === "duration" || t.type === "transition").map((t) => t.name)))].sort();
   // !important: the brand and mode blocks above are more specific than :root.

@@ -4,7 +4,7 @@ Design tokens, guidelines and components, generated and maintained with Plinth.
 
 | Path | What it is |
 |---|---|
-| `tokens/base.tokens.json` | Shared scales: radius, fonts, typography, shadows, motion (DTCG) |
+| `tokens/base.tokens.json` | Shared roles and scales: radius, font roles (headings, text, buttons and labels, code), text styles, shadows, motion (DTCG) |
 | `brands/<id>/tokens.json` | Each brand's semantic colors, light and dark (DTCG) |
 | `DESIGN.md`, `brands/<id>/DESIGN.md` | Design guidelines: shared, then per brand |
 | `WRITING.md` | Voice, tone and interface copy rules |

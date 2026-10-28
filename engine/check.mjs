@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { buildCss, loadConfig } from "./tokens.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { runChecks } from "./checks.mjs";
+import { REMINDER_RULES } from "./check-hardcoded.mjs";
 import { listComponents, foundationsData, FOUNDATIONS_DATA } from "./workspace.mjs";
 import { iconsModule } from "./icons.mjs";
 
@@ -46,7 +47,7 @@ export function checkRepo(root) {
       if (m) blocking.push({ kind: "icons", detail: `src/components/${c.id}/${file} imports icons from ${m[1]}. Use the design system's own icons (import from "@/icons"; add missing ones through Plinth).` });
     }
   }
-  for (const f of checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/"))) {
+  for (const f of checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/") && !REMINDER_RULES.has(h.rule))) {
     blocking.push({ kind: "hardcoded", detail: `${slash(f.file)}:${f.line} ${f.match} (${f.rule}). Use a token, or accept it as an exception in Plinth.` });
   }
 
@@ -57,6 +58,7 @@ export function checkRepo(root) {
     lookAlike: open(checks.distinct).map(({ brand, mode, a, b, reason }) => `${brand} ${mode === "default" ? "light" : mode}: ${a} and ${b} look alike (${reason})`),
     structure: open(checks.structure).map(({ brand, detail }) => `${brand}: ${detail}`),
     hardcodedOutsideComponents: checks.hardcoded.filter((h) => !h.accepted && !slash(h.file).startsWith("src/components/")).map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
+    textWithoutTokens: checks.hardcoded.filter((h) => !h.accepted && slash(h.file).startsWith("src/components/") && REMINDER_RULES.has(h.rule)).map((f) => `${slash(f.file)}:${f.line} ${f.match}`),
   };
   return { ok: blocking.length === 0, blocking, reminders };
 }
@@ -68,7 +70,7 @@ export function checkMarkdown(result) {
   const rem = Object.entries(result.reminders).filter(([, list]) => list.length);
   if (rem.length) {
     lines.push("", "### Reminders (do not stop the deploy)", "");
-    const names = { contrast: "Contrast", lookAlike: "Look-alike roles", structure: "Layer structure", hardcodedOutsideComponents: "Hardcoded values outside components" };
+    const names = { contrast: "Contrast", lookAlike: "Look-alike roles", structure: "Layer structure", hardcodedOutsideComponents: "Hardcoded values outside components", textWithoutTokens: "Text sizes not from text tokens" };
     for (const [k, list] of rem) {
       lines.push(`**${names[k] ?? k}** (${list.length})`, "");
       for (const item of list.slice(0, 20)) lines.push(`- ${item}`);

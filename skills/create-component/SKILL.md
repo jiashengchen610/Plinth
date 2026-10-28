@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.4.0
+version: 0.5.0
 ---
 
 # Create a component
@@ -48,15 +48,19 @@ Component tokens first: one per part and property the component styles, pointing
 `{ "<name>": { "$type": "color", "container": { "background": { "$value": "{color.card}" }, "foreground": … } } }`
 and `"radius": { "$type": "dimension", "$value": "{radius.container}" }`. Name color parts `<part>/background`,
 `<part>/foreground`, `<part>/border`, `<part>/background-hover` (background and foreground pairs are checked for
-contrast automatically). Opacity: `"$extensions": { "plinth": { "alpha": 0.1 } }`. A composition (tier 2) reuses
-the inner components' tokens and adds tokens only for what it styles itself.
+contrast automatically). Opacity: `"$extensions": { "plinth": { "alpha": 0.1 } }`. Text: one text token per part with
+text, `"<part>": { "font": { "$type": "typography", "$value": "{typography.label.md}" } }`, pointing at a text style:
+`display`, `heading.lg|md|sm|xs` (titles), `body.lg|md|sm` (running text, fields, descriptions), `label.md|sm` (buttons,
+tabs, badges, field labels), `code.md`. A composition (tier 2) reuses the inner components' tokens and adds tokens only
+for what it styles itself.
 
 Component rules:
 - Imports: `@/components/<x>/<x>`, `@/lib/utils` (`cn`), `radix-ui`, `class-variance-authority`, and icons from
   `@/icons` only (`icons/check.svg` → `CheckIcon`). Missing icons: `find_icons`, then `add_icons`. Never import an
   icon package (`lucide-react` and the like): the deploy refuses it.
 - Styling: the component's own tokens as theme utilities (`bg-<name>-container-background`,
-  `text-<name>-container-foreground`, `rounded-<name>`), spacing from Tailwind's scale (`p-4`, `gap-2`). Focus rings
+  `text-<name>-container-foreground`, `rounded-<name>`), text as `type-<name>-<part>` (never `text-sm`, `font-medium`,
+  `leading-*`, `tracking-*`; fields add `max-md:text-base`), spacing from Tailwind's scale (`p-4`, `gap-2`). Focus rings
   and invalid states may use roles (`ring-ring`, `border-destructive`). Elevation, motion and stacking come from the
   base roles: `shadow-card`, `shadow-overlay`, `duration-(--duration-fast)`, `ease-enter`, `ease-exit`,
   `z-(--layer-dialog)` (layers: sticky, dropdown, dialog, toast, tooltip). No hex, `oklch()`, arbitrary values

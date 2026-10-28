@@ -4,6 +4,11 @@
     "text": {
       "foreground": {
         "$value": "{color.foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Label text"
       }
     }
   }

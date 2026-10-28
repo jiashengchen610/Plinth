@@ -10,6 +10,13 @@
     },
     "foreground": {
       "$value": "{color.background}"
+    },
+    "text": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Tooltip text"
+      }
     }
   }
 }

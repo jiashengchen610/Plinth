@@ -1,6 +1,6 @@
-// Font loading generated from tokens. Every fontFamily used by a token (font/* and the fontFamily of
-// typography/*) that is not a generic or system family is loaded from Google Fonts, so changing a font is
-// one token change: the engine rewrites src/styles/fonts.css on regenerate. Zero dependencies.
+// Font loading generated from tokens. Every family a font role or a text style ends at (font roles point at fonts
+// in the palette; text styles point at roles) that is not a generic or system family is loaded from Google Fonts,
+// so changing a font is one token change: the engine rewrites src/styles/fonts.css on regenerate. Zero dependencies.
 import { loadConfig, listBrands, resolveBrand } from "./tokens.mjs";
 
 // Families the browser already has, or that are CSS keywords: never fetched.
@@ -25,12 +25,18 @@ export function fontsToLoad(root, config = loadConfig(root)) {
     if (weight) w.add(Number(weight) || 400);
     map.set(family, w);
   };
+  // Families and weights as resolved: font roles and text styles point at fonts by reference ({font.body}).
   for (const brand of listBrands(root, config)) {
-    for (const t of resolveBrand(root, brand, config).tokens) {
-      for (const v of Object.values(t.values)) {
-        const raw = v.raw;
-        if (t.type === "fontFamily") first(raw).slice(0, 1).forEach((f) => add(f));
-        if (t.type === "typography" && raw && typeof raw === "object" && !t.derived) first(raw.fontFamily).slice(0, 1).forEach((f) => add(f, raw.fontWeight));
+    const tokens = resolveBrand(root, brand, config).tokens;
+    const byKey = new Map(tokens.map((t) => [t.key, t]));
+    for (const t of tokens) {
+      for (const [mode, v] of Object.entries(t.values)) {
+        // Fonts in the palette load only when a role points at them (through these role tokens).
+        if (t.type === "fontFamily" && !t.derived && t.layerId !== "primitives") first(v.resolved).slice(0, 1).forEach((f) => add(f));
+        if (t.type === "typography" && !t.derived && v.raw && typeof v.raw === "object") {
+          const part = (name) => { const p = byKey.get(`${t.key}/${name}`); return (p?.values[mode] ?? p?.values.default)?.resolved; };
+          first(part("font-family")).slice(0, 1).forEach((f) => add(f, part("font-weight")));
+        }
       }
     }
   }

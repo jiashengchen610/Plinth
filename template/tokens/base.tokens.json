@@ -20,21 +20,38 @@
   },
   "font": {
     "$type": "fontFamily",
+    "$description": "Font roles: which font each kind of text uses. They point at fonts in the palette (tokens/primitives.tokens.json → font).",
+    "body": {
+      "$value": "{font.geist}",
+      "$description": "Running text, fields and lists"
+    },
+    "heading": {
+      "$value": "{font.body}",
+      "$description": "Headings and titles: the same as body until another font is picked"
+    },
+    "label": {
+      "$value": "{font.body}",
+      "$description": "Buttons, tabs, badges and field labels: follows body or heading"
+    },
+    "code": {
+      "$value": "{font.geist-mono}",
+      "$description": "Code"
+    },
     "sans": {
-      "$value": [
-        "Geist",
-        "sans-serif"
-      ]
+      "$value": "{font.body}",
+      "$description": "Tailwind's font-sans: the page's default font"
+    },
+    "mono": {
+      "$value": "{font.code}",
+      "$description": "Tailwind's font-mono"
     }
   },
   "typography": {
     "$type": "typography",
+    "$description": "Text styles. Each uses a font role; components point at these through their own text tokens (tokens/components).",
     "display": {
       "$value": {
-        "fontFamily": [
-          "Geist",
-          "sans-serif"
-        ],
+        "fontFamily": "{font.heading}",
         "fontSize": {
           "value": 2,
           "unit": "rem"
@@ -45,20 +62,175 @@
           "value": -0.02,
           "unit": "em"
         }
+      },
+      "$description": "Big numbers and page titles"
+    },
+    "heading": {
+      "lg": {
+        "$value": {
+          "fontFamily": "{font.heading}",
+          "fontSize": {
+            "value": 1.5,
+            "unit": "rem"
+          },
+          "fontWeight": 600,
+          "lineHeight": 1.25,
+          "letterSpacing": {
+            "value": -0.01,
+            "unit": "em"
+          }
+        },
+        "$description": "Section titles"
+      },
+      "md": {
+        "$value": {
+          "fontFamily": "{font.heading}",
+          "fontSize": {
+            "value": 1.125,
+            "unit": "rem"
+          },
+          "fontWeight": 600,
+          "lineHeight": 1.35,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Dialog titles"
+      },
+      "sm": {
+        "$value": {
+          "fontFamily": "{font.heading}",
+          "fontSize": {
+            "value": 1,
+            "unit": "rem"
+          },
+          "fontWeight": 500,
+          "lineHeight": 1.375,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Card titles"
+      },
+      "xs": {
+        "$value": {
+          "fontFamily": "{font.heading}",
+          "fontSize": {
+            "value": 0.875,
+            "unit": "rem"
+          },
+          "fontWeight": 500,
+          "lineHeight": 1.375,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Small card titles"
       }
     },
     "body": {
-      "$value": {
-        "fontFamily": [
-          "Geist",
-          "sans-serif"
-        ],
-        "fontSize": {
-          "value": 0.875,
-          "unit": "rem"
+      "lg": {
+        "$value": {
+          "fontFamily": "{font.body}",
+          "fontSize": {
+            "value": 1,
+            "unit": "rem"
+          },
+          "fontWeight": 400,
+          "lineHeight": 1.5,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
         },
-        "fontWeight": 400,
-        "lineHeight": 1.5
+        "$description": "Longer reading text"
+      },
+      "md": {
+        "$value": {
+          "fontFamily": "{font.body}",
+          "fontSize": {
+            "value": 0.875,
+            "unit": "rem"
+          },
+          "fontWeight": 400,
+          "lineHeight": 1.5,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Most text: descriptions, fields, lists"
+      },
+      "sm": {
+        "$value": {
+          "fontFamily": "{font.body}",
+          "fontSize": {
+            "value": 0.75,
+            "unit": "rem"
+          },
+          "fontWeight": 400,
+          "lineHeight": 1.35,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Small print and tooltips"
+      }
+    },
+    "label": {
+      "md": {
+        "$value": {
+          "fontFamily": "{font.label}",
+          "fontSize": {
+            "value": 0.875,
+            "unit": "rem"
+          },
+          "fontWeight": 500,
+          "lineHeight": 1.25,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Buttons, tabs and field labels"
+      },
+      "sm": {
+        "$value": {
+          "fontFamily": "{font.label}",
+          "fontSize": {
+            "value": 0.75,
+            "unit": "rem"
+          },
+          "fontWeight": 500,
+          "lineHeight": 1.35,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Badges and small buttons"
+      }
+    },
+    "code": {
+      "md": {
+        "$value": {
+          "fontFamily": "{font.code}",
+          "fontSize": {
+            "value": 0.8125,
+            "unit": "rem"
+          },
+          "fontWeight": 400,
+          "lineHeight": 1.5,
+          "letterSpacing": {
+            "value": 0,
+            "unit": "em"
+          }
+        },
+        "$description": "Code"
       }
     }
   },

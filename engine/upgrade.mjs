@@ -5,8 +5,10 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { loadConfig, listBrands, resolveBrand } from "./tokens.mjs";
 import { deltaE } from "./color.mjs";
+import { fontKind, fontSlug } from "./style.mjs";
 
 const BASE_COMPONENTS = ["button", "badge", "card", "input", "label"];
 
@@ -49,6 +51,97 @@ export function upgradeProposal(root, templateDir) {
     rationale: `Adds the Tailwind palette as the bottom layer, component tokens on top, and the layer list. Colors keep their values; link them to the palette afterwards if you like.${kept.length ? ` Kept as they are because they were edited: ${kept.join(", ")}.` : ""} The shared index.css drops its derived radius scale, so rounded-sm…4xl follow Tailwind's values.`,
     ops,
     kept,
+  };
+}
+
+// Every version of a template component file Plinth shipped (scripts/shipped-hashes.mjs): an upgrade replaces a
+// user's copy only while it is exactly one of these.
+const SHIPPED = JSON.parse(readFileSync(new URL("./shipped-components.json", import.meta.url), "utf8"));
+const lfHash = (text) => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
+const firstFamily = (v) => (Array.isArray(v) ? v[0] : typeof v === "string" && !/^\{/.test(v) ? v.split(",")[0].trim().replace(/^['"]|['"]$/g, "") : null);
+
+/**
+ * For a layered design system made before font roles (one family in font.sans, two text styles): fonts in the
+ * palette, font roles, the template's text styles, a text token for every part of the catalog components it has,
+ * and those components rewritten to use them, but only files still exactly as Plinth shipped them.
+ * A display font different from the text font becomes the headings font.
+ * @returns {null | { title, rationale, ops, kept: string[], references: string[] }} null when it has font roles
+ */
+export function typographyUpgrade(root, templateDir) {
+  const config = loadConfig(root);
+  if (!Array.isArray(config.layers)) return null; // the layers upgrade comes first
+  const readJson = (dir, rel) => (existsSync(join(dir, rel)) ? JSON.parse(readFileSync(join(dir, rel), "utf8")) : {});
+  const base = readJson(root, "tokens/base.tokens.json");
+  if (base.font?.body !== undefined) return null;
+  const tplBase = readJson(templateDir, "tokens/base.tokens.json");
+  const ops = [];
+  const BASE = "tokens/base.tokens.json", PRIM = "tokens/primitives.tokens.json";
+  const palette = new Set();
+  const inPalette = (family) => {
+    const slug = fontSlug(family);
+    if (!palette.has(slug)) { palette.add(slug); ops.push({ op: "set", file: PRIM, path: `font/${slug}`, type: "fontFamily", value: [family, { serif: "serif", mono: "monospace", sans: "sans-serif" }[fontKind(family)]] }); }
+    return `{font.${slug}}`;
+  };
+
+  // Fonts: the family in use is the text font; a different display family becomes the headings font.
+  const text = firstFamily(base.font?.sans?.$value) ?? "Geist";
+  const display = firstFamily(base.typography?.display?.$value?.fontFamily);
+  const roles = {
+    body: inPalette(text),
+    heading: display && display !== text ? inPalette(display) : "{font.body}",
+    label: "{font.body}",
+    code: inPalette(/^geist$/i.test(text) ? "Geist Mono" : "JetBrains Mono"),
+    sans: "{font.body}",
+    mono: "{font.code}",
+  };
+  for (const [role, value] of Object.entries(roles)) ops.push({ op: "set", file: BASE, path: `font/${role}`, type: "fontFamily", value, description: tplBase.font?.[role]?.$description });
+
+  // Text styles: the template's, with the display size kept; the old body style goes (its name is now the role's).
+  const oldDisplay = base.typography?.display?.$value;
+  if (base.typography?.body) ops.push({ op: "delete", file: BASE, path: "typography/body" });
+  const styles = (node, path) => Object.entries(node).filter(([k]) => !k.startsWith("$")).flatMap(([k, v]) => ("$value" in v ? [[`${path}/${k}`, v]] : styles(v, `${path}/${k}`)));
+  for (const [path, t] of styles(tplBase.typography ?? {}, "typography")) {
+    const value = path === "typography/display" && oldDisplay && typeof oldDisplay === "object" ? { ...t.$value, ...oldDisplay, fontFamily: "{font.heading}", letterSpacing: oldDisplay.letterSpacing ?? t.$value.letterSpacing } : t.$value;
+    ops.push({ op: "set", file: BASE, path, type: "typography", value, description: t.$description });
+  }
+
+  // Component text tokens, for the components this design system has.
+  const tplComponents = join(templateDir, "tokens", "components");
+  for (const f of readdirSync(tplComponents)) {
+    const rel = `tokens/components/${f}`;
+    if (!existsSync(join(root, rel))) continue;
+    for (const [path, t] of styles(readJson(templateDir, rel), "").map(([p, t]) => [p.slice(1), t])) {
+      if (t.$type === "typography") ops.push({ op: "set", file: rel, path, type: "typography", value: t.$value, description: t.$description });
+    }
+  }
+
+  // Component code: replaced only while exactly as shipped; edited files are kept (the text-size check reminds).
+  const kept = [];
+  for (const [rel, hashes] of Object.entries(SHIPPED)) {
+    if (!existsSync(join(root, rel)) || !existsSync(join(templateDir, rel))) continue;
+    const now = readFileSync(join(root, rel), "utf8"), want = readFileSync(join(templateDir, rel), "utf8");
+    if (lfHash(now) === lfHash(want)) continue;
+    if (hashes.includes(lfHash(now))) ops.push({ op: "write", file: rel, content: want });
+    else kept.push(rel);
+  }
+  // Code that used the old body style by name.
+  const references = [];
+  const walk = (dir) => {
+    if (!existsSync(join(root, dir))) return;
+    for (const e of readdirSync(join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) { if (!["node_modules", "foundations", "styles", "icons"].includes(e.name)) walk(rel); continue; }
+      if (/\.(tsx?|css|mdx)$/.test(e.name) && /\btext-body\b|--body-font\b|--body-font-/.test(readFileSync(join(root, rel), "utf8"))) references.push(rel);
+    }
+  };
+  walk("src");
+
+  return {
+    title: "Fonts for headings, text and buttons",
+    rationale: `Adds font roles (headings, text, buttons and labels, code) and text styles, and gives every component part a text token, so headings, text and buttons can each have their own font.${kept.length ? ` Kept as they are because they were edited: ${kept.join(", ")}; their text sizes stay until you or Claude move them onto text tokens.` : ""}${references.length ? ` These files used the old body style by name and need updating: ${references.join(", ")}.` : ""}`,
+    ops,
+    kept,
+    references,
   };
 }
 

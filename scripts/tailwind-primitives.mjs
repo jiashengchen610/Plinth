@@ -29,7 +29,15 @@ radius.full = { $value: { value: 9999, unit: "px" } };
 const shadow = { $type: "shadow" };
 for (const [, name, v] of css.matchAll(/--shadow-([a-z0-9]+):\s*([^;]+);/g)) if (name !== "inner") shadow[name] = { $value: v.trim() };
 
-const out = { color, radius, shadow };
+// Fonts in the palette: the template's two (font roles in base.tokens.json point at them; picking another font in
+// Plinth adds it here).
+const font = {
+  $type: "fontFamily",
+  $description: "Fonts the design system loads. Font roles (tokens/base.tokens.json → font) point at these.",
+  geist: { $value: ["Geist", "sans-serif"] },
+  "geist-mono": { $value: ["Geist Mono", "monospace"] },
+};
+const out = { color, radius, shadow, font };
 const target = join(dirname(fileURLToPath(import.meta.url)), "..", "template", "tokens", "primitives.tokens.json");
 writeFileSync(target, JSON.stringify(out, null, 2) + "\n");
 const hues = Object.keys(color).filter((k) => !k.startsWith("$"));

@@ -6,10 +6,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Managed by Plinth. Every value comes from tokens.css (primitives, semantic and component tokens). */
-@theme inline {
-  --font-heading: var(--font-sans);
-}
+/* Managed by Plinth. Every value comes from tokens.css (primitives, semantic and component tokens), including the
+   fonts (font-heading, font-body, font-label, font-code) and one type-* utility per text style. */
 
 @layer base {
   * {

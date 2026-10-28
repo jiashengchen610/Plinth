@@ -15,6 +15,11 @@ This repository is a design system maintained with Plinth. Follow these rules.
 - Components use their component tokens only: utilities such as `bg-button-default-background` defined in
   `tokens/components/<name>.tokens.json`. No hex values, color functions, arbitrary Tailwind values or magic pixel
   values.
+- Text too: every part with text has a text token (`<part>.font`, `$type` typography, pointing at a text style such as
+  `{typography.label.md}`), used as `type-<name>-<part>` (size, weight, line height and font in one class). No
+  `text-sm`, `font-medium`, `leading-*` or `tracking-*` in components; fields add `max-md:text-base` so phones do not
+  zoom. Text styles (`typography.*`) use font roles (`font.heading`, `font.body`, `font.label`, `font.code`), which
+  point at fonts in the palette; change fonts with `set_style`.
 - Every component has `<name>.tsx`, `<name>.stories.tsx` and `<name>.spec.md` in `src/components/<name>/`, and its
   tokens in `tokens/components/<name>.tokens.json`. GitHub refuses to deploy a component without its tokens or story,
   or with hardcoded values.

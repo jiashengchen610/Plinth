@@ -9,7 +9,7 @@ import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./publish.mjs";
-import { toolByName } from "./tools.mjs";
+import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 import { createSetup, presets, suggest } from "./start.mjs";
 import { draftVersionMessage } from "./quick.mjs";
@@ -65,7 +65,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     return {
       ...common, config, brands, tokens,
       checks: { gate: checks.gate, summary: checks.summary, warnings: checks.warnings, contrast: checks.contrast, distinct: checks.distinct, structure: checks.structure, hardcoded: checks.hardcoded.slice(0, 50), tokenIssues: checks.tokenIssues, exceptions: checks.exceptions },
-      layers: (config.layers ?? null), upgradeAvailable: !Array.isArray(config.layers),
+      layers: (config.layers ?? null), upgradeAvailable: upgradeKind(ctx.root, config),
       components: ws.listComponents(ctx.root),
       style: Object.fromEntries(brands.map((b) => [b, readStyle(ctx.root, b)])),
       guidelines: { shared: ws.readText(ctx.root, "DESIGN.md"), writing: ws.readText(ctx.root, "WRITING.md"), brands: Object.fromEntries(brands.map((b) => [b, ws.readText(ctx.root, `brands/${b}/DESIGN.md`)])) },

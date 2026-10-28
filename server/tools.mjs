@@ -8,7 +8,7 @@ import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
 import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
-import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
+import { upgradeProposal, linkToPaletteOps, typographyUpgrade } from "../engine/upgrade.mjs";
 import { readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
@@ -53,6 +53,18 @@ const failures = (r) => ({
 });
 
 /** Write ops as one change and say what happened, for Claude to relay. */
+/** Applies the font upgrade when a layered design system lacks font roles (one undoable change of its own). */
+export function upgradeTypographyFirst(ctx) {
+  const t = typographyUpgrade(ctx.root, ws.TEMPLATE_DIR);
+  if (t) write(ctx, { title: t.title, ops: t.ops, by: "engine" });
+}
+
+/** What the Upgrade button would do: "layers", "typography" or false. */
+export function upgradeKind(root, config = loadConfig(root)) {
+  if (!Array.isArray(config.layers)) return "layers";
+  try { return typographyUpgrade(root, ws.TEMPLATE_DIR) ? "typography" : false; } catch { return false; }
+}
+
 const write = (ctx, args) => {
   const r = ws.change(ctx.root, args);
   ctx.notify();
@@ -68,7 +80,7 @@ export const TOOLS = [
       if (!existsSync(join(ctx.root, "design-system.json"))) return { workspace: ctx.root, exists: false, next: "Call create_design_system to scaffold a new design system here.", ui: ctx.ui.url };
       const checks = runChecks(ctx.root);
       const config = loadConfig(ctx.root);
-      return { exists: true, ...ws.summary(ctx.root), layers: config.layers?.map((l) => l.id) ?? null, upgradeAvailable: !Array.isArray(config.layers), gate: checks.gate, checks: checks.summary, warnings: checks.warnings, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
+      return { exists: true, ...ws.summary(ctx.root), layers: config.layers?.map((l) => l.id) ?? null, upgradeAvailable: upgradeKind(ctx.root, config), gate: checks.gate, checks: checks.summary, warnings: checks.warnings, ui: ctx.ui.url, storybook: ctx.storybook.url, dependenciesInstalled: ctx.deps.installed, tests: ctx.tests.last ?? null };
     },
   },
   {
@@ -151,22 +163,25 @@ export const TOOLS = [
   },
   {
     name: "set_style",
-    description: "Change the overall look in one step, the way the UI's Style step does: main color (a palette family such as teal, or a gray family for black and white), grays (a gray family: slate, gray, zinc, neutral, stone …), corners (square, slight, round, pill) and font (a Google Fonts family). Roles are re-pointed at palette steps the engine picks for readable text; the palette is not edited. Written at once; undoable. Prefer this over hand-made ops for these four choices.",
+    description: "Change the overall look in one step, the way the UI's Style step does: main color (a palette family such as teal, or a gray family for black and white), grays (a gray family: slate, gray, zinc, neutral, stone …), corners (square, slight, round, pill) and fonts. Fonts are layered: font (the text font, Google Fonts family; code follows it), headingFont (a family for headings and titles, or \"\" for the same as text) and labelFont (\"body\" or \"heading\": what buttons, tabs, badges and labels follow). A new family joins the palette; roles point at it. Roles are re-pointed at palette steps the engine picks for readable text. Written at once; undoable. Prefer this over hand-made ops for these choices.",
     inputSchema: {
       type: "object",
       properties: {
         brand: { type: "string", description: "Brand id; default: the default brand" },
         main: { type: "string" }, gray: { type: "string" },
         corners: { type: "string", enum: ["square", "slight", "round", "pill"] },
-        font: { type: "string", description: "Google Fonts family, e.g. Inter, Nunito, Source Serif 4" },
+        font: { type: "string", description: "Text font, a Google Fonts family, e.g. Inter, Nunito, Geist" },
+        headingFont: { type: "string", description: "Headings font, e.g. Playfair Display, Source Serif 4; \"\" for the same as the text font" },
+        labelFont: { type: "string", enum: ["body", "heading"], description: "Buttons and labels follow the text font (body) or the headings font (heading)" },
       },
     },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
       const config = loadConfig(ctx.root);
       const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
-      const pick = Object.fromEntries(["main", "gray", "corners", "font"].filter((k) => a[k] !== undefined && a[k] !== "").map((k) => [k, a[k]]));
-      if (!Object.keys(pick).length) throw new Error("set_style needs main, gray, corners or font");
+      // headingFont "" is a choice (same as text); the others count when given.
+      const pick = Object.fromEntries(["main", "gray", "corners", "font", "headingFont", "labelFont"].filter((k) => a[k] !== undefined && (a[k] !== "" || k === "headingFont")).map((k) => [k, a[k]]));
+      if (!Object.keys(pick).length) throw new Error("set_style needs main, gray, corners, font, headingFont or labelFont");
       const ops = styleOps(ctx.root, brand, pick);
       if (!ops.length) return { title: styleTitle(pick), files: [], unchanged: true, style: readStyle(ctx.root, brand) };
       return { ...write(ctx, { title: styleTitle(pick), ops, by: a.by ?? "claude" }), style: readStyle(ctx.root, brand) };
@@ -202,6 +217,8 @@ export const TOOLS = [
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Catalog id, e.g. dialog" } }, required: ["name"] },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
+      // Catalog components take their text from text styles: a design system from before those upgrades first.
+      upgradeTypographyFirst(ctx);
       return write(ctx, { title: `Add ${componentName(a.name)}`, ops: ws.catalogComponentOps(ctx.root, a.name), by: a.by ?? "claude" });
     },
   },
@@ -236,13 +253,21 @@ export const TOOLS = [
   },
   {
     name: "upgrade_to_layers",
-    description: "For a design system made before layers existed: upgrade it (Tailwind palette, component tokens, layer list; base components rewritten only if untouched). Written at once; undoable.",
+    description: "For a design system made by an older Plinth: upgrade it. Before layers: the Tailwind palette, component tokens and the layer list. Before font roles: fonts in the palette, font roles (headings, text, buttons and labels, code), text styles and a text token for every component part. Component files are rewritten only while exactly as Plinth shipped them. Written at once; undoable.",
     inputSchema: { type: "object", properties: {} },
     run: (_a, ctx) => {
       requireWorkspace(ctx.root);
       const p = upgradeProposal(ctx.root, ws.TEMPLATE_DIR);
-      if (!p) return { message: "Already layered." };
-      return { ...write(ctx, { title: p.title, ops: p.ops, by: "engine" }), kept: p.kept, about: p.rationale };
+      if (p) {
+        // The font part needs layers: it follows as its own change.
+        const r = write(ctx, { title: p.title, ops: p.ops, by: "engine" });
+        const t = typographyUpgrade(ctx.root, ws.TEMPLATE_DIR);
+        if (!t) return { ...r, kept: p.kept, about: p.rationale };
+        return { ...write(ctx, { title: t.title, ops: t.ops, by: "engine" }), kept: [...p.kept, ...t.kept], references: t.references, about: `${p.rationale} ${t.rationale}` };
+      }
+      const t = typographyUpgrade(ctx.root, ws.TEMPLATE_DIR);
+      if (!t) return { message: "Already up to date." };
+      return { ...write(ctx, { title: t.title, ops: t.ops, by: "engine" }), kept: t.kept, references: t.references, about: t.rationale };
     },
   },
   {

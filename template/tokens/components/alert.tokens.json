@@ -89,6 +89,20 @@
       "description": {
         "$value": "{color.muted-foreground}"
       }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Alert title"
+      }
+    },
+    "description": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Alert text"
+      }
     }
   }
 }

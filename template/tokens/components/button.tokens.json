@@ -85,6 +85,20 @@
       "foreground": {
         "$value": "{color.primary}"
       }
+    },
+    "label": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Button text"
+      }
+    },
+    "label-small": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.sm}",
+        "$description": "Button text in the small sizes"
+      }
     }
   }
 }

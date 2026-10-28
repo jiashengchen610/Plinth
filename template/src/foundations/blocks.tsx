@@ -135,39 +135,70 @@ export function ColorPalette() {
 
 const SAMPLE = "The quick brown fox jumps over the lazy dog. 0123456789";
 
+const FONT_ROLES: Record<string, string> = { heading: "Headings", body: "Text", label: "Buttons and labels", code: "Code" };
+type Style = { fontFamily?: unknown; fontSize?: { value: number; unit: string }; fontWeight?: number; lineHeight?: number };
+const aliasOf = (v: unknown) => (typeof v === "string" && /^\{.+\}$/.test(v) ? v.slice(1, -1) : null);
+const familyName = (v: Value | undefined) => (v?.resolved ?? "").split(",")[0].trim().replace(/^['"]|['"]$/g, "");
+
+/** Three layers of text: fonts in the palette, font roles and text styles, and each component's text tokens. */
 export function TypeScale() {
   const { brand, mode } = useBrandMode();
-  const families = brand.tokens.filter((t) => t.type === "fontFamily");
-  const styles = brand.tokens.filter((t) => t.type === "typography");
+  const roles = brand.tokens.filter((t) => t.type === "fontFamily" && t.layer !== "primitives" && FONT_ROLES[t.path.split("/").at(-1) ?? ""]);
+  const loaded = brand.tokens.filter((t) => t.type === "fontFamily" && t.layer === "primitives");
+  const styles = brand.tokens.filter((t) => t.type === "typography" && t.layer !== "components" && typeof valueIn(t, mode).raw === "object");
+  const parts = brand.tokens.filter((t) => t.type === "typography" && t.layer === "components");
+  const styleLabel = (path: string) => path.replace(/^typography\//, "").replace(/\//g, " ");
   return (
     <Surface className="flex flex-col gap-8">
+      <section className="flex flex-col gap-3">
+        <h3 className="text-base font-semibold">Fonts</h3>
+        <p className="text-sm text-muted-foreground">Each kind of text uses a font role; the roles point at the fonts this design system loads ({loaded.map((t) => familyName(valueIn(t, mode))).join(", ")}).</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {roles.map((t) => (
+            <div key={t.name} className="flex flex-col gap-1 rounded-lg border p-4">
+              <span className="text-xs text-muted-foreground">{FONT_ROLES[t.path.split("/").at(-1) ?? ""]} · <code>font-{t.name.replace(/-font$/, "")}</code></span>
+              <p className="text-2xl" style={{ fontFamily: `var(--${t.name})` }}>{familyName(valueIn(t, mode))}</p>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="flex flex-col gap-4">
         <h3 className="text-base font-semibold">Text styles</h3>
         {styles.map((t) => {
-          const v = valueIn(t, mode).raw as { fontSize?: { value: number; unit: string }; fontWeight?: number; lineHeight?: number };
+          const v = valueIn(t, mode).raw as Style;
+          const role = aliasOf(v.fontFamily)?.split(".").at(-1);
           return (
             <div key={t.name} className="flex flex-col gap-1 border-b pb-4 last:border-b-0">
               <div className="flex flex-wrap items-baseline gap-x-3 text-xs text-muted-foreground">
-                <code className="font-semibold text-foreground">{t.path.split("/").at(-1)}</code>
+                <code className="font-semibold text-foreground">{styleLabel(t.path)}</code>
+                {role && <span>{FONT_ROLES[role] ?? role} font</span>}
                 {v.fontSize && <span>{v.fontSize.value}{v.fontSize.unit}</span>}
                 {v.fontWeight && <span>weight {v.fontWeight}</span>}
                 {v.lineHeight && <span>line height {v.lineHeight}</span>}
-                <code>var(--{t.name})</code>
+                <code>type-{t.name.replace(/-font$/, "")}</code>
               </div>
               <p style={{ font: `var(--${t.name})` }}>{SAMPLE}</p>
             </div>
           );
         })}
       </section>
-      <section className="flex flex-col gap-3">
-        <h3 className="text-base font-semibold">Families</h3>
-        {families.map((t) => (
-          <div key={t.name} className="flex flex-col gap-1">
-            <code className="text-xs text-muted-foreground">--{t.name}: {show(valueIn(t, mode))}</code>
-            <p className="text-2xl" style={{ fontFamily: `var(--${t.name})` }}>Aa Bb Cc 123</p>
+      {parts.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-base font-semibold">Text in components</h3>
+          <p className="text-sm text-muted-foreground">Each component's text points at a text style, so changing a style changes every component that uses it.</p>
+          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            {parts.map((t) => {
+              const target = aliasOf(valueIn(t, mode).raw);
+              return (
+                <div key={t.name} className="flex items-baseline justify-between gap-3 border-b py-1.5">
+                  <span style={{ font: `var(--${t.name})` }}>{t.path.split("/").slice(0, -1).join(" ")}</span>
+                  <code className="text-xs text-muted-foreground">{target ? styleLabel(target.replace(/\./g, "/")) : show(valueIn(t, mode))}</code>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </section>
+        </section>
+      )}
     </Surface>
   );
 }

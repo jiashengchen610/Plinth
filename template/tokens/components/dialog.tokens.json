@@ -37,6 +37,18 @@
     "description": {
       "foreground": {
         "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Dialog text"
+      }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.heading.md}",
+        "$description": "Dialog title"
       }
     }
   }

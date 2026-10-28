@@ -43,6 +43,23 @@ export function partName(path: string) {
   const group = segs.slice(0, -1).filter((s) => !["container", "field", "text"].includes(s)).map(titleCase).join(" ");
   return group ? `${group} · ${word}` : word;
 }
+const TEXT_PARTS: Record<string, string> = { container: "Text", text: "Text", field: "What people type", file: "File button", item: "Options", "group-label": "Group names", trigger: "Trigger" };
+/** A component's text part: "button/label/font" → "Label", "card/title-small/font" → "Title (small)". */
+export function textPartName(path: string) {
+  const part = path.split("/").slice(1, -1).join("-");
+  return TEXT_PARTS[part] ?? titleCase(part.replace(/-small$/, "")) + (part.endsWith("-small") ? " (small)" : "");
+}
+const SIZES: Record<string, string> = { xs: "XS", sm: "S", md: "M", lg: "L", xl: "XL" };
+const STYLE_WORDS: Record<string, string> = { body: "Text", heading: "Heading", label: "Label", code: "Code", display: "Display" };
+/** A text style as people say it: "typography/heading/lg" → "Heading L", "typography/body/md" → "Text M". */
+export function textStyleName(path: string) {
+  const [kind = "", size] = path.replace(/^typography\//, "").split("/");
+  const word = STYLE_WORDS[kind] ?? titleCase(kind);
+  return kind === "code" ? word : size ? `${word} ${SIZES[size] ?? size.toUpperCase()}` : word;
+}
+/** Font roles: which font each kind of text uses. */
+export const FONT_ROLE_NAMES: Record<string, string> = { heading: "Headings", body: "Text", label: "Buttons and labels", code: "Code" };
+
 /** The variant a component token belongs to, for the graph's filter: "default", "outline" … or "" for shared ones. */
 export const variantOf = (path: string) => (path.split("/").length > 2 ? path.split("/")[1] : "");
 
@@ -61,9 +78,9 @@ export const isGenerated = (file: string) => /^src\/(styles|foundations)\/|^expo
 export function fileName(file: string) {
   if (/^brands\/[^/]+\/tokens\.json$/.test(file)) return "Colors";
   if (file === "tokens/base.tokens.json") return "Corners, fonts and shadows";
-  if (file === "tokens/primitives.tokens.json") return "Base colors";
+  if (file === "tokens/primitives.tokens.json") return "Base colors and fonts";
   let m = /^tokens\/components\/([^.]+)\.tokens\.json$/.exec(file);
-  if (m) return `${titleCase(m[1])} colors`;
+  if (m) return `${titleCase(m[1])} colors and text`;
   m = /^src\/components\/([^/]+)\//.exec(file);
   if (m) return `${titleCase(m[1])} component`;
   if (/DESIGN\.md$/.test(file)) return "Style guide";
