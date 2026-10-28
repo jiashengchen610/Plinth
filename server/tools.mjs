@@ -5,11 +5,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
-import { runChecks, contrastFixes } from "../engine/checks.mjs";
+import { runChecks, contrastFixes, glassContrast } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps, typographyUpgrade, componentRefresh } from "../engine/upgrade.mjs";
-import { readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
+import { GLASS_PRESETS, glassOps, readGlass, readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
 import { deployStatus } from "./publish.mjs";
@@ -191,6 +191,31 @@ export const TOOLS = [
       const ops = styleOps(ctx.root, brand, pick);
       if (!ops.length) return { title: styleTitle(pick), files: [], unchanged: true, style: readStyle(ctx.root, brand) };
       return { ...write(ctx, { title: styleTitle(pick), ops, by: a.by ?? "claude" }), style: readStyle(ctx.root, brand) };
+    },
+  },
+  {
+    name: "set_glass",
+    description: "Tune the glass material (frosted panels over imagery; the Glass component and anything using material-glass), the way the UI's glass tool does: preset (clear, regular, frosted) as a starting point, tint (a color role, e.g. popover, background, card, primary; text on glass follows its -foreground role), tintOpacity (0–1), blur (px, 0–64), saturation (1 = unchanged, up to 3), highlight (edge light, 0–1), distortion (ripple, 0–1, Chromium only). Returns how its text reads over a black and a white backdrop in each mode (needs 4.5:1). Written at once; undoable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Brand id for the roles; default: the default brand" },
+        preset: { type: "string", enum: ["clear", "regular", "frosted"] },
+        tint: { type: "string" }, tintOpacity: { type: "number" }, blur: { type: "number" }, saturation: { type: "number" }, highlight: { type: "number" }, distortion: { type: "number" },
+        title: { type: "string" },
+      },
+    },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+      if (a.preset && !GLASS_PRESETS[a.preset]) throw new Error(`no glass preset ${a.preset}`);
+      const change = { ...(a.preset ? GLASS_PRESETS[a.preset] : {}), ...Object.fromEntries(["tint", "tintOpacity", "blur", "saturation", "highlight", "distortion"].filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) };
+      const ops = glassOps(ctx.root, brand, change);
+      const title = a.title || (a.preset ? `Glass: ${a.preset}` : "Glass settings");
+      const result = ops.length ? write(ctx, { title, ops, by: a.by ?? "claude" }) : { title, files: [], unchanged: true };
+      const g = readGlass(ctx.root);
+      return { ...result, glass: g, contrast: g ? glassContrast(ctx.root, brand, { tint: g.tint, foreground: g.foreground, tintOpacity: g.recipe.tintOpacity }) : [] };
     },
   },
   {

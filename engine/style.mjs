@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { contrastRatio } from "./color.mjs";
+import { glassRecipe } from "./tokens.mjs";
 
 const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
 /** Palette families used as grays. Picking one as the main color gives a black-and-white look. */
@@ -119,6 +120,7 @@ export function readStyle(root, brand) {
     // not a step), and whether parts inside a container fit its corners (null: a design system from before that).
     outer: step("container") ?? null, inner: step("control") ?? null, fitInside: fit === undefined ? null : Number(fit) !== 0,
     radiusSteps: radiusSteps(root),
+    glass: readGlass(root),
     hues: Object.keys(fams).filter((f) => !GRAYS.includes(f)),
     grays: Object.keys(fams).filter((f) => GRAYS.includes(f)),
   };
@@ -294,7 +296,43 @@ export function roleColorOps(root, brand, { role, color, mode = "default" } = {}
   return ops;
 }
 
-export const FIT_DESCRIPTION = "1: parts inside a rounded container (tabs in the tab bar, options in a menu, close buttons in a corner) take its corners minus the gap, so the space between stays even. 0: they keep their own corners.";
+// ---------------- glass ----------------
+const MATERIAL_GLASS = "material/glass";
+/** Glass presets the tuning tool starts from; the user adjusts from there. */
+export const GLASS_PRESETS = {
+  clear: { tintOpacity: 0.45, blur: 10, saturation: 1.8, highlight: 0.8, distortion: 0 },
+  regular: { tintOpacity: 0.7, blur: 16, saturation: 1.6, highlight: 0.6, distortion: 0 },
+  frosted: { tintOpacity: 0.82, blur: 28, saturation: 1.3, highlight: 0.4, distortion: 0 },
+};
+
+/** The glass as stored: { tint: role, foreground: role, recipe }, or null when the design system has none yet. */
+export function readGlass(root) {
+  const m = readJson(root, BASE).material ?? {};
+  if (!m.glass) return null;
+  const role = (v) => ref(v)?.replace(/^color\./, "") ?? null;
+  return { tint: role(m.glass.$value), foreground: role(m["glass-foreground"]?.$value), recipe: glassRecipe(m.glass.$extensions?.plinth?.glass) };
+}
+
+/**
+ * Ops for the glass: { tint: a color role, tintOpacity, blur, saturation, highlight, distortion }, any subset. Text
+ * on glass follows the tint (its -foreground role, or foreground for background). Creates the material when missing.
+ */
+export function glassOps(root, brand, change = {}) {
+  const roles = Object.fromEntries(colorRoles(root, brand));
+  const cur = readGlass(root);
+  const tint = change.tint ?? cur?.tint ?? "popover";
+  if (!roles[tint]) throw new Error(`no color role ${tint}`);
+  const foreground = roles[`${tint}-foreground`] ? `${tint}-foreground` : tint === "background" ? "foreground" : cur?.foreground ?? "foreground";
+  const recipe = glassRecipe({ ...(cur?.recipe ?? GLASS_PRESETS.regular), ...Object.fromEntries(Object.entries(change).filter(([k]) => k !== "tint")) });
+  const ops = [];
+  if (!cur || cur.tint !== tint || JSON.stringify(cur.recipe) !== JSON.stringify(recipe)) {
+    ops.push({ op: "set", file: BASE, path: MATERIAL_GLASS, type: "color", value: `{color.${tint}}`, glass: recipe, ...(cur ? {} : { description: "Glass: the color it tints what is behind it with, and shows solid where the browser cannot blur or the system asks for less transparency" }) });
+  }
+  if (!cur || cur.foreground !== foreground) ops.push({ op: "set", file: BASE, path: `${MATERIAL_GLASS}-foreground`, type: "color", value: `{color.${foreground}}`, ...(cur ? {} : { description: "Text on glass" }) });
+  return ops;
+}
+
+export const FIT_DESCRIPTION ="1: parts inside a rounded container (tabs in the tab bar, options in a menu, close buttons in a corner) take its corners minus the gap, so the space between stays even. 0: they keep their own corners.";
 
 const CORNER_NAMES = { square: "square", slight: "slightly rounded", round: "rounded", pill: "pill" };
 /** A short title for a style change, in words the UI shows: "Main color: teal", "Corners: pill, font: Inter". */

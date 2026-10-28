@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
-import { runChecks } from "../engine/checks.mjs";
+import { glassContrast, glassMinOpacity, runChecks } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./publish.mjs";
 import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
@@ -159,6 +159,16 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/setup": async (req) => { const answers = await readJson(req); const already = Boolean(ctx.setup.state()?.running); ctx.setup.start(answers).catch(() => {}); return { started: true, already }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },
+    "POST /api/glass": async (req) => { needsWorkspace(); return tool("set_glass", { ...(await readJson(req)), by: "you" }); },
+    // The glass tool's live readout while sliders move (nothing is written): its text over black and white.
+    "GET /api/glass-check": (_req, url) => {
+      needsWorkspace();
+      const brand = url.searchParams.get("brand") || loadConfig(ctx.root).defaultBrand || listBrands(ctx.root)[0];
+      const tint = url.searchParams.get("tint") || "popover";
+      const roles = new Set(resolveBrand(ctx.root, brand).tokens.filter((t) => t.key.startsWith("color/")).map((t) => t.key.slice(6)));
+      const foreground = roles.has(`${tint}-foreground`) ? `${tint}-foreground` : "foreground";
+      return { foreground, contrast: glassContrast(ctx.root, brand, { tint, foreground, tintOpacity: Number(url.searchParams.get("tintOpacity") ?? 0.7) }), minOpacity: glassMinOpacity(ctx.root, brand, { tint, foreground }) };
+    },
     "POST /api/add-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("add_component", { name, by: "you" }); },
     "POST /api/remove-component": async (req) => { needsWorkspace(); const { name } = await readJson(req); return tool("remove_component", { name, by: "you" }); },
     "POST /api/link-palette": () => { needsWorkspace(); return tool("link_to_palette"); },

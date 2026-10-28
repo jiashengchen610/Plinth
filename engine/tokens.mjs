@@ -77,6 +77,7 @@ function flatten(tree, source, out, path = [], inheritedType, layer = { layer: 0
       values: { default: tree.$value, ...(ds.modes ?? {}) },
       alpha: ds.alpha ?? null,
       fit: ds.fit ?? null,
+      glass: ds.glass ?? null,
       deprecated: Boolean(tree.$deprecated),
     };
     if (t.type === "typography" && tree.$value && typeof tree.$value === "object") {
@@ -167,6 +168,14 @@ function colorCss(v) {
   return String(v);
 }
 const dim = (v) => (v && typeof v === "object" && "value" in v ? `${v.value}${v.unit ?? "px"}` : typeof v === "number" ? (v === 0 ? "0" : `${v}px`) : String(v ?? 0));
+/**
+ * A glass recipe with every parameter in range: tintOpacity (how much of the color shows, 0–1), blur (px),
+ * saturation (1 = unchanged), highlight (edge light, 0–1), distortion (ripple, 0–1, Chromium only).
+ */
+export function glassRecipe(g = {}) {
+  const n = (v, d, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+  return { tintOpacity: n(g.tintOpacity, 0.7, 0, 1), blur: n(g.blur, 16, 0, 64), saturation: n(g.saturation, 1.6, 0.5, 3), highlight: n(g.highlight, 0.6, 0, 1), distortion: n(g.distortion, 0, 0, 1) };
+}
 /** A CSS length in px: "0.75rem" → 12, "4px" → 4, "0" → 0; null for anything else (calc, %). */
 const toPx = (s) => { const m = /^(-?[\d.]+)(px|rem)?$/.exec(String(s ?? "").trim()); return m ? Number(m[1]) * (m[2] === "rem" ? 16 : 1) : null; };
 const fontList = (v) => (Array.isArray(v) ? v : [v]).map((f) => (/[^a-zA-Z0-9-]/.test(f) ? `'${f}'` : f)).join(", ");
@@ -309,8 +318,25 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
     return {
       key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, layer: t.layer, layerId: t.layerId, refs, linked: isAlias(first), derived: t.derived, deprecated: t.deprecated, values,
       ...(fit?.outer ? { fit: { outer: fit.outer.key, min: fit.min?.key ?? null, spacing: fit.spacing, border: fit.border, on: fitInside } } : {}),
+      ...(t.glass && t.type === "color" ? { glass: glassRecipe(t.glass) } : {}),
     };
   });
+  // Glass: its parts as derived tokens (the color at the recipe's opacity, blur, saturation, edge light, ripple), for
+  // the material utility (buildCss) and previews.
+  for (const t of tokens.filter((x) => x.glass)) {
+    const g = t.glass;
+    const part = (suffix, type, css, resolved) => {
+      const path = [...t.path, suffix];
+      const key = path.join("/");
+      tokens.push({ key, path, name: cssName({ key, path, derived: true, type }, config), type, description: "", source: t.source, layer: t.layer, layerId: t.layerId, refs: [t.key], linked: true, derived: true,
+        values: Object.fromEntries(Object.keys(t.values).map((m) => [m, { raw: null, css: typeof css === "function" ? css(m) : css, resolved: typeof resolved === "function" ? resolved(m) : resolved, alpha: 1 }])) });
+    };
+    part("tint", "color", `color-mix(in oklab, var(--${t.name}) ${Number((g.tintOpacity * 100).toFixed(1))}%, transparent)`, (m) => (t.values[m]?.resolved ? withAlpha(t.values[m].resolved, g.tintOpacity) : null));
+    part("blur", "dimension", `${g.blur}px`, `${g.blur}px`);
+    part("saturation", "number", String(g.saturation), String(g.saturation));
+    part("highlight", "number", String(g.highlight), String(g.highlight));
+    part("distortion", "number", String(g.distortion), String(g.distortion));
+  }
 
   const seen = new Map();
   for (const t of tokens) {
@@ -342,6 +368,36 @@ function themeEntries(tokens) {
   // Workspaces from before font roles: font-heading (used by template components) stays the page font.
   if (!have.has("heading-font") && have.has("sans-font")) lines.push("  --font-heading: var(--sans-font);");
   return [...new Set(lines)].sort();
+}
+
+/**
+ * One Tailwind utility per glass token (material-glass): its color at the recipe's opacity, blurred and saturated
+ * through, with a light edge. A browser that cannot blur, or a system asking for less transparency, gets the solid
+ * color instead, so text on it stays readable. The ripple (distortion) needs JavaScript: the Glass component.
+ */
+function glassUtilities(tokens) {
+  const out = [];
+  for (const t of tokens) {
+    if (!t.glass || t.derived) continue;
+    const n = t.name, filter = `blur(var(--${n}-blur)) saturate(var(--${n}-saturation))`;
+    out.push(
+      `@utility ${n} {`,
+      `  background-color: var(--${n});`,
+      `  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / calc(var(--${n}-highlight) * 0.7)), inset 0 0 0 1px rgb(255 255 255 / calc(var(--${n}-highlight) * 0.2));`,
+      "  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {",
+      `    background-color: var(--${n}-tint);`,
+      `    -webkit-backdrop-filter: ${filter};`,
+      `    backdrop-filter: ${filter};`,
+      "  }",
+      "  @media (prefers-reduced-transparency: reduce) {",
+      `    background-color: var(--${n});`,
+      "    -webkit-backdrop-filter: none;",
+      "    backdrop-filter: none;",
+      "  }",
+      "}",
+    );
+  }
+  return out;
 }
 
 /**
@@ -415,6 +471,8 @@ export function buildCss(root, config = loadConfig(root)) {
   if (theme.length) out.push("@theme inline {", ...theme, "}", "");
   const types = typeUtilities(resolved.find((r) => r.brand === defaultBrand).tokens);
   if (types.length) out.push(...types, "");
+  const glass = glassUtilities(resolved.find((r) => r.brand === defaultBrand).tokens);
+  if (glass.length) out.push(...glass, "");
   // Reduced motion: every duration becomes 0, so anything animated with the motion tokens just appears.
   const motion = [...new Set(resolved.flatMap((r) => r.tokens.filter((t) => t.type === "duration" || t.type === "transition").map((t) => t.name)))].sort();
   // !important: the brand and mode blocks above are more specific than :root.

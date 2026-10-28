@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.5.1
+version: 0.5.2
 ---
 
 # Create a component
@@ -67,7 +67,8 @@ Component rules:
   `leading-*`, `tracking-*`; fields add `max-md:text-base`), spacing from Tailwind's scale (`p-4`, `gap-2`). Focus rings
   and invalid states may use roles (`ring-ring`, `border-destructive`). Elevation, motion and stacking come from the
   base roles: `shadow-card`, `shadow-overlay`, `duration-(--duration-fast)`, `ease-enter`, `ease-exit`,
-  `z-(--layer-dialog)` (layers: sticky, dropdown, dialog, toast, tooltip). No hex, `oklch()`, arbitrary values
+  `z-(--layer-dialog)` (layers: sticky, dropdown, dialog, toast, tooltip); glass over imagery is `material-glass` with
+  `text-material-glass-foreground` (never a hand-written `backdrop-filter`). No hex, `oklch()`, arbitrary values
   (`p-[13px]`), inline styles or magic pixel values.
 - Variants with `cva`; `data-slot` on the root; forward `className`; type props explicitly.
 - Copy follows WRITING.md (verbs on buttons, sentence case, specific errors).

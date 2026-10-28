@@ -1,0 +1,23 @@
+{
+  "glass": {
+    "$type": "color",
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}",
+      "$description": "Glass panel corners"
+    },
+    "panel": {
+      "foreground": {
+        "$value": "{material.glass-foreground}",
+        "$description": "Text on the glass panel"
+      }
+    },
+    "text": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Text on the glass panel"
+      }
+    }
+  }
+}

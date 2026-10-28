@@ -457,5 +457,28 @@
       "unit": "rem"
     },
     "$description": "Density: the step every padding, gap and margin is a multiple of (p-4 = 4 steps)."
+  },
+  "material": {
+    "$type": "color",
+    "$description": "Materials: surfaces with an effect. Glass is a recipe of parameters ($extensions.plinth.glass); Plinth writes the CSS (the material-glass utility) and checks its text over the darkest and the lightest backdrop.",
+    "glass": {
+      "$value": "{color.popover}",
+      "$description": "Glass: the color it tints what is behind it with, and shows solid where the browser cannot blur or the system asks for less transparency",
+      "$extensions": {
+        "plinth": {
+          "glass": {
+            "tintOpacity": 0.7,
+            "blur": 16,
+            "saturation": 1.6,
+            "highlight": 0.6,
+            "distortion": 0
+          }
+        }
+      }
+    },
+    "glass-foreground": {
+      "$value": "{color.popover-foreground}",
+      "$description": "Text on glass"
+    }
   }
 }

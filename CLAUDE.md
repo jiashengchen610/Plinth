@@ -44,9 +44,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (32 tests).
+- After changing `engine/` or `server/`, run `npm test` (34 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
-  (83 story tests).
+  (86 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
   Write/Edit tools. Never pass text with backticks inside double quotes to Bash (`node -e "…"`): the shell runs the
   backticked words as commands, and Windows has a `label` command that renames drives. Edit docs with Edit.

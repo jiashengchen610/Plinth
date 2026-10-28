@@ -20,6 +20,10 @@ This repository is a design system maintained with Plinth. Follow these rules.
   `text-sm`, `font-medium`, `leading-*` or `tracking-*` in components; fields add `max-md:text-base` so phones do not
   zoom. Text styles (`typography.*`) use font roles (`font.heading`, `font.body`, `font.label`, `font.code`), which
   point at fonts in the palette; change fonts with `set_style`.
+- Glass: a surface over imagery or busy color uses `material-glass` (base token `material.glass`: its color, solid
+  where the browser cannot blur, with a recipe tuned by `set_glass`), text on it the glass's foreground; or the Glass
+  component. Never write `backdrop-filter` or translucent colors by hand: the engine checks glass text over black and
+  white and falls back to solid for `prefers-reduced-transparency`.
 - Corners inside corners: a part that sits inside a rounded container near its corner (tabs in a bar, options in a
   list, a close button in a corner) gets its own radius token with
   `"$extensions": { "plinth": { "fit": { "outer": "{<name>.radius}", "spacing": <padding steps>, "border": <px> } } }`

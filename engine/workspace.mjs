@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { buildCss, loadConfig, listBrands, resolveBrand, cssName, TYPOGRAPHY_PARTS } from "./tokens.mjs";
+import { buildCss, loadConfig, listBrands, resolveBrand, cssName, glassRecipe, TYPOGRAPHY_PARTS } from "./tokens.mjs";
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { hueFamily, staleMentions } from "./prose.mjs";
@@ -405,6 +405,17 @@ function applyOp(root, op, files) {
         if (!Object.keys(node.$extensions.plinth).length) delete node.$extensions.plinth;
         if (!Object.keys(node.$extensions).length) delete node.$extensions;
       }
+      // A glass recipe on a color token: { tintOpacity, blur, saturation, highlight, distortion } (glassRecipe keeps
+      // each in range); null removes it.
+      if (op.glass !== undefined) {
+        if (op.glass !== null && typeof op.glass !== "object") throw new Error(`${op.path}: glass needs { tintOpacity, blur, saturation, highlight, distortion }`);
+        node.$extensions ??= {};
+        node.$extensions.plinth ??= {};
+        if (op.glass === null) delete node.$extensions.plinth.glass;
+        else node.$extensions.plinth.glass = glassRecipe(op.glass);
+        if (!Object.keys(node.$extensions.plinth).length) delete node.$extensions.plinth;
+        if (!Object.keys(node.$extensions).length) delete node.$extensions;
+      }
       if (!("$value" in node)) throw new Error(`${op.path} has no value: set one first`);
       files.set(rel, tree);
       break;
@@ -780,6 +791,10 @@ export function catalogComponentOps(root, id, templateDir = TEMPLATE_DIR) {
   const missing = [];
   if (tpl.radius?.small && !base.radius?.small) missing.push(["radius/small", tpl.radius.small, "dimension"]);
   if (tpl.radius?.["fit-inside"] && !base.radius?.["fit-inside"]) missing.push(["radius/fit-inside", tpl.radius["fit-inside"], "number"]);
+  // The glass material (with its recipe) for the Glass component.
+  if (tpl.material && !base.material?.glass && existsSync(tokens) && readFileSync(tokens, "utf8").includes("{material.glass")) {
+    for (const k of ["glass", "glass-foreground"]) if (tpl.material[k]) ops.push({ op: "set", file: "tokens/base.tokens.json", path: `material/${k}`, value: tpl.material[k].$value, type: "color", description: tpl.material[k].$description, ...(tpl.material[k].$extensions?.plinth?.glass ? { glass: tpl.material[k].$extensions.plinth.glass } : {}) });
+  }
   for (const group of ["duration", "layer"]) if (tpl[group] && !base[group]) for (const [k, v] of Object.entries(tpl[group])) if (!k.startsWith("$")) missing.push([`${group}/${k}`, v, tpl[group].$type]);
   for (const k of ["enter", "exit"]) if (tpl.ease?.[k] && !base.ease?.[k]) missing.push([`ease/${k}`, tpl.ease[k], "cubicBezier"]);
   for (const [path, t, type] of missing) ops.push({ op: "set", file: "tokens/base.tokens.json", path, value: t.$value, type, ...(t.$description ? { description: t.$description } : {}) });

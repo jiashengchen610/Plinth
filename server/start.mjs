@@ -9,7 +9,7 @@ import { quickClaude } from "./quick.mjs";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands } from "../engine/tokens.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
-import { CORNERS, fontPickFor, styleOps, readStyle } from "../engine/style.mjs";
+import { CORNERS, fontPickFor, GLASS_PRESETS, styleOps, readStyle } from "../engine/style.mjs";
 import { typographyUpgrade } from "../engine/upgrade.mjs";
 
 export const KINDS = [
@@ -59,6 +59,7 @@ export const COMPONENTS = [
   { id: "tabs", name: "Tabs", hint: "Switch between views", ready: true },
   { id: "dialog", name: "Dialog", hint: "A window that asks for a decision", ready: true },
   { id: "separator", name: "Divider", hint: "A line between sections", ready: true },
+  { id: "glass", name: "Glass", hint: "A frosted panel over photos and color", ready: true },
 ];
 /** What each kind of product usually needs beyond the core five; the starting selection in Describe. */
 export const KIND_COMPONENTS = {
@@ -77,6 +78,7 @@ export function presets() {
     kinds: KINDS, feels: FEELS, fonts: FONTS, components: COMPONENTS, kindComponents: KIND_COMPONENTS,
     palettes: PALETTES.map((p) => ({ ...p, swatches: [c(p.main, "700"), c(p.main, "100"), c(p.gray, "50"), c(p.gray, "400"), c(p.gray, "900")], main600: c(p.main, "700") })),
     corners: Object.entries(CORNERS).map(([id, s]) => ({ id, name: { square: "Square", slight: "Slightly rounded", round: "Rounded", pill: "Pill" }[id], control: r(s.control), container: r(s.container) })),
+    glass: Object.entries(GLASS_PRESETS).map(([id, recipe]) => ({ id, name: { clear: "Clear", regular: "Regular", frosted: "Frosted" }[id] ?? id, recipe })),
   };
 }
 

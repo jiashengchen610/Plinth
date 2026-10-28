@@ -41,7 +41,9 @@ export type UnsavedFile = { file: string; status: "modified" | "added" | "delete
 export type LastChange = { title: string; by: string; at: string; files: string[] };
 export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null; usedBy: string[] };
-export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; outer: string | null; inner: string | null; fitInside: boolean | null; radiusSteps: { step: string; px: number }[]; hues: string[]; grays: string[] };
+export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; outer: string | null; inner: string | null; fitInside: boolean | null; radiusSteps: { step: string; px: number }[]; glass: { tint: string | null; foreground: string | null; recipe: GlassRecipe } | null; hues: string[]; grays: string[] };
+/** A glass recipe: how much of its color shows, blur (px), saturation (1 = unchanged), edge light, ripple (0–1). */
+export type GlassRecipe = { tintOpacity: number; blur: number; saturation: number; highlight: number; distortion: number };
 export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
 export type SetupStep = { id: string; label: string; who: string; status: "waiting" | "active" | "done" | "error"; detail?: string };
 export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
@@ -51,6 +53,7 @@ export type Presets = {
   kindComponents: Record<string, string[]>;
   palettes: { id: string; name: string; mood: string; main: string; gray: string; swatches: (string | null)[]; main600: string | null }[];
   corners: { id: string; name: string; control: string | null; container: string | null }[];
+  glass?: { id: string; name: string; recipe: GlassRecipe }[];
 };
 export type Suggestions = { name: string | null; kind: string; feels: string[]; palette: string; corners: string; font: string; components: string[]; question: string | null; answers?: string[]; by: "claude" | "fallback"; error?: string; seconds?: number; cost?: number | null };
 export type Answers = { product: string; name?: string; feel: string; kind: string; palette: string; brandColor?: string; corners: string; font: string; components: string[]; extraText: string };
@@ -149,6 +152,8 @@ export const api = {
   style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
   removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),
   roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
+  glass: (brand: string, glass: GlassRecipe & { tint: string }) => edit("Saving the glass", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/glass", { brand, ...glass })),
+  glassCheck: (brand: string, tint: string, tintOpacity: number) => call<{ foreground: string; contrast: { mode: string; backdrop: string; ratio: number | null; pass: boolean }[]; minOpacity: number | null }>("GET", `/api/glass-check?brand=${encodeURIComponent(brand)}&tint=${encodeURIComponent(tint)}&tintOpacity=${tintOpacity}`),
   addComponent: (name: string) => edit("Adding the component", () => call<ChangeResult>("POST", "/api/add-component", { name })),
   deploy: () => call<{ deploy: Deploy }>("GET", "/api/deploy"),
   versionDraft: () => call<VersionDraft>("GET", "/api/version-draft"),

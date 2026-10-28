@@ -4,6 +4,7 @@ import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from "@/lib/plain";
 import { buildGraph, dependents, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
+import { GlassTool } from "@/views/GlassTool";
 
 type Props = {
   state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
@@ -255,6 +256,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
           </section>
         </div>
       </div>
+      <GlassTool state={state} presets={presets} brand={brand} mode={tmode} rows={rows} onChanged={onChanged} onError={onError} />
       <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
     </div>
   );

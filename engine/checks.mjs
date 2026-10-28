@@ -99,6 +99,39 @@ function editPoint(byKey, start, mode) {
 }
 
 /** Contrast results for every brand and mode. */
+/**
+ * Text on a glass in the making (the tuning tool, before it is saved): the tint role at an opacity over black and
+ * over white, against its text role, in each mode. [{ mode, backdrop, ratio, pass }]
+ */
+export function glassContrast(root, brand, { tint: tintRole, foreground, tintOpacity }) {
+  const r = resolveBrand(root, brand);
+  const role = (name) => r.tokens.find((t) => t.key === `color/${name}`);
+  const bg = role(tintRole), fg = role(foreground);
+  if (!bg || !fg) throw new Error(`no color role ${!bg ? tintRole : foreground}`);
+  const out = [];
+  for (const mode of r.modes) {
+    for (const [backdrop, base] of [["black", "#000000"], ["white", "#ffffff"]]) {
+      const ratio = contrastRatio((fg.values[mode] ?? fg.values.default).resolved, tint((bg.values[mode] ?? bg.values.default).resolved, Number(tintOpacity), base));
+      out.push({ mode, backdrop, ratio: ratio === null ? null : Number(ratio.toFixed(2)), pass: ratio !== null && ratio >= 4.5 });
+    }
+  }
+  return out;
+}
+
+/** The lowest tint opacity (in steps of 0.01) at which text on the glass reads over black and white in every mode. */
+export function glassMinOpacity(root, brand, { tint: tintRole, foreground }) {
+  const r = resolveBrand(root, brand);
+  const role = (name) => r.tokens.find((t) => t.key === `color/${name}`);
+  const bg = role(tintRole), fg = role(foreground);
+  if (!bg || !fg) return null;
+  const pairs = r.modes.map((m) => [(fg.values[m] ?? fg.values.default).resolved, (bg.values[m] ?? bg.values.default).resolved]);
+  for (let i = 0; i <= 100; i++) {
+    const a = i / 100;
+    if (pairs.every(([f, b]) => ["#000000", "#ffffff"].every((base) => (contrastRatio(f, tint(b, a, base)) ?? 0) >= 4.5))) return a;
+  }
+  return null;
+}
+
 export function checkContrast(root, config = loadConfig(root)) {
   const results = [];
   const tinted = tintedPairs(root);
@@ -142,6 +175,17 @@ export function checkContrast(root, config = loadConfig(root)) {
         const base = page(mode);
         const bgValue = tint(valueIn(t.fg, mode)?.resolved, alpha, base);
         results.push(row({ fg: t.fg, bg: `${t.fg}/${Math.round(alpha * 100)}`, min: 4.5 }, mode, bgValue, { selfTint: { alpha, base }, files: t.files }));
+      }
+    }
+    // Glass: its text over the darkest and the lightest backdrop it can sit on. Blur and saturation leave black and
+    // white as they are, so what shows is the glass color at its opacity over each.
+    for (const g of r.tokens.filter((t) => t.glass && !t.derived)) {
+      const fg = `${g.name}-foreground`;
+      if (!byName.has(fg)) continue;
+      for (const mode of r.modes) {
+        for (const [backdrop, base] of [["black", "#000000"], ["white", "#ffffff"]]) {
+          results.push(row({ fg, bg: `${g.name} over ${backdrop}`, min: 4.5 }, mode, tint((g.values[mode] ?? g.values.default)?.resolved, g.glass.tintOpacity, base), { glass: true }));
+        }
       }
     }
   }
