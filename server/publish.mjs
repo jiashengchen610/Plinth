@@ -108,7 +108,7 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
     else if (!r.ok) {
       step("tests", r, false);
       return stop("tests", { tests: r, next: "Fix the failing tests (ask Claude in the chat), then publish again. GitHub Actions runs the same tests before deploying." });
-    } else step("tests", { typecheck: "ok", stories: `${r.tests.passed} passed` });
+    } else step("tests", { typecheck: "ok", stories: `${r.tests.passed} passed`, ...(r.tests.flaky?.length ? { flaky: r.tests.flaky } : {}) });
   }
 
   if (dryRun) return { published: false, dryRun: true, steps, next: "Run publish without dryRun to push." };

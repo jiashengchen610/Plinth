@@ -476,9 +476,23 @@ export const TOOLS = [
   },
   {
     name: "deploy_status",
-    description: "What GitHub did with the last publish: the push only starts the deploy workflow, which runs plinth check, the typecheck and every story test on Linux, and puts Storybook online only if they pass. Returns status (waiting, running, live, failed), the failing step and story tests, and the run link. Call it after publishing, and before fixing a failed deploy: a story test can pass locally and fail on GitHub (timing during animations), so fix the cause, not only the local run.",
+    description: "What happened to the last publish. On this computer first (lastPublishOnThisComputer): publish saves, checks and runs the typecheck and every story test before pushing, and stops there when they fail; then the failing step, the failing tests and the end of the test output are here, kept after restarts. Then on GitHub (status): the push only starts the deploy workflow, which runs plinth check, the typecheck and every story test on Linux, and puts Storybook online only if they pass: status (waiting, running, live, failed), the failing step and story tests, and the run link. Call it before fixing a failed publish, and fix the cause the failures name: a story test can pass on a second run (timing during animations), so a test that failed once is worth fixing even when it passes now.",
     inputSchema: { type: "object", properties: {} },
-    run: async (_a, ctx) => { requireWorkspace(ctx.root); return (await deployStatus(ctx.root)) ?? { status: "not published", next: "Publish first." }; },
+    run: async (_a, ctx) => {
+      requireWorkspace(ctx.root);
+      const github = (await deployStatus(ctx.root)) ?? { status: "not published", next: "Publish first." };
+      const p = ctx.publish?.last;
+      const t = ctx.tests?.last;
+      return {
+        ...github,
+        lastPublishOnThisComputer: !p ? null : p.published ? { at: p.at, published: true, flaky: p.steps?.find((s) => s.name === "tests")?.detail?.flaky ?? [] } : {
+          at: p.at, published: false, stoppedAt: p.stoppedAt, error: p.error ?? null, next: p.next ?? null, blocking: p.blocking ?? null,
+          typecheck: p.tests?.typecheck?.ok === false ? p.tests.typecheck.tail : null,
+          failures: p.tests?.tests?.failures ?? [], testOutputEnd: p.tests?.tests?.tail?.slice(-4000) ?? null,
+        },
+        lastTests: t ? { at: t.at, ok: t.ok, failures: t.tests?.failures ?? [], failedOnceThenPassed: t.tests?.flaky ?? [] } : null,
+      };
+    },
   },
 ];
 

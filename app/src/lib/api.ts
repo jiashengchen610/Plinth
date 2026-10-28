@@ -75,7 +75,8 @@ export type Answers = { product: string; name?: string; feel: string; kind: stri
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
   typecheck?: { ok: boolean; tail?: string };
-  tests?: { ok: boolean; passed: number | null; failed: number | null; total: number | null; failures: string[]; tail?: string };
+  /** flaky: tests that failed once and passed when run again (a timing fluke worth fixing; it does not stop a publish). */
+  tests?: { ok: boolean; passed: number | null; failed: number | null; total: number | null; failures: string[]; flaky?: string[]; tail?: string };
 };
 export type PublishStep = { name: string; ok: boolean; detail: unknown };
 export type PublishResult = {

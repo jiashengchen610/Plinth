@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.13.0.** Tested by `npm test` (42 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.13.1.** Tested by `npm test` (43 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -175,6 +175,9 @@ when the step is done:
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
    does not work for private repositories there. After the push, the top of the page shows what GitHub does: testing,
    online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
+   Before the push, the same tests run on this computer; a story test that fails runs once more, and one that passes
+   then is reported as failing once (a timing problem worth fixing) without stopping the publish. What stopped the
+   last publish, with the failing tests, is kept in `.ds/` and Claude reads it (`deploy_status`).
    While it works, the page shows each step (here, then on GitHub); once the site is online a success page lists where
    to check it (the component site, DESIGN.md for AI tools, the repository, the test results) and your versions as a
    tree. **Make more changes** starts the next round.
@@ -419,7 +422,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 42 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 43 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

@@ -185,6 +185,15 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
         {result?.published && (
           <p className="text-sm">Sent to GitHub: <a className="underline" href={result.github} target="_blank" rel="noreferrer">{result.github}</a></p>
         )}
+        {(() => {
+          const flaky = (result?.steps.find((s) => s.name === "tests")?.detail as { flaky?: string[] } | undefined)?.flaky ?? [];
+          return flaky.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warning/50 bg-warning/10 px-3.5 py-2 text-sm">
+              <span className="flex-[1_1_260px]">Passed on a second run. These failed once, which usually means a timing problem that can stop a publish later: {flaky.slice(0, 3).join("; ")}.</span>
+              <Button variant="outline" className="min-h-10" onClick={() => onAsk(`These story tests failed once and passed on a second run: ${flaky.slice(0, 5).join("; ")}. Find the timing problem and fix it.`)}>Ask Claude to fix it</Button>
+            </div>
+          );
+        })()}
         {result?.published && result.pagesBlocked === "plan" && !fixed && (
           <div className="flex flex-col gap-2 rounded-xl border border-warning/60 bg-warning/10 p-3.5 text-sm">
             <p>Your component site isn't online: your GitHub plan doesn't serve sites for private repositories. Make it public to put the site online, or keep it private without one.</p>
@@ -199,7 +208,7 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
             {result.next && <p className="text-muted-foreground">{result.next}</p>}
             {result.blocking?.length ? <ul className="list-disc pl-5">{result.blocking.map((b) => <li key={b.detail}>{b.detail}</li>)}</ul> : null}
             {result.tests?.tests?.failures?.length ? <ul className="list-disc pl-5">{result.tests.tests.failures.map((f) => <li key={f}>{f}</li>)}</ul> : null}
-            <Button variant="outline" className="self-start" onClick={() => onAsk(`Publishing stopped at ${result.stoppedAt}. Help me fix it.`)}>Ask Claude</Button>
+            <Button variant="outline" className="self-start" onClick={() => onAsk(`Publishing stopped at ${STEP_LABEL[result.stoppedAt ?? ""] ?? result.stoppedAt} on this computer${result.tests?.tests?.failures?.length ? `. Failing: ${result.tests.tests.failures.slice(0, 5).join("; ")}` : result.error ? `: ${result.error}` : ""}. Find the cause and fix it (deploy_status has the details).`)}>Ask Claude</Button>
           </div>
         )}
       </section>
