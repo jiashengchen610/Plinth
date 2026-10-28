@@ -88,4 +88,9 @@ test("template: a Storybook on this computer loads Plinth's picker; the publishe
   assert.match(preview, /local\(location\.hostname\)/, "only on this computer");
   const inspect = readFileSync(fileURLToPath(new URL("../server/inspect.js", import.meta.url)), "utf8");
   assert.match(inspect, /e\.origin !== ui/, "it takes orders only from the Plinth UI that served it");
+  // The page of every component: out of the tests and the manifest, without stories that open an overlay.
+  const sheet = readFileSync(join(ws.TEMPLATE_DIR, "src/foundations/sticker-sheet.stories.tsx"), "utf8");
+  assert.match(sheet, /tags: \["!test", "!manifest", "!autodocs"\]/);
+  assert.match(sheet, /defaultOpen/);
+  assert.match(sheet, /data-sheet=\{s\.id\}/, "sections the picker can reveal");
 });

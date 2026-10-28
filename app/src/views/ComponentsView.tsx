@@ -4,11 +4,12 @@ import { api, type ChangeResult, type Op, type Presets, type State, type StoryEn
 import { Cta } from "@/lib/cta";
 import { componentOfChain, picksFromChain, type ChainLink } from "@/lib/inspect";
 import { EditPanel } from "@/views/EditPanel";
+import { StepIntro } from "@/views/StepIntro";
 import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
 import { buildGraph, componentOf, remindersByToken, targetIn, valueIn, type Mode } from "@/lib/tokens";
 import { NodeGraph } from "@/views/NodeGraph";
 import { TypeGraph } from "@/views/TypeGraph";
-import { ModeSwitch } from "@/views/StyleView";
+import { ModeSwitch } from "@/views/ModeSwitch";
 
 type Props = {
   state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
@@ -40,14 +41,14 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const srcRef = useRef<string | null>(null);
   const [readyFor, setReadyFor] = useState<{ src: string | null; at: number } | null>(null);
   const [picking, setPicking] = useState(false);
-  const [picked, setPicked] = useState<{ chain: ChainLink[]; text: string } | null>(null);
+  const [picked, setPicked] = useState<{ chain: ChainLink[]; text: string; sheet: string | null } | null>(null);
   const sbOrigin = state.storybook ? new URL(state.storybook).origin : null;
   useEffect(() => {
     if (!sbOrigin) return;
     const on = (e: MessageEvent) => {
       if (e.origin !== sbOrigin || e.data?.source !== "plinth-inspect") return;
       if (e.data.type === "ready") setReadyFor({ src: srcRef.current, at: Date.now() });
-      else if (e.data.type === "pick" && Array.isArray(e.data.chain)) setPicked({ chain: e.data.chain, text: String(e.data.text ?? "") });
+      else if (e.data.type === "pick" && Array.isArray(e.data.chain)) setPicked({ chain: e.data.chain, text: String(e.data.text ?? ""), sheet: typeof e.data.sheet === "string" ? e.data.sheet : null });
       else if (e.data.type === "cancel") setPicking(false);
     };
     window.addEventListener("message", on);
@@ -64,14 +65,22 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [picking]);
-  useEffect(() => { setPart(null); setTextPart(null); setVariant(""); setConfirmRemove(false); setPicked(null); }, [component?.id]);
+  useEffect(() => { setPart(null); setTextPart(null); setVariant(""); setConfirmRemove(false); }, [component?.id]);
+  // A pick on the page of every component opens that component below (its section, else the part's component).
+  useEffect(() => {
+    if (!picked) return;
+    const ids = state.components.map((c) => c.id);
+    const id = picked.sheet && ids.includes(picked.sheet) ? picked.sheet : componentOfChain(picked.chain, ids);
+    if (id) setSelected(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
   // A picked color part of this component is also selected in the graph below.
   useEffect(() => {
     if (!picked || !component) return;
     const p = picksFromChain(g, picked.chain, state.components.map((c) => c.id)).find((x) => x.kind === "color" && !x.state && componentOf(x.row) === component.id);
     if (p) { setVariant(variantOf(p.row.path)); setPart(p.row.path); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picked]);
+  }, [picked, component?.id]);
   const reminders = useMemo(() => remindersByToken(state, brand, tmode), [state, brand, tmode]);
   if (!component) return <p className="text-muted-foreground">No components yet. Ask Claude to add one.</p>;
 
@@ -91,12 +100,17 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
 
   const docs = entries.find((e) => e.type === "docs" && e.importPath.includes(`/components/${component.id}/`));
   const firstStory = entries.find((e) => e.type === "story" && e.importPath.includes(`/components/${component.id}/`));
-  const target = docs ?? firstStory;
+  // Every component on one page (the template's sticker sheet); a design system without it shows one at a time.
+  const sheet = entries.find((e) => e.type === "story" && e.importPath.includes("/foundations/sticker-sheet"));
+  const target = sheet ?? docs ?? firstStory;
   const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}&plinthInspect=${encodeURIComponent(location.origin)}` : null;
+  const pageOf = docs ?? firstStory;
+  const reveal = (id: string) => { if (sheet && sbOrigin) frame.current?.contentWindow?.postMessage({ source: "plinth-ui", type: "reveal", sheet: id }, sbOrigin); };
   srcRef.current = src;
   const ready = !!src && readyFor?.src === src;
   const ids = state.components.map((c) => c.id);
-  const sel = picked ? { title: `${componentLabel(componentOfChain(picked.chain, ids) ?? component.id, catalog)}${picked.text ? ` · “${picked.text.length > 28 ? `${picked.text.slice(0, 27)}…` : picked.text}”` : ""}`, picks: picksFromChain(g, picked.chain, ids) } : null;
+  const said = picked?.text.split("\n").map((s) => s.trim()).find(Boolean) ?? "";
+  const sel = picked ? { title: `${componentLabel(componentOfChain(picked.chain, ids) ?? component.id, catalog)}${said ? ` · “${said.length > 28 ? `${said.slice(0, 27)}…` : said}”` : ""}`, picks: picksFromChain(g, picked.chain, ids) } : null;
   const deps = state.deps;
   const name = componentLabel(component.id, catalog);
   const missing = (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id));
@@ -111,16 +125,38 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-muted-foreground">Step 3 of 4</span>
-        <h1 className="text-2xl font-semibold tracking-tight">Components</h1>
-        <p className="text-muted-foreground">Check each component and fine-tune its colors and text.</p>
-      </div>
+      <StepIntro n={3} title="Components" decide="How each component uses your style: which of your colors, corners and text styles each part takes, and which components you have."
+        change="Pick any part on the page of every component, or a component in the list for all its parts. Or tell Claude in the chat." done="Every component looks right in light and dark mode, and passes its tests when you publish." />
+
+      <section aria-label="All your components" className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 className="text-base font-semibold">{sheet ? "All your components" : name}</h2><p className="text-sm text-muted-foreground">{sheet ? "The real components, every one on one page." : "The real component."}</p></div>
+          <ModeSwitch mode={mode} onMode={onMode} />
+        </div>
+        {src ? (
+          <>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <button type="button" aria-pressed={picking} disabled={!ready} onClick={() => setPicking(!picking)} className={`min-h-10 rounded-lg border-2 px-3.5 text-sm font-semibold disabled:opacity-50 ${picking ? "border-info bg-info/10" : "border-border"}`}>{picking ? "Stop picking" : "Pick something to change"}</button>
+              <span className="flex-[1_1_220px] text-xs text-muted-foreground">{!ready ? "Getting the preview ready for picking…" : picking ? "Click a part: a button, a card, a field. Esc stops." : "Then click a part to change its colors, corners or text."}</span>
+            </div>
+            <iframe ref={frame} title="Components preview" src={src} className={`h-[560px] w-full rounded-xl border bg-white ${picking ? "ring-2 ring-info" : ""}`} />
+            {sel && <EditPanel state={state} g={g} brand={brand} mode={tmode} sel={sel} onClose={() => setPicked(null)} onChanged={onChanged} onError={onError} onAsk={onAsk} />}
+          </>
+        ) : (
+          <div className="flex flex-col items-start gap-2.5 rounded-xl border border-dashed p-6">
+            <h3 className="font-semibold">{deps.installing ? "Getting the preview ready…" : state.storybook ? "No preview yet" : deps.installed ? "The preview isn't running" : "The preview tools aren't installed"}</h3>
+            <p className="text-sm text-muted-foreground">{deps.installing ? "Installing the preview and tests; this takes a few minutes the first time." : state.storybook ? "Ask Claude to write stories for your components." : "Components are previewed on your component site, running on this computer."}</p>
+            {!state.storybook && deps.installed && <Button onClick={() => api.startStorybook().catch((e) => onError(e.message))}>Start the preview</Button>}
+            {!deps.installed && !deps.installing && <Button onClick={() => api.install().catch((e) => onError(e.message))}>Install the preview tools</Button>}
+          </div>
+        )}
+      </section>
+
       <div className="flex flex-wrap items-start gap-5">
         <nav aria-label="Your components" className="flex min-w-0 flex-[1_1_190px] flex-col gap-0.5 rounded-2xl border bg-background p-2 md:max-w-56">
           <span className="px-2.5 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Your components</span>
           {state.components.map((c) => (
-            <button key={c.id} type="button" aria-current={c.id === component.id ? "page" : undefined} onClick={() => setSelected(c.id)} className={`flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-left text-sm hover:bg-muted ${c.id === component.id ? "bg-muted font-semibold" : ""}`}>
+            <button key={c.id} type="button" aria-current={c.id === component.id ? "page" : undefined} onClick={() => { setSelected(c.id); setPicked(null); reveal(c.id); }} className={`flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-left text-sm hover:bg-muted ${c.id === component.id ? "bg-muted font-semibold" : ""}`}>
               <span className="flex-1">{componentLabel(c.id, catalog)}</span>
               {warnFor(c.id) && <span title="Something to look at" className="size-2 rounded-full bg-warning" />}
             </button>
@@ -156,7 +192,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 flex-col"><h2 className="text-xl font-semibold">{name}</h2><p className="text-sm text-muted-foreground">{catalog?.find((c) => c.id === component.id)?.hint ?? component.spec?.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.slice(0, 120) ?? ""}</p></div>
               <div className="flex flex-wrap items-center gap-2">
-                <ModeSwitch mode={mode} onMode={onMode} />
+                {state.storybook && pageOf && <Button asChild variant="outline" className="min-h-10"><a href={`${state.storybook}/?path=/${pageOf.type === "docs" ? "docs" : "story"}/${pageOf.id}`} target="_blank" rel="noreferrer">Open its page</a></Button>}
                 <Button variant="outline" className="min-h-10 text-destructive" disabled={protectedBy} title={protectedBy ? `Used by ${component.usedBy.join(", ")}` : `Remove ${name}`} onClick={() => setConfirmRemove(true)}>Remove</Button>
               </div>
             </div>
@@ -168,23 +204,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
                 <Button variant="outline" className="min-h-10" onClick={() => setConfirmRemove(false)}>Keep it</Button>
               </div>
             )}
-            {src ? (
-              <>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <button type="button" aria-pressed={picking} disabled={!ready} onClick={() => setPicking(!picking)} className={`min-h-10 rounded-lg border-2 px-3.5 text-sm font-semibold disabled:opacity-50 ${picking ? "border-info bg-info/10" : "border-border"}`}>{picking ? "Stop picking" : "Pick something to change"}</button>
-                  <span className="flex-[1_1_220px] text-xs text-muted-foreground">{!ready ? "Getting the preview ready for picking…" : picking ? "Click a part of the preview: a button, a card, a field. Esc stops." : "Then click a part of the preview to change its colors, corners or text."}</span>
-                </div>
-                <iframe ref={frame} title={`${name} preview`} src={src} className={`h-[420px] w-full rounded-xl border bg-white ${picking ? "ring-2 ring-info" : ""}`} />
-                {sel && <EditPanel state={state} g={g} brand={brand} mode={tmode} sel={sel} onClose={() => setPicked(null)} onChanged={onChanged} onError={onError} onAsk={onAsk} />}
-              </>
-            ) : (
-              <div className="flex flex-col items-start gap-2.5 rounded-xl border border-dashed p-6">
-                <h3 className="font-semibold">{deps.installing ? "Getting the preview ready…" : state.storybook ? "No preview for this component yet" : deps.installed ? "The preview isn't running" : "The preview tools aren't installed"}</h3>
-                <p className="text-sm text-muted-foreground">{deps.installing ? "Installing the preview and tests; this takes a few minutes the first time." : state.storybook ? "Ask Claude to write a story for it." : "Components are previewed on your component site, running on this computer."}</p>
-                {!state.storybook && deps.installed && <Button onClick={() => api.startStorybook().catch((e) => onError(e.message))}>Start the preview</Button>}
-                {!deps.installed && !deps.installing && <Button onClick={() => api.install().catch((e) => onError(e.message))}>Install the preview tools</Button>}
-              </div>
-            )}
+            {state.storybook && !docs && !firstStory && <p className="text-sm text-muted-foreground">{name} has no stories yet: ask Claude to write them, so it shows on the page of every component.</p>}
             {warns.map((w) => (
               <div key={w} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-warning/50 bg-warning/10 py-2 pr-2 pl-3.5 text-sm">
                 <span className="flex-[1_1_220px]">Text in {name} is hard to read here ({w.split(":")[0].split(" on ").map((x) => roleName(x.trim().replace(/\/\d+$/, ""))).join(" on ")}).</span>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Answers, type Presets, type State, type Suggestions } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES } from "@/lib/plain";
+import { StepIntro } from "@/views/StepIntro";
 
 type Props = {
   state: State; presets: Presets | null;
@@ -129,13 +130,10 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
   return (
     <div className="flex flex-col gap-4">
       {href && <link rel="stylesheet" href={href} precedence="default" />}
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-muted-foreground">Step 1 of 4</span>
-        <h1 className="text-2xl font-semibold tracking-tight">{created && !redo ? "Your answers" : redo ? "Answer again" : "Describe your design system"}</h1>
-        <p className="max-w-[62ch] text-muted-foreground">
-          {created && !redo ? "What your design system was made from." : redo ? "Change any answer. Your components and history stay; Claude rewrites the style guide to match." : "Claude asks a few questions and suggests an answer for each. Keep the suggestion, pick another, or say it in your own words."}
-        </p>
-      </div>
+      <StepIntro n={1} title={created && !redo ? "Your answers" : redo ? "Answer again" : "Describe your design system"}
+        decide="What you're making and how it should feel. Your answers set the colors, corners, fonts and components to start from."
+        change={redo ? "Change any answer. Your components and history stay; Claude rewrites the style guide to match." : "Claude suggests an answer to each question, with why. Keep it, pick another, or say it in your own words."}
+        done={created && !redo ? "Done: your design system was made from these answers. Answer again to change them." : "Create makes your style, your style guide and the ready-made components you picked."} />
 
       {!created && (
         <div role="group" aria-label="How do you want to start?" className="inline-flex flex-wrap self-start rounded-xl bg-muted p-1">
@@ -175,6 +173,7 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
               <Bubble who="claude">
                 <span className="block font-semibold">{questionOf(step)}</span>
                 <span className="block text-sm text-muted-foreground">{QUESTIONS[step][1]}</span>
+                {sugg?.why?.[step as keyof NonNullable<Suggestions["why"]>] && <span className="mt-1.5 block text-sm"><strong>Why the suggestion:</strong> {sugg.why[step as keyof NonNullable<Suggestions["why"]>]}</span>}
               </Bubble>
               <div className="flex flex-col gap-3.5 rounded-2xl border bg-background p-4">
                 {step === "product" && (

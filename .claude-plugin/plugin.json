@@ -1,6 +1,6 @@
 {
   "name": "plinth",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "Create and maintain a multi-brand design system from natural language and images in Claude Code: DTCG tokens, DESIGN.md and WRITING.md guidelines, shadcn/ui components, a local review UI, Storybook on GitHub Pages.",
   "author": {
     "name": "jiashengchen610",

@@ -40,12 +40,16 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
 - One edit at a time: UI calls that write go through `edit()` in `app/src/lib/lock.ts` (`api.ts` wraps them), which
   locks the page until the write is done and the page has reloaded; a Claude reply locks it for the whole reply.
-- Picking to edit: the Style sample lists each part's tokens (`data-pick`); a story in Components loads
-  `server/inspect.js` from the Plinth UI (the managed `.storybook/preview.tsx` adds it only for a localhost Storybook
-  opened with `plinthInspect=<UI origin>`), which reports clicked classes by `postMessage`; `app/src/lib/inspect.ts`
-  maps them to tokens. The edit panel counts the reach itself and asks "only this / everywhere" before a shared
-  change (`set_part_color`); the request box is one Haiku run that returns values only (`quickEdit`), checked by the
-  server and confirmed by the user.
+- Every step opens with `<StepIntro>`: what you decide, how to change it, when it is done (PRD 下一版 item 19). Style
+  has no sample screen: its main view is `TokenSheet` (every layer side by side; base values only when used).
+  Components shows the managed sticker sheet (`src/foundations/sticker-sheet.stories.tsx`: every component's stories
+  on one page, loaded when the page renders, never imported eagerly, and skipping stories that open an overlay).
+- Picking to edit: a story in Components loads `server/inspect.js` from the Plinth UI (the managed
+  `.storybook/preview.tsx` adds it only for a localhost Storybook opened with `plinthInspect=<UI origin>`), which
+  reports clicked classes by `postMessage` and scrolls to a component on request (`reveal`); `app/src/lib/inspect.ts`
+  maps them to tokens. The edit panel (also opened from any node of the Style sheet) counts the reach itself and asks
+  "only this / everywhere" before a shared change (`set_part_color`); the request box is one Haiku run that returns
+  values only (`quickEdit`), checked by the server and confirmed by the user.
 - Before a release that changes template component files, run `node scripts/shipped-hashes.mjs` (the previous
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
@@ -80,7 +84,10 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   shadow when hovered" to the chat.
 - Storybook 10.6.1 dev: a story iframe keeps extra query parameters (`plinthInspect`), `.storybook/preview.tsx` can
   add a script from another localhost port, and `postMessage` to the parent page works (tested from a page on another
-  port).
+  port). `composeStories` comes from `@storybook/react-vite`. Under the vitest addon every stories file is a test
+  file: a stories file that imports the others eagerly (`import.meta.glob(..., { eager: true })`) breaks their tests
+  ("Vitest failed to find the current suite"), even with its own stories tagged `!test`; load them lazily at render.
+  A story that opens a dialog (`defaultOpen`) covers a page that renders it among others, and blocks clicks there.
 - shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
   `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,

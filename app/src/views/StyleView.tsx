@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { api, exceptionKey, type ChangeResult, type Presets, type State, type TokenRow } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
-import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from "@/lib/plain";
-import { buildGraph, dependents, type Mode } from "@/lib/tokens";
+import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleName } from "@/lib/plain";
+import { buildGraph, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
-import { picksFromNames } from "@/lib/inspect";
-import { EditPanel } from "@/views/EditPanel";
 import { GlassTool } from "@/views/GlassTool";
+import { StepIntro } from "@/views/StepIntro";
+import { TokenSheet } from "@/views/TokenSheet";
 import { ChartColors } from "@/views/ChartColors";
 
 type Props = {
@@ -32,15 +32,6 @@ export function previewVars(rows: TokenRow[], mode: Mode) {
   return vars as React.CSSProperties;
 }
 
-export function ModeSwitch({ mode, onMode }: { mode: "light" | "dark"; onMode: (m: "light" | "dark") => void }) {
-  return (
-    <div role="group" aria-label="Preview in light or dark mode" className="inline-flex rounded-xl bg-muted p-1">
-      {(["light", "dark"] as const).map((m) => (
-        <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)} className={`min-h-9 rounded-lg px-3.5 text-sm font-medium capitalize ${mode === m ? "bg-background shadow-sm" : "text-muted-foreground"}`}>{m}</button>
-      ))}
-    </div>
-  );
-}
 
 export function StyleView({ state, presets, brand, mode, onMode, onChanged, onError, onBack, onNext, onAsk }: Props) {
   const st = state.style?.[brand];
@@ -51,7 +42,6 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const [moreMain, setMoreMain] = useState(false);
   const [moreGray, setMoreGray] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [picked, setPicked] = useState<{ pairs: string; label: string } | null>(null);
 
   const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
   const pick = async (p: { main?: string; gray?: string; corners?: string; outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string; labelFont?: "body" | "heading" }, label: string) => {
@@ -70,7 +60,6 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const moodOf = (f: string) => preset.find((x) => x.family === f)?.mood ?? "Your font";
   const href = fontsHref([...fonts, ...headingFonts]);
   const roleRows = rows.filter((r) => r.layerId === "semantic" && r.type === "color" && r.source.startsWith("brands/") && !r.path.startsWith("color/chart/"));
-  const usedBy = (r: TokenRow) => new Set(dependents(g, r.path).filter((d) => d.layerId === "components").map((d) => d.path.split("/")[0])).size;
   const famUsed = (fam: string) => roleRows.some((r) => Object.values(r.values).some((v) => typeof v.raw === "string" && v.raw.includes(`{color.${fam}.`)));
   const vars = previewVars(rows, tmode);
 
@@ -85,11 +74,9 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   return (
     <div className="flex flex-col gap-4">
       {href && <link rel="stylesheet" href={href} precedence="default" />}
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-muted-foreground">Step 2 of 4</span>
-        <h1 className="text-2xl font-semibold tracking-tight">Style</h1>
-        <p className="text-muted-foreground">A few choices set the look of every component. Pick here, or just tell Claude in the chat what you want. Changes show up right away, and Undo takes them back.</p>
-      </div>
+      <StepIntro n={2} title="Style" decide="The values every component shares: colors, text, corners and effects, from the base values up to the parts that use them."
+        change="Start with the quick picks, then click anything in the full list below. Or tell Claude in the chat. Changes show at once; Undo takes them back."
+        done="Nothing blocks publishing, and each thing to look at is fixed or marked as on purpose." />
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[1_1_340px] flex-col gap-4">
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
@@ -210,22 +197,6 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
             </section>
           )}
 
-          <section className="flex flex-col gap-2 rounded-2xl border bg-background p-5">
-            <div><h2 className="text-base font-semibold">Your colors</h2><p className="text-sm text-muted-foreground">Every color your components use. To change one, pick it in Components or ask Claude.</p></div>
-            <ul className="flex flex-col">
-              {roleRows.map((r) => {
-                const n = usedBy(r);
-                return (
-                  <li key={r.path} className="flex items-center gap-3 border-b border-muted py-2 last:border-0">
-                    <span className="size-7 flex-none rounded-lg border" style={{ background: (r.values[tmode] ?? r.values.default)?.resolved ?? undefined }} />
-                    <span className="flex min-w-0 flex-1 flex-col leading-tight"><span className="text-sm font-semibold">{roleName(r.name)}</span><span className="text-xs text-muted-foreground">{roleHint(r.name)}</span></span>
-                    <span className="text-xs whitespace-nowrap text-muted-foreground">{n ? `Used in ${n} component${n > 1 ? "s" : ""}` : "Not used yet"}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
           {state.brands.length === 1 && (
             <section className="flex flex-wrap items-center gap-3 rounded-2xl border bg-background px-5 py-4">
               <span className="flex-[1_1_240px] text-sm"><strong>More than one brand?</strong> Same components, different colors and fonts.</span>
@@ -235,12 +206,6 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
         </div>
 
         <div className="flex min-w-0 flex-[999_1_380px] flex-col gap-4 lg:sticky lg:top-0">
-          <section className="flex flex-col gap-3.5 rounded-2xl border bg-background p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-base font-semibold">Preview</h2><ModeSwitch mode={mode} onMode={onMode} /></div>
-            <Sample vars={vars} onPick={(pairs, label) => setPicked(picked?.pairs === pairs ? null : { pairs, label })} picked={picked?.pairs} />
-            <p className="text-xs text-muted-foreground">A sample screen painted with your design system's values: click any part of it to change its colors or corners. The real components are in Components.</p>
-            {picked && <EditPanel state={state} g={g} brand={brand} mode={tmode} sel={{ title: picked.label, picks: picksFromNames(g, picked.pairs) }} onClose={() => setPicked(null)} onChanged={onChanged} onError={onError} onAsk={onAsk} />}
-          </section>
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
             <h2 className="text-base font-semibold">Things to look at</h2>
             {!nWarn && <p className="text-sm text-muted-foreground">Nothing right now. Plinth checks every change for text that's hard to read and colors that look alike.</p>}
@@ -259,8 +224,10 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
               </div>
             ))}
           </section>
+          <p className="px-1 text-sm text-muted-foreground">To see your real components with these values, go to Components: every component is on one page there.</p>
         </div>
       </div>
+      <TokenSheet state={state} g={g} brand={brand} mode={mode} onMode={onMode} catalog={presets?.components} onChanged={onChanged} onError={onError} onAsk={onAsk} />
       <GlassTool state={state} presets={presets} brand={brand} mode={tmode} rows={rows} onChanged={onChanged} onError={onError} />
       <ChartColors state={state} brand={brand} mode={tmode} page={(vars as Record<string, string>)["--background"]} onChanged={onChanged} onError={onError} />
       <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
@@ -296,60 +263,5 @@ function FontChoice({ family, name, mood, on, disabled, onPick }: { family: stri
       <span className="text-sm font-semibold">{name ?? family}</span>
       <span className="text-sm text-muted-foreground">{mood}</span>
     </button>
-  );
-}
-
-/**
- * A small budgeting screen drawn with the component tokens, so a change shows up the way components will show it.
- * With onPick, each part can be clicked (or reached with Tab and Enter) to change what it uses: data-pick lists its
- * "Prop=token-name" pairs.
- */
-export function Sample({ vars, onPick, picked }: { vars: React.CSSProperties; onPick?: (pairs: string, label: string) => void; picked?: string | null }) {
-  const v = (n: string) => `var(--${n})`;
-  const P = (pairs: string, label: string) => (onPick ? {
-    "data-pick": pairs, "data-label": label, "data-picked": picked === pairs ? "" : undefined, tabIndex: 0, role: "button", "aria-label": `Change ${label}`,
-    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onPick(pairs, label); } },
-  } : {});
-  const click = onPick ? (e: React.MouseEvent) => { const el = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]"); if (el) onPick(el.dataset.pick!, el.dataset.label!); } : undefined;
-  // The three font roles (older design systems have one font: font-sans).
-  const heading = { fontFamily: "var(--heading-font, var(--sans-font))" }, label = { fontFamily: "var(--label-font, var(--sans-font))" };
-  // The screen's corners follow the card inside it, one gap (p-5, 20px) wider, so the space between stays even;
-  // square cards get a square screen.
-  const px = (v: unknown) => { const m = /^([\d.]+)(px|rem)$/.exec(String(v ?? "").trim()); return m ? Number(m[1]) * (m[2] === "rem" ? 16 : 1) : null; };
-  const card = px((vars as Record<string, unknown>)["--card-radius"]);
-  const screen = card === null ? undefined : card > 0 ? `${card + 20}px` : "0px";
-  return (
-    <div className={onPick ? "pickable" : undefined} onClick={click}>
-    <div {...P("Background=background Text=foreground", "Page")} style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))", borderRadius: screen }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col"><span {...P("Text=muted-foreground", "Secondary text")} className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span {...P("Text=foreground", "Heading")} className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
-        <span {...P("Background=badge-default-background Text=badge-default-foreground Corners=badge-radius", "Badge")} className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
-      </div>
-      {/* A tab bar: the selected tab sits inside it, so it shows whether parts inside fit their container. */}
-      <div {...P("Background=tabs-list-background Text=tabs-list-foreground Corners=tabs-radius", "Tab bar")} className="flex gap-1 p-1 text-[13px]" style={{ ...label, background: v("tabs-list-background"), color: v("tabs-list-foreground"), borderRadius: v("tabs-radius") }}>
-        {["Week", "Month", "Year"].map((t) => (
-          <span key={t} {...(t === "Month" ? P("Background=tabs-trigger-active-background Text=tabs-trigger-active-foreground Corners=tabs-trigger-radius", "Selected tab") : {})} className="flex h-7 flex-1 items-center justify-center font-medium" style={t === "Month" ? { background: v("tabs-trigger-active-background"), color: v("tabs-trigger-active-foreground"), borderRadius: "var(--tabs-trigger-radius, var(--tabs-radius))" } : undefined}>{t}</span>
-        ))}
-      </div>
-      <div {...P("Background=card-container-background Text=card-container-foreground Border=card-container-border Corners=card-radius", "Card")} className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
-        <span {...P("Text=card-description-foreground", "Card description")} className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
-        <span className="text-[28px] leading-tight font-bold" style={heading}>$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
-        <span {...P("Background=muted Corners=pill-radius", "Progress track")} className="mt-2 block h-2 rounded-full" style={{ background: v("muted"), borderRadius: v("pill-radius") }}><span {...P("Background=primary Corners=pill-radius", "Progress")} className="block h-2 w-[62%] rounded-full" style={{ background: v("primary"), borderRadius: v("pill-radius") }} /></span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <label {...P("Text=label-text-foreground", "Field label")} className="text-sm font-semibold" style={{ ...label, color: v("label-text-foreground") }}>Search</label>
-        <span {...P("Background=input-field-background Border=input-field-border Hint_text=input-field-placeholder Corners=input-radius", "Text field")} className="flex h-11 items-center border px-3.5 text-[15px]" style={{ background: v("input-field-background"), borderColor: v("input-field-border"), color: v("input-field-placeholder"), borderRadius: v("input-radius") }}>Search expenses</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {[["Groceries", "secondary"], ["Paid", "success"], ["Over budget", "destructive"]].map(([t, k]) => (
-          <span key={t} {...P(`Background=badge-${k}-background Text=badge-${k}-foreground Corners=badge-radius`, `Badge (${t})`)} className="px-2.5 py-0.5 text-xs font-semibold" style={{ ...label, background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
-        ))}
-      </div>
-      <div className="flex gap-2.5">
-        <span {...P("Background=button-default-background Text=button-default-foreground Corners=button-radius", "Button")} className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ ...label, background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
-        <span {...P("Background=button-outline-background Text=button-outline-foreground Border=button-outline-border Corners=button-radius", "Outline button")} className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ ...label, background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
-      </div>
-    </div>
-    </div>
   );
 }

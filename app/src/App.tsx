@@ -141,7 +141,20 @@ export default function App() {
     : upToDate ? { text: "Live · nothing changed since", tone: "bg-success" }
     : { text: `Changed since it went live${round.versions ? ` · ${round.versions} saved version${round.versions > 1 ? "s" : ""} to publish` : ""}`, tone: "bg-warning" };
   const compName = componentLabel(state.components?.[0]?.id ?? "button", presets?.components);
-  const tips = effective === "components" ? [`Make the ${compName.toLowerCase()} a bit bigger`, "Add a loading state to Button", "Add a date picker"] : TIPS[effective] ?? [];
+  // What to ask Claude, led by what needs attention right now (then the usual examples).
+  const firstContrast = exists ? state.checks.contrast.find((c) => c.brand === brand && !c.pass && !c.accepted) : undefined;
+  const firstDistinct = exists ? state.checks.distinct.find((d) => d.brand === brand && !d.pass && !d.accepted) : undefined;
+  const firstHardcoded = exists ? state.checks.hardcoded.find((h) => !h.accepted && /^src\/components\//.test(h.file)) : undefined;
+  const now = effective === "style" ? [
+    firstContrast && `Make ${roleName(firstContrast.fg)} easier to read on ${roleName(firstContrast.bg.replace(/\/\d+$/, ""))}`,
+    firstDistinct && `Make ${roleName(firstDistinct.a)} and ${roleName(firstDistinct.b)} easier to tell apart`,
+  ] : effective === "components" ? [
+    firstHardcoded && `Use tokens instead of the fixed values in ${componentLabel(firstHardcoded.file.split("/")[2] ?? "", presets?.components)}`,
+  ] : effective === "publish" ? [
+    state.review?.result?.ok && "Fix what you suggested before I publish",
+  ] : [];
+  const usual = effective === "components" ? [`Make the ${compName.toLowerCase()} a bit bigger`, "Add a loading state to Button", "Add a date picker"] : TIPS[effective] ?? [];
+  const tips = [...now.filter((t): t is string => Boolean(t)), ...usual].slice(0, 3);
   const placeholder = effective === "style" ? "Tell Claude how the style should change" : effective === "components" ? "Tell Claude what to change in a component" : effective === "publish" ? "Ask Claude about your changes" : "Tell Claude what to change";
 
   return (

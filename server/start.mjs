@@ -90,7 +90,7 @@ const slug = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[^a
 export function fallbackSuggestions(product) {
   const t = String(product ?? "").toLowerCase();
   const kind = /shop|store|sell|cart|commerce|購物|商店/.test(t) ? "e-commerce" : /dashboard|admin|internal|team|後台|管理/.test(t) ? "saas-dashboard" : /site|landing|marketing|官網|網站/.test(t) ? "marketing-site" : "mobile-app";
-  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: KIND_COMPONENTS[kind], question: null, answers: [], by: "fallback" };
+  return { name: null, kind, feels: FEELS, palette: PALETTES[0].id, corners: "round", font: "Inter", components: KIND_COMPONENTS[kind], question: null, answers: [], why: {}, by: "fallback" };
 }
 
 const SUGGEST_PROMPT = (product) => `Suggest starting answers for a design system interview. Do not use any tools. Reply with one JSON object and nothing else.
@@ -106,7 +106,8 @@ JSON fields:
 - "font": one of ${FONTS.map((f) => `"${f.family}" (${f.mood})`).join(", ")}
 - "components": ids this product will likely need beyond button, text field, label, card and badge, from ${COMPONENTS.filter((c) => !c.core).map((c) => `"${c.id}"`).join(", ")}
 - "question": null, or one short follow-up question if the description is too vague to design for
-- "answers": when you ask a question, 2 or 3 likely short answers to it (a few words each), else []`;
+- "answers": when you ask a question, 2 or 3 likely short answers to it (a few words each), else []
+- "why": an object with "palette", "corners", "font" and "components": for each, one short sentence (at most 15 words, plain words) on why your pick fits this product`;
 
 function cleanSuggestions(raw, product) {
   const base = fallbackSuggestions(product);
@@ -122,6 +123,8 @@ function cleanSuggestions(raw, product) {
     components: Array.isArray(raw?.components) ? raw.components.filter((c) => COMPONENTS.some((x) => x.id === c && !x.core)) : [],
     question: typeof raw?.question === "string" && raw.question.trim() ? raw.question.trim().slice(0, 200) : null,
     answers: typeof raw?.question === "string" && Array.isArray(raw?.answers) ? raw.answers.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 60)).slice(0, 3) : [],
+    // Why each pick fits, shown with it (a pick Claude did not make, the preset fallback, gets no reason).
+    why: Object.fromEntries(["palette", "corners", "font", "components"].filter((k) => typeof raw?.why?.[k] === "string" && raw.why[k].trim() && raw?.[k] !== undefined).map((k) => [k, raw.why[k].trim().slice(0, 160)])),
     by: "claude",
   };
 }

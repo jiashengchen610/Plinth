@@ -41,7 +41,8 @@
     stop(e);
     picked = target(e.target);
     place(chosen, picked);
-    send({ type: "pick", chain: chain(picked), text: (picked.innerText || picked.getAttribute("aria-label") || "").trim().slice(0, 60) });
+    // On the page with every component (data-sheet sections), which component's section the click was in.
+    send({ type: "pick", chain: chain(picked), text: (picked.innerText || picked.getAttribute("aria-label") || "").trim().slice(0, 60), sheet: picked.closest("[data-sheet]")?.dataset.sheet ?? null });
   }, true);
   addEventListener("keydown", (e) => { if (on && e.key === "Escape") send({ type: "cancel" }); }, true);
   addEventListener("message", (e) => {
@@ -50,6 +51,14 @@
       on = !!e.data.on;
       document.documentElement.style.cursor = on ? "crosshair" : "";
       if (!on) { hovered = null; picked = null; place(hover, null); place(chosen, null); }
+    }
+    // Bring one component's section into view and mark it (the UI's list of components).
+    if (e.data.type === "reveal" && typeof e.data.sheet === "string") {
+      const section = [...document.querySelectorAll("[data-sheet]")].find((s) => s.dataset.sheet === e.data.sheet);
+      if (!section) return;
+      section.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      picked = section;
+      place(chosen, picked);
     }
   });
   send({ type: "ready" });

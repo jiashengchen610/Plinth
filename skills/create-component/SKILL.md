@@ -1,7 +1,7 @@
 ---
 name: create-component
 description: "This skill should be used when the user asks to \"make a component\", \"add a pricing card\", \"build this from the screenshot\", \"create a date picker\", \"turn this design into a component\", or wants a new or changed component in their design system. Writes a spec first, then the component, stories and tests using only the system's tokens and existing components, through the Plinth MCP tools."
-version: 0.5.3
+version: 0.5.4
 ---
 
 # Create a component
@@ -79,6 +79,9 @@ Story rules:
 - `title: "Components/<Group>/<Name>"` (or `Patterns/<Name>` for tier 2).
 - One story per variant and per state in the spec, with realistic content; static args.
 - A `play` test for any interaction; tag it `["!manifest"]`.
+- Every story also shows on the "All components" page (one page with every component). A story that opens an overlay
+  by itself through `open` or `defaultOpen` stays off it automatically; one that covers the page another way (a
+  fixed panel, a toast shown on mount) gets the tag `"!sheet"`.
 
 ## 4. Verify
 

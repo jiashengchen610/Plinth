@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, exceptionKey, type Deploy, type PublishDefaults, type State } from "@/lib/api";
+import { api, exceptionKey, type Deploy, type PublishDefaults, type RoundChanges, type State } from "@/lib/api";
 import { Cta } from "@/lib/cta";
 import { useVersionDraft, VersionField } from "@/lib/draft";
-import { fileName, isGenerated, roleName } from "@/lib/plain";
+import { componentLabel, fileName, isGenerated, partName, roleName, textPartName } from "@/lib/plain";
 import { Reply } from "@/views/ChatPanel";
+import { StepIntro } from "@/views/StepIntro";
 import { isPublishCommit, versionTitle, VersionTree } from "@/views/VersionTree";
 
 type Props = { state: State; onError: (m: string) => void; onAsk: (text: string) => void; onBack: () => void; onSaved: (m: string) => void; onNewRound: () => void };
@@ -84,11 +85,9 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-muted-foreground">Step 4 of 4 · optional</span>
-        <h1 className="text-2xl font-semibold tracking-tight">Publish</h1>
-        <p className="text-muted-foreground">Publishing puts your saved versions on GitHub and updates your component site, so your team can use them. You can skip it and keep working on your computer.</p>
-      </div>
+      <StepIntro n={4} note="optional" title="Publish" decide="Whether this round goes online: your saved versions go to GitHub, which tests every component and updates your component site for your team."
+        change="Read what changed and Claude's suggestions below; fix things in Style or Components, or ask Claude. You can also skip publishing and keep working on this computer."
+        done="GitHub has tested it and put it online. Then the steps start over for your next changes." />
 
       <DeployStatus d={deploy} onAsk={onAsk} onError={onError} onRetry={retry} />
 
@@ -108,6 +107,7 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
             {unsaved.length > 0 && <li className="text-muted-foreground">• Changes not saved yet</li>}
           </ul>
         )}
+        <ValuesChanged rev={state.rev} published={published} />
       </section>
 
       {review && (
@@ -213,6 +213,35 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
 const STEP_PLAIN = (step: string) => /npm test|test/i.test(step) ? "testing every component" : /check/i.test(step) ? "Plinth's checks" : /typecheck|tsc/i.test(step) ? "checking the code" : /deploy|pages/i.test(step) ? "putting the site online" : /install|npm ci/i.test(step) ? "installing" : step;
 /** "src/components/radio-group/radio-group.stories.tsx › Keyboard" → "Radio group › Keyboard" */
 const testName = (f: string) => f.replace(/^src\/components\/([^/]+)\/\S+ › /, (_m, id: string) => `${id[0].toUpperCase()}${id.slice(1).replace(/-/g, " ")} › `);
+
+/** This round's values, before → after, in plain names: what the team will see change. */
+function ValuesChanged({ rev, published }: { rev: number; published: boolean }) {
+  const [changes, setChanges] = useState<RoundChanges | null>(null);
+  const [all, setAll] = useState(false);
+  useEffect(() => { if (published) api.roundChanges().then((r) => setChanges(r.changes)).catch(() => setChanges(null)); }, [rev, published]);
+  if (!published || !changes?.tokens.length) return null;
+  const name = (path: string, token: string, layer: string | null) => {
+    if (layer === "components") { const comp = path.split("/")[0]; return `${componentLabel(comp)} · ${/\/font$/.test(path) ? textPartName(path) : partName(path)}`; }
+    return path.startsWith("color/") ? roleName(token) : token;
+  };
+  const shown = all ? changes.tokens : changes.tokens.slice(0, 10);
+  const swatch = (v: RoundChanges["tokens"][number]["before"]) => (v?.resolved && /^(#|oklch|rgb|hsl)/.test(v.resolved) ? <span className="size-4 flex-none rounded border" style={{ background: v.resolved }} /> : null);
+  const text = (v: RoundChanges["tokens"][number]["before"]) => (v ? String(v.resolved ?? JSON.stringify(v.value)).slice(0, 40) : "none");
+  return (
+    <div className="flex flex-col gap-1.5 border-t pt-3">
+      <h3 className="text-sm font-semibold">Values that changed ({changes.tokensChanged})</h3>
+      <ul className="flex flex-col gap-1 text-sm">
+        {shown.map((t) => (
+          <li key={`${t.path}|${t.brand}|${t.mode}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="min-w-0 flex-[1_1_200px] truncate">{name(t.path, t.token, t.layer)}{t.mode === "dark" ? <span className="text-muted-foreground"> · dark mode</span> : null}</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{swatch(t.before)}{swatch(t.before) ? null : text(t.before)}<span aria-label="becomes">→</span>{swatch(t.after)}{swatch(t.after) ? null : text(t.after)}</span>
+          </li>
+        ))}
+      </ul>
+      {changes.tokens.length > 10 && <button type="button" onClick={() => setAll(!all)} className="min-h-9 self-start text-sm font-medium text-info underline underline-offset-2">{all ? "Show fewer" : `Show all ${changes.tokens.length}`}</button>}
+    </div>
+  );
+}
 
 /**
  * What GitHub did after the push: it tests every component, then puts the site online, or stops and leaves the

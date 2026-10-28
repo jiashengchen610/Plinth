@@ -19,7 +19,7 @@ out({ type: "system", subtype: "init", session_id: session, cwd: process.cwd() }
 if (/crash/.test(prompt)) { process.stderr.write("boom\n"); process.exit(3); }
 // The Describe step's suggestion run: one JSON answer, no tools.
 if (/^Suggest starting answers/.test(prompt)) {
-  const json = JSON.stringify({ name: "Pocket", kind: "mobile-app", feels: ["Warm and trustworthy", "Calm", "Playful", "Focused"], palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch", "not-a-component"], question: null });
+  const json = JSON.stringify({ name: "Pocket", kind: "mobile-app", feels: ["Warm and trustworthy", "Calm", "Playful", "Focused"], palette: "blue-slate", corners: "pill", font: "Nunito", components: ["switch", "not-a-component"], question: null, why: { palette: "Blue reads as calm and trustworthy for money.", corners: "Soft pills feel friendly on a phone.", font: 42 } });
   out({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: json }] } });
   out({ type: "result", subtype: "success", is_error: false, result: json, session_id: session, total_cost_usd: 0.002, num_turns: 1 });
   process.exit(0);

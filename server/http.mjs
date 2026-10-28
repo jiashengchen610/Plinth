@@ -165,6 +165,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },
     "POST /api/part-color": async (req) => { needsWorkspace(); return tool("set_part_color", { ...(await readJson(req)), by: "you" }); },
+    // This round's values, before → after (Publish shows them). null before the first publish: everything is new.
+    "GET /api/round-changes": () => { needsWorkspace(); return { changes: ws.publishedRef(ctx.root) ? ws.changesSince(ctx.root) : null }; },
     // A short request about a picked element, turned into values for the user to confirm (nothing is written here).
     "POST /api/quick-edit": async (req) => { needsWorkspace(); return quickEdit(ctx.root, await readJson(req)); },
     "POST /api/glass": async (req) => { needsWorkspace(); return tool("set_glass", { ...(await readJson(req)), by: "you" }); },

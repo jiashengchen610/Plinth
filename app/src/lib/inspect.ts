@@ -1,5 +1,4 @@
-// What a picked element uses: the classes the Storybook picker reports (server/inspect.js) or the token names the
-// Style sample lists, mapped to token rows. Theme utilities come from token names (engine/tokens.mjs themeEntries):
+// What a picked element uses: the classes the Storybook picker reports (server/inspect.js), mapped to token rows. Theme utilities come from token names (engine/tokens.mjs themeEntries):
 // bg-<color>, text-<color>, border-<color>, rounded-<radius without "radius">, type-<text token without "-font">.
 import type { TokenRow } from "@/lib/api";
 import type { Graph } from "@/lib/tokens";
@@ -87,15 +86,4 @@ export function componentOfChain(chain: ChainLink[], components: string[]) {
     if (id) return id;
   }
   return null;
-}
-
-/** The Style sample's elements list "Prop=token-name" pairs (data-pick); this maps them to token rows. */
-export function picksFromNames(g: Graph, pairs: string): Pick[] {
-  return pairs.split(/\s+/).filter(Boolean).flatMap((pair) => {
-    const [prop, name] = pair.split("=");
-    const row = g.byName.get(name);
-    if (!row) return [];
-    const kind: Kind = row.type === "color" ? "color" : row.type === "typography" ? "text" : "radius";
-    return [{ row, prop: prop.replace(/_/g, " "), kind, state: null }];
-  });
 }

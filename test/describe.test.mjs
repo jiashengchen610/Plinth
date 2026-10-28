@@ -115,6 +115,7 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.equal(sugg.by, "claude");
   assert.equal(sugg.palette, "blue-slate");
   assert.deepEqual(sugg.components, ["switch"], "ids outside the catalog are dropped");
+  assert.deepEqual(Object.keys(sugg.why).sort(), ["corners", "palette"], "reasons come with picks; a reason that is not text is dropped");
   assert.equal((await api("api/suggest", { product: " " })).status, 400);
 
   // Create: scaffold and style at once, the guidelines through the chat, then the first version is saved.

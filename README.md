@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.12.1.** Tested by `npm test` (42 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.13.0.** Tested by `npm test` (42 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -119,20 +119,25 @@ npm. Sign-ins (Claude Code, GitHub) open the browser. GitHub is optional at this
 later from the Publish dialog. Skip the checks with `--no-setup`.
 
 Then the UI opens at http://localhost:4319. Keep the terminal window open while you use it. Four steps, each with
-its main button in the bar at the bottom of the screen:
+its main button in the bar at the bottom of the screen, and at the top what you decide there, how to change it and
+when the step is done:
 
 1. **Describe.** Say what you're making ("a budgeting app for young professionals"). Claude reads that one answer
    (a few seconds, a cheap model) and suggests the rest: how it should feel, a palette, corners, a font and the
-   components you'll likely need. Keep each suggestion with **Next**, pick another, say it your own way, or let Claude
+   components you'll likely need, each with a short reason. Keep each suggestion with **Next**, pick another, say it your own way, or let Claude
    decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
    and asks Claude in the chat to write the style guides and any extra components you picked. The result is saved as
    your first version. Dependencies for the preview install in the background (1–3 minutes, once).
-2. **Style.** Main color, grays, corners and fonts (a text font, a headings font or the same, and whether buttons and
-   labels follow text or headings), with a sample screen in light and dark. Corners: a preset, then outer (cards,
+2. **Style.** Quick picks for the main color, grays, corners and fonts (a text font, a headings font or the same, and
+   whether buttons and labels follow text or headings), then **Everything in your style**: every layer side by side,
+   in tabs for colors, text, corners and effects. The base values show only the ones in use (**All** shows the whole
+   palette); then your colors and other shared settings; then the parts of components that use them, grouped by
+   component. Click anything to highlight what it points at and what uses it, and change it in the edit panel (below);
+   base values never change. There is no sample screen: the real components are in Components. Corners: a preset, then outer (cards,
    dialogs, menus) and inner (buttons, fields) fine-tuned apart, and whether parts inside a container (tabs in the bar,
    options in a menu, close buttons in a corner) fit its corners: the container's radius minus the gap, so the space
    between stays even. Each pick re-points the roles at palette steps the engine chooses for readable text; a new font
-   joins the palette. Click any part of the sample screen to change what it uses in the edit panel (below). **Things to look at** lists text that is hard to read and colors that look alike, with **Fix it**
+   joins the palette. **Things to look at** lists text that is hard to read and colors that look alike, with **Fix it**
    or **That's on purpose**. **Glass** tunes the frosted material (color, how much of it shows, blur, how vivid what
    shows through is, edge light, a ripple in Chrome and Edge) live over color, text, black and white, with how its
    text reads over the darkest and the lightest backdrop and the least color that keeps it readable; **Save glass**
@@ -141,8 +146,11 @@ its main button in the bar at the bottom of the screen:
    blue-blind. Categories keep to the main color and the hues next to it, using lighter and darker steps, and reach
    for wider hues only when nothing closer stays apart. They follow the main color until someone picks one by hand.
    With all eight series in use, the two closest ones are near the limit of the check.
-3. **Components.** The real component in Storybook. **Pick something to change**, then click a part of the preview (a
-   button, a card, a field) to open the edit panel for it. Below the preview, a graph of how it gets its colors: its parts → your colors
+3. **Components.** Every real component on one page (a sticker sheet from your Storybook: each component with all its
+   stories, grouped like the sidebar). **Pick something to change**, then click a part (a button, a card, a field) to
+   open the edit panel for it and that component's details below; the list of components brings one into view. A
+   story that opens an overlay by itself (a dialog with `open` or `defaultOpen`), or one tagged `!sheet`, stays on its
+   component's own page (**Open its page**). Below, a graph of how the selected component gets its colors: its parts → your colors
    (roles), each labelled with the base color it uses. Click a part, then one of your colors, to connect them. To
    change one of your colors itself, click it again or press **Change**: pick from your palette (your own colors
    first, then Tailwind's) or any color on a color wheel, which Plinth turns into a 50–950 scale in your palette.
@@ -161,7 +169,8 @@ its main button in the bar at the bottom of the screen:
    bit darker", "rounder"): Claude (Haiku, one run, about 8 s and US$0.004) suggests values from your palette, corner
    steps and text styles, and nothing changes until you confirm, through the same question. Requests that need more
    (a shadow, a new variant, layout) offer **Continue in the chat**.
-4. **Publish** (optional). Claude drafts the description of your changes (change it if you like) and **Save and
+4. **Publish** (optional). It lists what this round changed: the versions, and the values before → after (colors as
+   swatches). Claude drafts the description of your changes (change it if you like) and **Save and
    publish** saves and publishes in one step; Claude's review appears (suggestions only). The first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
    does not work for private repositories there. After the push, the top of the page shows what GitHub does: testing,
