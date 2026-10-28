@@ -50,6 +50,8 @@ export type ChartView = {
   /** Who made them: Plinth now (from the main color's hues), Plinth 0.10 (the most different colors), or by hand. */
   safe: number; madeBy: "plinth" | "older" | "hand"; failing: { mode: string; kind: "contrast" | "distinct"; a: string; b?: string; vision?: string }[];
 };
+/** Claude's values for a short request about a picked element; chat: it needs more than values (ask in the chat). */
+export type QuickEdit = { changes: { path: string; kind: "color" | "radius" | "text"; to: string }[]; reply: string; chat: boolean; seconds?: number; cost?: number | null; error: string | null };
 /** A glass recipe: how much of its color shows, blur (px), saturation (1 = unchanged), edge light, ripple (0–1). */
 export type GlassRecipe = { tintOpacity: number; blur: number; saturation: number; highlight: number; distortion: number };
 export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
@@ -160,6 +162,10 @@ export const api = {
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
   style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
   removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),
+  /** One part's color: everywhere its color is used (scope role), or only this part with a new color (scope part). */
+  partColor: (b: { brand: string; part: string; color: string; mode: "default" | "dark"; scope: "role" | "part"; name?: string; title?: string }) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean; role: string; made?: boolean }>("POST", "/api/part-color", b)),
+  /** A short request about a picked element, turned into values to confirm (nothing is written). */
+  quickEdit: (b: { brand: string; mode: "default" | "dark"; title: string; picks: { path: string; prop: string; kind: string; state: string | null }[]; text: string }) => call<QuickEdit>("POST", "/api/quick-edit", b),
   roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
   glass: (brand: string, glass: GlassRecipe & { tint: string }) => edit("Saving the glass", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/glass", { brand, ...glass })),
   glassCheck: (brand: string, tint: string, tintOpacity: number) => call<{ foreground: string; contrast: { mode: string; backdrop: string; ratio: number | null; pass: boolean }[]; minOpacity: number | null }>("GET", `/api/glass-check?brand=${encodeURIComponent(brand)}&tint=${encodeURIComponent(tint)}&tintOpacity=${tintOpacity}`),

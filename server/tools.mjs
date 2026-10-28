@@ -9,7 +9,8 @@ import { runChecks, contrastFixes, glassContrast } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps, typographyUpgrade, componentRefresh } from "../engine/upgrade.mjs";
-import { GLASS_PRESETS, glassOps, readGlass, readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
+import { GLASS_PRESETS, glassOps, partColorOps, readGlass, readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
+import { colorName } from "../engine/color-names.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
 import { deployStatus } from "./publish.mjs";
@@ -248,6 +249,42 @@ export const TOOLS = [
       const ops = brands.flatMap((b) => chartOps(ctx.root, b));
       const result = ops.length ? write(ctx, { title: "Chart colors made from the palette", ops, by: a.by ?? "claude" }) : { title: "Chart colors made from the palette", files: [], unchanged: true };
       return { ...result, chart: Object.fromEntries(brands.map((b) => [b, chartView(ctx.root, b)])) };
+    },
+  },
+  {
+    name: "set_part_color",
+    description: "Change the color of one component part (a component token such as button/default/background) in one mode, the way the UI's edit panel does. scope \"role\": the color it uses changes, in every component that uses that color. scope \"part\": only this part changes: Plinth makes a new color of yours (a copy of the old one in every brand, so other brands keep their look; named `name` or by the engine), sets it, and points the part at it. color: a palette step (violet.600, white) or any CSS color (#9e5e00, oklch(…)), which joins the palette as a 50–950 scale (named paletteName or by the engine). Ask the user which scope they want when other parts use the same color. Written at once; undoable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Brand id; default: the default brand" },
+        part: { type: "string", description: "Component token path, e.g. button/default/background" },
+        color: { type: "string", description: "Palette step (violet.600) or any CSS color" },
+        mode: { type: "string", enum: ["default", "dark"], description: "default (light) or dark; default: default" },
+        scope: { type: "string", enum: ["role", "part"], description: "role: everywhere that color is used; part: only this part (a new color)" },
+        name: { type: "string", description: "With scope part: name of the new color, kebab-case" },
+        paletteName: { type: "string", description: "With a CSS color: its palette name, kebab-case" },
+        title: { type: "string", description: "Change title" },
+      },
+      required: ["part", "color", "scope"],
+    },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+      const mode = a.mode ?? "default";
+      let ops = [], color = String(a.color ?? "").trim(), added;
+      // Not a palette step: a color of its own, added to the palette in the same change.
+      if (!/^[a-z0-9-]+\.\d{2,3}$/i.test(color) && !/^(white|black)$/i.test(color)) {
+        const st = readStyle(ctx.root, brand);
+        const p = paletteColorOps(ctx.root, { name: a.paletteName || colorName(color, [...st.hues, ...st.grays]), value: color, templateDir: ws.TEMPLATE_DIR });
+        ops = p.ops; added = { name: p.name, shades: p.shades }; color = `${p.name}.${p.anchor}`;
+      }
+      const r = partColorOps(ctx.root, brand, { part: a.part, color, mode, scope: a.scope, name: a.name, added });
+      ops = [...ops, ...r.ops];
+      const title = a.title || (r.made ? `${a.part}: its own color ${r.role} (${color})` : `${r.role} → ${color}`) + (mode === "dark" ? " (dark)" : "");
+      if (!ops.length) return { title, files: [], unchanged: true, role: r.role, color };
+      return { ...write(ctx, { title, ops, by: a.by ?? "claude" }), role: r.role, made: r.made, color };
     },
   },
   {

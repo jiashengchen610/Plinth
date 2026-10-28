@@ -12,12 +12,14 @@ import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./
 import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 import { createSetup, presets, suggest } from "./start.mjs";
-import { draftVersionMessage } from "./quick.mjs";
+import { draftVersionMessage, quickEdit } from "./quick.mjs";
 import { colorName } from "../engine/color-names.mjs";
 import { readStyle } from "../engine/style.mjs";
 import { chartView } from "../engine/chart.mjs";
 
 const DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "dist");
+// The element picker a Storybook on this computer loads into a story (the template's .storybook/preview.tsx).
+const INSPECT = join(dirname(fileURLToPath(import.meta.url)), "inspect.js");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".woff2": "font/woff2", ".json": "application/json" };
 
 export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PORT) || 4319 } = {}) {
@@ -160,6 +162,9 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/setup": async (req) => { const answers = await readJson(req); const already = Boolean(ctx.setup.state()?.running); ctx.setup.start(answers).catch(() => {}); return { started: true, already }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },
+    "POST /api/part-color": async (req) => { needsWorkspace(); return tool("set_part_color", { ...(await readJson(req)), by: "you" }); },
+    // A short request about a picked element, turned into values for the user to confirm (nothing is written here).
+    "POST /api/quick-edit": async (req) => { needsWorkspace(); return quickEdit(ctx.root, await readJson(req)); },
     "POST /api/glass": async (req) => { needsWorkspace(); return tool("set_glass", { ...(await readJson(req)), by: "you" }); },
     "GET /api/chart": (_req, url) => { needsWorkspace(); return { chart: chartView(ctx.root, url.searchParams.get("brand") || loadConfig(ctx.root).defaultBrand || listBrands(ctx.root)[0]) }; },
     "POST /api/chart": async (req) => { needsWorkspace(); return tool("make_chart_colors", { ...(await readJson(req)), by: "you" }); },
@@ -216,6 +221,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
         if (!existsSync(file)) return send(res, 404, { error: "not found" });
         return send(res, 200, readFileSync(file), TYPES[extname(file)] ?? "application/octet-stream");
       }
+      if (url.pathname === "/inspect.js") return send(res, 200, readFileSync(INSPECT), "text/javascript");
       // static app
       let rel = normalize(decodeURIComponent(url.pathname)).replace(/^([\\/])+/, "");
       if (!rel || rel === "." ) rel = "index.html";

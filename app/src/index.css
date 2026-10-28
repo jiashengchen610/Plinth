@@ -180,3 +180,18 @@
     animation: none;
   }
 }
+
+/* The Style sample when its parts can be picked: the part under the pointer (not its parents) gets a dashed
+   outline, the picked one a solid one. */
+.pickable [data-pick] {
+  cursor: pointer;
+}
+.pickable [data-pick]:hover:not(:has([data-pick]:hover)),
+.pickable [data-pick]:focus-visible {
+  outline: 2px dashed var(--info);
+  outline-offset: 2px;
+}
+.pickable [data-picked] {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}

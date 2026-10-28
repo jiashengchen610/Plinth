@@ -4,6 +4,8 @@ import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleHint, roleName } from "@/lib/plain";
 import { buildGraph, dependents, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
+import { picksFromNames } from "@/lib/inspect";
+import { EditPanel } from "@/views/EditPanel";
 import { GlassTool } from "@/views/GlassTool";
 import { ChartColors } from "@/views/ChartColors";
 
@@ -49,6 +51,7 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
   const [moreMain, setMoreMain] = useState(false);
   const [moreGray, setMoreGray] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [picked, setPicked] = useState<{ pairs: string; label: string } | null>(null);
 
   const swatch = (fam: string, step: string) => rows.find((r) => r.path === `color/${fam}/${step}`)?.values.default?.resolved ?? null;
   const pick = async (p: { main?: string; gray?: string; corners?: string; outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string; labelFont?: "body" | "heading" }, label: string) => {
@@ -234,8 +237,9 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
         <div className="flex min-w-0 flex-[999_1_380px] flex-col gap-4 lg:sticky lg:top-0">
           <section className="flex flex-col gap-3.5 rounded-2xl border bg-background p-5">
             <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-base font-semibold">Preview</h2><ModeSwitch mode={mode} onMode={onMode} /></div>
-            <Sample vars={vars} />
-            <p className="text-xs text-muted-foreground">A sample screen painted with your design system's values. The real components are in Components.</p>
+            <Sample vars={vars} onPick={(pairs, label) => setPicked(picked?.pairs === pairs ? null : { pairs, label })} picked={picked?.pairs} />
+            <p className="text-xs text-muted-foreground">A sample screen painted with your design system's values: click any part of it to change its colors or corners. The real components are in Components.</p>
+            {picked && <EditPanel state={state} g={g} brand={brand} mode={tmode} sel={{ title: picked.label, picks: picksFromNames(g, picked.pairs) }} onClose={() => setPicked(null)} onChanged={onChanged} onError={onError} onAsk={onAsk} />}
           </section>
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
             <h2 className="text-base font-semibold">Things to look at</h2>
@@ -295,9 +299,18 @@ function FontChoice({ family, name, mood, on, disabled, onPick }: { family: stri
   );
 }
 
-/** A small budgeting screen drawn with the component tokens, so a change shows up the way components will show it. */
-export function Sample({ vars }: { vars: React.CSSProperties }) {
+/**
+ * A small budgeting screen drawn with the component tokens, so a change shows up the way components will show it.
+ * With onPick, each part can be clicked (or reached with Tab and Enter) to change what it uses: data-pick lists its
+ * "Prop=token-name" pairs.
+ */
+export function Sample({ vars, onPick, picked }: { vars: React.CSSProperties; onPick?: (pairs: string, label: string) => void; picked?: string | null }) {
   const v = (n: string) => `var(--${n})`;
+  const P = (pairs: string, label: string) => (onPick ? {
+    "data-pick": pairs, "data-label": label, "data-picked": picked === pairs ? "" : undefined, tabIndex: 0, role: "button", "aria-label": `Change ${label}`,
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onPick(pairs, label); } },
+  } : {});
+  const click = onPick ? (e: React.MouseEvent) => { const el = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]"); if (el) onPick(el.dataset.pick!, el.dataset.label!); } : undefined;
   // The three font roles (older design systems have one font: font-sans).
   const heading = { fontFamily: "var(--heading-font, var(--sans-font))" }, label = { fontFamily: "var(--label-font, var(--sans-font))" };
   // The screen's corners follow the card inside it, one gap (p-5, 20px) wider, so the space between stays even;
@@ -306,35 +319,37 @@ export function Sample({ vars }: { vars: React.CSSProperties }) {
   const card = px((vars as Record<string, unknown>)["--card-radius"]);
   const screen = card === null ? undefined : card > 0 ? `${card + 20}px` : "0px";
   return (
-    <div style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))", borderRadius: screen }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
+    <div className={onPick ? "pickable" : undefined} onClick={click}>
+    <div {...P("Background=background Text=foreground", "Page")} style={{ ...vars, background: v("background"), color: v("foreground"), fontFamily: "var(--body-font, var(--sans-font))", borderRadius: screen }} className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5 rounded-2xl border p-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col"><span className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
-        <span className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
+        <div className="flex flex-col"><span {...P("Text=muted-foreground", "Secondary text")} className="text-[13px]" style={{ color: v("muted-foreground") }}>October</span><span {...P("Text=foreground", "Heading")} className="text-[22px] leading-tight font-bold" style={heading}>Your budget</span></div>
+        <span {...P("Background=badge-default-background Text=badge-default-foreground Corners=badge-radius", "Badge")} className="px-2.5 py-0.5 text-[13px] font-semibold" style={{ ...label, background: v("badge-default-background"), color: v("badge-default-foreground"), borderRadius: v("badge-radius") }}>On track</span>
       </div>
       {/* A tab bar: the selected tab sits inside it, so it shows whether parts inside fit their container. */}
-      <div className="flex gap-1 p-1 text-[13px]" style={{ ...label, background: v("tabs-list-background"), color: v("tabs-list-foreground"), borderRadius: v("tabs-radius") }}>
+      <div {...P("Background=tabs-list-background Text=tabs-list-foreground Corners=tabs-radius", "Tab bar")} className="flex gap-1 p-1 text-[13px]" style={{ ...label, background: v("tabs-list-background"), color: v("tabs-list-foreground"), borderRadius: v("tabs-radius") }}>
         {["Week", "Month", "Year"].map((t) => (
-          <span key={t} className="flex h-7 flex-1 items-center justify-center font-medium" style={t === "Month" ? { background: v("tabs-trigger-active-background"), color: v("tabs-trigger-active-foreground"), borderRadius: "var(--tabs-trigger-radius, var(--tabs-radius))" } : undefined}>{t}</span>
+          <span key={t} {...(t === "Month" ? P("Background=tabs-trigger-active-background Text=tabs-trigger-active-foreground Corners=tabs-trigger-radius", "Selected tab") : {})} className="flex h-7 flex-1 items-center justify-center font-medium" style={t === "Month" ? { background: v("tabs-trigger-active-background"), color: v("tabs-trigger-active-foreground"), borderRadius: "var(--tabs-trigger-radius, var(--tabs-radius))" } : undefined}>{t}</span>
         ))}
       </div>
-      <div className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
-        <span className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
+      <div {...P("Background=card-container-background Text=card-container-foreground Border=card-container-border Corners=card-radius", "Card")} className="flex flex-col gap-1 border p-4" style={{ background: v("card-container-background"), color: v("card-container-foreground"), borderColor: v("card-container-border"), borderRadius: v("card-radius") }}>
+        <span {...P("Text=card-description-foreground", "Card description")} className="text-[13px]" style={{ color: v("card-description-foreground") }}>Spent so far</span>
         <span className="text-[28px] leading-tight font-bold" style={heading}>$1,240 <span className="text-[15px] font-normal" style={{ color: v("card-description-foreground") }}>of $2,000</span></span>
-        <span className="mt-2 block h-2 rounded-full" style={{ background: v("muted"), borderRadius: v("pill-radius") }}><span className="block h-2 w-[62%] rounded-full" style={{ background: v("primary"), borderRadius: v("pill-radius") }} /></span>
+        <span {...P("Background=muted Corners=pill-radius", "Progress track")} className="mt-2 block h-2 rounded-full" style={{ background: v("muted"), borderRadius: v("pill-radius") }}><span {...P("Background=primary Corners=pill-radius", "Progress")} className="block h-2 w-[62%] rounded-full" style={{ background: v("primary"), borderRadius: v("pill-radius") }} /></span>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold" style={{ ...label, color: v("label-text-foreground") }}>Search</label>
-        <span className="flex h-11 items-center border px-3.5 text-[15px]" style={{ background: v("input-field-background"), borderColor: v("input-field-border"), color: v("input-field-placeholder"), borderRadius: v("input-radius") }}>Search expenses</span>
+        <label {...P("Text=label-text-foreground", "Field label")} className="text-sm font-semibold" style={{ ...label, color: v("label-text-foreground") }}>Search</label>
+        <span {...P("Background=input-field-background Border=input-field-border Hint_text=input-field-placeholder Corners=input-radius", "Text field")} className="flex h-11 items-center border px-3.5 text-[15px]" style={{ background: v("input-field-background"), borderColor: v("input-field-border"), color: v("input-field-placeholder"), borderRadius: v("input-radius") }}>Search expenses</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {[["Groceries", "secondary"], ["Paid", "success"], ["Over budget", "destructive"]].map(([t, k]) => (
-          <span key={t} className="px-2.5 py-0.5 text-xs font-semibold" style={{ ...label, background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
+          <span key={t} {...P(`Background=badge-${k}-background Text=badge-${k}-foreground Corners=badge-radius`, `Badge (${t})`)} className="px-2.5 py-0.5 text-xs font-semibold" style={{ ...label, background: v(`badge-${k}-background`), color: v(`badge-${k}-foreground`), borderRadius: v("badge-radius") }}>{t}</span>
         ))}
       </div>
       <div className="flex gap-2.5">
-        <span className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ ...label, background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
-        <span className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ ...label, background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
+        <span {...P("Background=button-default-background Text=button-default-foreground Corners=button-radius", "Button")} className="flex h-11 flex-1 items-center justify-center text-[15px] font-semibold" style={{ ...label, background: v("button-default-background"), color: v("button-default-foreground"), borderRadius: v("button-radius") }}>Add expense</span>
+        <span {...P("Background=button-outline-background Text=button-outline-foreground Border=button-outline-border Corners=button-radius", "Outline button")} className="flex h-11 flex-1 items-center justify-center border text-[15px] font-semibold" style={{ ...label, background: v("button-outline-background"), color: v("button-outline-foreground"), borderColor: v("button-outline-border"), borderRadius: v("button-radius") }}>See all</span>
       </div>
+    </div>
     </div>
   );
 }

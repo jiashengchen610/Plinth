@@ -1,7 +1,7 @@
 ---
 name: change-design-system
 description: "This skill should be used when the user asks to change an existing design system: \"make the primary warmer\", \"rounder corners\", \"rename this token\", \"use Inter\", \"add a dark mode tweak\", \"add a second brand\", \"update our writing guidelines\", \"fix the contrast\", \"these two colors look the same\", \"undo the last change\", \"go back to yesterday's version\". Makes each change at once through the Plinth MCP tools, after reading the guidelines; the user can undo it and decides when to save a version."
-version: 0.3.0
+version: 0.3.1
 ---
 
 # Change a design system
@@ -26,6 +26,7 @@ Use `change` with a short imperative `title` (shown in the UI and on the Undo bu
 | Change a role (primary, muted …) | `set` it to another palette step, e.g. `{color.red.800}`; add `mode: "dark"` for the dark value. Change both modes unless asked otherwise. |
 | A color that is not in the palette | `add_palette_color` (name + color → a 50–950 scale), then point roles at it |
 | Change one component only | `set` its component token in `tokens/components/<component>.tokens.json` (e.g. `button/default/background` → `{color.accent}`); opacity with `alpha` |
+| One part's color, when other parts share its color | ask the user: only this part or everywhere? Then `set_part_color` with `scope: "part"` (a new color of its own, copied into every brand) or `scope: "role"`; any CSS color joins the palette in the same change |
 | Change every component that uses a role | change the role, not the component tokens |
 | A new layer between two others | `write` `tokens/layers/<id>.tokens.json` and `design-system.json` with the layer inserted in `layers`; tokens should point at their own layer or lower ones |
 | Old design system without layers | `upgrade_to_layers`; afterwards `link_to_palette` points fixed colors at the matching palette step |

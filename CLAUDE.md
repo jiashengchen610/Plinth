@@ -40,11 +40,17 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
 - One edit at a time: UI calls that write go through `edit()` in `app/src/lib/lock.ts` (`api.ts` wraps them), which
   locks the page until the write is done and the page has reloaded; a Claude reply locks it for the whole reply.
+- Picking to edit: the Style sample lists each part's tokens (`data-pick`); a story in Components loads
+  `server/inspect.js` from the Plinth UI (the managed `.storybook/preview.tsx` adds it only for a localhost Storybook
+  opened with `plinthInspect=<UI origin>`), which reports clicked classes by `postMessage`; `app/src/lib/inspect.ts`
+  maps them to tokens. The edit panel counts the reach itself and asks "only this / everywhere" before a shared
+  change (`set_part_color`); the request box is one Haiku run that returns values only (`quickEdit`), checked by the
+  server and confirmed by the user.
 - Before a release that changes template component files, run `node scripts/shipped-hashes.mjs` (the previous
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (37 tests).
+- After changing `engine/` or `server/`, run `npm test` (41 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (93 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
@@ -69,7 +75,12 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - `gh run view --log-failed` prints "job<TAB>step<TAB>timestamp text" lines; on Windows the color codes arrive written out
   as "^[[31m". Story tests that check visibility during a fade-in pass on Windows and fail on GitHub's Linux runner:
   wait for it (`waitFor`) or check the text.
-- Version descriptions by Haiku (one run, no tools): about 7 s, US$0.004.
+- Version descriptions by Haiku (one run, no tools): about 7 s, US$0.004. The edit panel's request box (Haiku, one
+  run, values only): 6.8–8.3 s, US$0.0035–0.0041; five requests on a button gave sensible values and sent "add a
+  shadow when hovered" to the chat.
+- Storybook 10.6.1 dev: a story iframe keeps extra query parameters (`plinthInspect`), `.storybook/preview.tsx` can
+  add a script from another localhost port, and `postMessage` to the parent page works (tested from a page on another
+  port).
 - shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
   `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,

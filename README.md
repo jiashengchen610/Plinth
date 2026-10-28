@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.11.0.** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.12.0.** Tested by `npm test` (41 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -132,7 +132,7 @@ its main button in the bar at the bottom of the screen:
    dialogs, menus) and inner (buttons, fields) fine-tuned apart, and whether parts inside a container (tabs in the bar,
    options in a menu, close buttons in a corner) fit its corners: the container's radius minus the gap, so the space
    between stays even. Each pick re-points the roles at palette steps the engine chooses for readable text; a new font
-   joins the palette. **Things to look at** lists text that is hard to read and colors that look alike, with **Fix it**
+   joins the palette. Click any part of the sample screen to change what it uses in the edit panel (below). **Things to look at** lists text that is hard to read and colors that look alike, with **Fix it**
    or **That's on purpose**. **Glass** tunes the frosted material (color, how much of it shows, blur, how vivid what
    shows through is, edge light, a ripple in Chrome and Edge) live over color, text, black and white, with how its
    text reads over the darkest and the lightest backdrop and the least color that keeps it readable; **Save glass**
@@ -141,7 +141,8 @@ its main button in the bar at the bottom of the screen:
    blue-blind. Categories keep to the main color and the hues next to it, using lighter and darker steps, and reach
    for wider hues only when nothing closer stays apart. They follow the main color until someone picks one by hand.
    With all eight series in use, the two closest ones are near the limit of the check.
-3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
+3. **Components.** The real component in Storybook. **Pick something to change**, then click a part of the preview (a
+   button, a card, a field) to open the edit panel for it. Below the preview, a graph of how it gets its colors: its parts → your colors
    (roles), each labelled with the base color it uses. Click a part, then one of your colors, to connect them. To
    change one of your colors itself, click it again or press **Change**: pick from your palette (your own colors
    first, then Tailwind's) or any color on a color wheel, which Plinth turns into a 50–950 scale in your palette.
@@ -150,6 +151,16 @@ its main button in the bar at the bottom of the screen:
    A design system made by an older Plinth gets an **Upgrade** for what newer components use (components someone
    edited stay as they are). Add ready-made
    components (free, at once), ask Claude for others, or remove ones nothing else uses.
+
+   **The edit panel** lists what the picked part uses in plain words (background, text, border, corners, text style,
+   and the same in other states such as on hover), each with **Change**: one of your colors, the palette or the color
+   wheel for colors, the corner steps, the text styles. When other components use the same color or corners, it asks
+   first, with the count: **Only** this part (a new color of its own, copied into every brand so the others keep
+   their look, with a name Plinth drafts and you can change; or corners of its own) or **Everywhere**. Text that a
+   change makes hard to read shows in the panel with **Fix it**. **Or say what you want** takes a short request ("a
+   bit darker", "rounder"): Claude (Haiku, one run, about 8 s and US$0.004) suggests values from your palette, corner
+   steps and text styles, and nothing changes until you confirm, through the same question. Requests that need more
+   (a shadow, a new variant, layout) offer **Continue in the chat**.
 4. **Publish** (optional). Claude drafts the description of your changes (change it if you like) and **Save and
    publish** saves and publishes in one step; Claude's review appears (suggestions only). The first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
@@ -287,6 +298,7 @@ previous Storybook online.
 | Your messages, attached images, and the token / guideline / component content Claude reads through the tools | Anthropic, through your Claude Code sign-in | **Yes**, the same as any Claude Code session. Plinth's own code is never sent. |
 | The review at publish: the changes since the last publish and the guidelines | Anthropic, through your Claude Code sign-in | **Yes** |
 | Your first answer in Describe (what you're making), for the suggestions | Anthropic, through your Claude Code sign-in | **Yes**: only that text, no files |
+| A request in the edit panel ("a bit darker"), for suggested values | Anthropic, through your Claude Code sign-in | **Yes**: that text, the picked part's token names and current colors, and the names of your palette, corner steps and text styles; no files |
 | Plinth UI, engine, checks, tests | localhost (127.0.0.1 only, per-session token) | No |
 | Install dependencies | the npm registry, and Playwright's browser download | Package requests only |
 | Fonts | Google Fonts, from the browser showing Storybook, your app, or the font choices in the Plinth UI | Font requests only (no content) |
@@ -309,6 +321,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `undo` | Take back the newest change |
 | `set_style` | Main color, grays, corners (preset, outer, inner, whether parts inside fit), text font, headings font, what buttons and labels follow (what the Style step does): roles re-pointed at readable palette steps, new fonts added to the palette |
 | `set_role_color` | One role on a palette step in one mode (what picking from the palette in Components does); the other mode follows in the same family |
+| `set_part_color` | One component part's color in one mode, everywhere its color is used or only this part (a new color, copied into every brand); any CSS color joins the palette in the same change (what the edit panel does) |
 | `set_glass` | The glass material (preset, color, opacity, blur, saturation, edge light, ripple), with how its text reads over black and white |
 | `make_chart_colors` | Make the chart colors from the main color again (categories near its hue, kept apart for color vision deficiencies; low to high; around a middle) |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
@@ -350,6 +363,7 @@ design-system folder.
 | `PLINTH_REVIEW_MODEL` | `haiku` | Model for the review at publish |
 | `PLINTH_SUGGEST_MODEL` | `haiku` | Model for the suggestions after the first answer in Describe (one run, no tools) |
 | `PLINTH_DRAFT_MODEL` | `haiku` | Model that drafts the description of a version for you to confirm (one run, no tools) |
+| `PLINTH_QUICK_MODEL` | `haiku` | Model that turns a request in the edit panel into values for you to confirm (one run, no tools) |
 | `PLINTH_NO_INSTALL` | unset | Set it to stop Create from installing dependencies (tests, CI) |
 | `PLINTH_CLAUDE_BIN` | `claude` | Claude Code executable |
 
@@ -359,11 +373,12 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Limitations and known issues
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
-- Decided but not built yet (PRD, "下一版"): changing a token by clicking the element in the Style sample or the
-  component preview, with a short prompt box and a question when the change would reach other components;
-  starting from something you have (a Storybook, a website, a GitHub repo; the Describe step shows the option as
-  coming later), and a shadcn registry plus `plinth connect` so product repos get components and ask Plinth for new
-  ones.
+- Decided but not built yet (PRD, "下一版"): starting from something you have (a Storybook, a website, a GitHub repo;
+  the Describe step shows the option as coming later), and a shadcn registry plus `plinth connect` so product repos
+  get components and ask Plinth for new ones.
+- The edit panel changes colors, corners and text styles only (not shadows, spacing or motion), and picking in the
+  preview works only for a Storybook on this computer (the published component site never loads the picker). Several
+  changes from one request are applied one after another, so each is its own Undo step.
 - The five template components can't be removed: the Foundations pages of the component site use them.
 - Not built yet, although the PRD lists them: importing DTCG / Tokens Studio / DESIGN.md files, the token usage
   index ("used by these components"), screenshot previews, behavior that depends on the context (mobile vs
@@ -388,7 +403,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 37 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 41 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

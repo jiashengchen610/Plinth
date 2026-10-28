@@ -24,6 +24,15 @@ if (/^Suggest starting answers/.test(prompt)) {
   out({ type: "result", subtype: "success", is_error: false, result: json, session_id: session, total_cost_usd: 0.002, num_turns: 1 });
   process.exit(0);
 }
+// A request about a picked element: the first listed path to violet.700, plus one change the server must drop
+// (a path that was not picked); "animate" asks for the chat instead.
+if (/^You turn a request about one picked element/.test(prompt)) {
+  const first = (prompt.match(/\n- ([^:\s]+):/) ?? [])[1] ?? "";
+  const json = /animate/.test(prompt) ? JSON.stringify({ changes: [], reply: "Claude in the chat can add that.", chat: true })
+    : JSON.stringify({ changes: [{ path: first, to: "violet.700" }, { path: "not/picked", to: "red.500" }], reply: "A deeper violet.", chat: false });
+  out({ type: "result", subtype: "success", is_error: false, result: json, session_id: session, total_cost_usd: 0.003, num_turns: 1 });
+  process.exit(0);
+}
 // The description of a version: one line, no tools. Echoes the first change it was given, so tests can tell.
 if (/^Describe a saved version/.test(prompt)) {
   const first = (prompt.match(/\n- (.+)/) ?? [])[1] ?? "nothing";

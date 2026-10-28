@@ -128,7 +128,7 @@ export function NodeGraph({ g, mode, brand, parts, selected, onSelect, onEdit, o
 }
 
 /** The whole palette, one row per color: your own colors first, then Tailwind's, then white and black. */
-function PaletteGrid({ g, mode, current, onPick }: { g: Graph; mode: Mode; current: TokenRow | null; onPick: (color: string, name: string) => void }) {
+export function PaletteGrid({ g, mode, current, onPick }: { g: Graph; mode: Mode; current: TokenRow | null; onPick: (color: string, name: string) => void }) {
   const rows = useMemo(() => {
     const hues = paletteHues(g);
     const scales = hues.filter((h) => h.steps.length > 1);

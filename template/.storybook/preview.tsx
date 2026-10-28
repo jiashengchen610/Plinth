@@ -21,6 +21,17 @@ const channel = addons.getChannel();
 channel.on("globalsUpdated", ({ globals }: { globals: Record<string, unknown> }) => apply(globals));
 channel.on("setGlobals", ({ globals }: { globals: Record<string, unknown> }) => apply(globals));
 
+// The Plinth UI on this computer can pick an element in a story to change its tokens: it opens the story with
+// plinthInspect=<its own address>, and the picker loads from there. Only for a Storybook on this computer, so the
+// published component site never loads it.
+const plinth = new URLSearchParams(location.search).get("plinthInspect");
+const local = (host: string) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
+if (plinth && local(location.hostname) && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(plinth)) {
+  const script = document.createElement("script");
+  script.src = `${plinth}/inspect.js`;
+  document.head.append(script);
+}
+
 const withBrandAndMode: Decorator = (Story, context) => {
   apply(context.globals);
   return Story();

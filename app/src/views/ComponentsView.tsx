@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry, type TokenRow } from "@/lib/api";
 import { Cta } from "@/lib/cta";
+import { componentOfChain, picksFromChain, type ChainLink } from "@/lib/inspect";
+import { EditPanel } from "@/views/EditPanel";
 import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
 import { buildGraph, componentOf, remindersByToken, targetIn, valueIn, type Mode } from "@/lib/tokens";
 import { NodeGraph } from "@/views/NodeGraph";
@@ -32,7 +34,44 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   }, [state.storybook, state.rev]);
 
   const component = state.components.find((c) => c.id === selected) ?? state.components[0];
-  useEffect(() => { setPart(null); setTextPart(null); setVariant(""); setConfirmRemove(false); }, [component?.id]);
+  // Picking in the preview: the story runs Plinth's picker (server/inspect.js), which says when it is ready and
+  // reports a click as the classes of the element and its parents.
+  const frame = useRef<HTMLIFrameElement>(null);
+  const srcRef = useRef<string | null>(null);
+  const [readyFor, setReadyFor] = useState<{ src: string | null; at: number } | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<{ chain: ChainLink[]; text: string } | null>(null);
+  const sbOrigin = state.storybook ? new URL(state.storybook).origin : null;
+  useEffect(() => {
+    if (!sbOrigin) return;
+    const on = (e: MessageEvent) => {
+      if (e.origin !== sbOrigin || e.data?.source !== "plinth-inspect") return;
+      if (e.data.type === "ready") setReadyFor({ src: srcRef.current, at: Date.now() });
+      else if (e.data.type === "pick" && Array.isArray(e.data.chain)) setPicked({ chain: e.data.chain, text: String(e.data.text ?? "") });
+      else if (e.data.type === "cancel") setPicking(false);
+    };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, [sbOrigin]);
+  useEffect(() => {
+    if (!sbOrigin || !readyFor || readyFor.src !== srcRef.current) return;
+    frame.current?.contentWindow?.postMessage({ source: "plinth-ui", type: "inspect", on: picking }, sbOrigin);
+  }, [picking, readyFor, sbOrigin]);
+  // Esc stops picking here too (the picker hears it only while the preview has focus).
+  useEffect(() => {
+    if (!picking) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setPicking(false); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [picking]);
+  useEffect(() => { setPart(null); setTextPart(null); setVariant(""); setConfirmRemove(false); setPicked(null); }, [component?.id]);
+  // A picked color part of this component is also selected in the graph below.
+  useEffect(() => {
+    if (!picked || !component) return;
+    const p = picksFromChain(g, picked.chain, state.components.map((c) => c.id)).find((x) => x.kind === "color" && !x.state && componentOf(x.row) === component.id);
+    if (p) { setVariant(variantOf(p.row.path)); setPart(p.row.path); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
   const reminders = useMemo(() => remindersByToken(state, brand, tmode), [state, brand, tmode]);
   if (!component) return <p className="text-muted-foreground">No components yet. Ask Claude to add one.</p>;
 
@@ -53,7 +92,11 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const docs = entries.find((e) => e.type === "docs" && e.importPath.includes(`/components/${component.id}/`));
   const firstStory = entries.find((e) => e.type === "story" && e.importPath.includes(`/components/${component.id}/`));
   const target = docs ?? firstStory;
-  const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}` : null;
+  const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}&plinthInspect=${encodeURIComponent(location.origin)}` : null;
+  srcRef.current = src;
+  const ready = !!src && readyFor?.src === src;
+  const ids = state.components.map((c) => c.id);
+  const sel = picked ? { title: `${componentLabel(componentOfChain(picked.chain, ids) ?? component.id, catalog)}${picked.text ? ` · “${picked.text.length > 28 ? `${picked.text.slice(0, 27)}…` : picked.text}”` : ""}`, picks: picksFromChain(g, picked.chain, ids) } : null;
   const deps = state.deps;
   const name = componentLabel(component.id, catalog);
   const missing = (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id));
@@ -126,7 +169,14 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
               </div>
             )}
             {src ? (
-              <iframe title={`${name} preview`} src={src} className="h-[420px] w-full rounded-xl border bg-white" />
+              <>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <button type="button" aria-pressed={picking} disabled={!ready} onClick={() => setPicking(!picking)} className={`min-h-10 rounded-lg border-2 px-3.5 text-sm font-semibold disabled:opacity-50 ${picking ? "border-info bg-info/10" : "border-border"}`}>{picking ? "Stop picking" : "Pick something to change"}</button>
+                  <span className="flex-[1_1_220px] text-xs text-muted-foreground">{!ready ? "Getting the preview ready for picking…" : picking ? "Click a part of the preview: a button, a card, a field. Esc stops." : "Then click a part of the preview to change its colors, corners or text."}</span>
+                </div>
+                <iframe ref={frame} title={`${name} preview`} src={src} className={`h-[420px] w-full rounded-xl border bg-white ${picking ? "ring-2 ring-info" : ""}`} />
+                {sel && <EditPanel state={state} g={g} brand={brand} mode={tmode} sel={sel} onClose={() => setPicked(null)} onChanged={onChanged} onError={onError} onAsk={onAsk} />}
+              </>
             ) : (
               <div className="flex flex-col items-start gap-2.5 rounded-xl border border-dashed p-6">
                 <h3 className="font-semibold">{deps.installing ? "Getting the preview ready…" : state.storybook ? "No preview for this component yet" : deps.installed ? "The preview isn't running" : "The preview tools aren't installed"}</h3>

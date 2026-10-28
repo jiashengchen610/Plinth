@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { contrastRatio } from "./color.mjs";
-import { glassRecipe } from "./tokens.mjs";
+import { glassRecipe, listBrands, resolveBrand } from "./tokens.mjs";
 
 const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
 /** Palette families used as grays. Picking one as the main color gives a black-and-white look. */
@@ -269,12 +269,13 @@ export function styleOps(root, brand, { main, gray, corners, outer, inner, fitIn
  * Ops that point one color role at a palette step in one mode: { role: "primary", color: "blue.600", mode: "dark" }.
  * The other mode moves to the same family at the step it already uses, so the role stays one color in light and dark
  * (white, black and fixed values stay). A role with no dark value of its own follows the light one as before.
- * added: a palette color being added in the same change ({ name, shades }), so the role can point at it already.
+ * added: a palette color being added in the same change ({ name, shades }), so the role can point at it already;
+ * node: the role's values when it is being made in the same change.
  */
-export function roleColorOps(root, brand, { role, color, mode = "default", added } = {}) {
+export function roleColorOps(root, brand, { role, color, mode = "default", added, node } = {}) {
   const file = brandFile(brand);
   if (!existsSync(join(root, file))) throw new Error(`no brand ${brand}`);
-  const t = Object.fromEntries(colorRoles(root, brand))[role];
+  const t = node ?? Object.fromEntries(colorRoles(root, brand))[role];
   if (!t) throw new Error(`no color role ${role}`);
   if (!["default", "dark"].includes(mode)) throw new Error(`no mode ${mode}`);
   const [fam, step] = String(color ?? "").replace(/^\{|\}$/g, "").replace(/^color\./, "").split(/[./-](?=[^./-]*$)/);
@@ -295,6 +296,65 @@ export function roleColorOps(root, brand, { role, color, mode = "default", added
   const otherStep = otherRef?.split(".")[2];
   if (cur[other] !== undefined && otherFam && otherStep && step && otherFam !== fam && fams[fam]?.[otherStep]) set(other, `{color.${fam}.${otherStep}}`);
   return ops;
+}
+
+/**
+ * The name a part's own color gets: the old color plus the component ("primary-button"), or the component plus what
+ * the part is when the color is already named after the component ("card-background", not "card-card").
+ * The UI drafts the same name (app/src/views/EditPanel.tsx).
+ */
+export function newColorName(old, part) {
+  const segs = part.split("/");
+  const component = segs[0];
+  return old === component || old.startsWith(`${component}-`) ? `${component}-${segs.at(-1)}` : `${old}-${component}`;
+}
+
+/** Which of the brand's colors a component part uses in a mode, from its token: "card" for {color.card}; else null. */
+export function partRole(root, brand, part, mode = "default") {
+  const t = resolveBrand(root, brand).tokens.find((x) => x.key === part);
+  if (!t) throw new Error(`no token ${part}`);
+  if (t.type !== "color") throw new Error(`${part} is not a color`);
+  const role = ref((t.values[mode] ?? t.values.default)?.raw)?.replace(/^color\./, "") ?? null;
+  return role && Object.fromEntries(colorRoles(root, brand))[role] ? role : null;
+}
+
+/**
+ * Ops that change the color of one component part ("button/default/background") in one mode, the way the UI's edit
+ * panel does. scope "role": the color the part uses changes, in every component that uses it (roleColorOps). scope
+ * "part": only this part changes: a new color (named `name`, else the old color's name plus the component's) is made
+ * in every brand as a copy of the old one, set to `color` in this brand and mode, and the part points at it.
+ * color: a palette step ("violet.600"); added: a palette color being added in the same change ({ name, shades }).
+ * @returns {{ ops: object[], role: string, made: boolean }} role: the color the part uses afterwards.
+ */
+export function partColorOps(root, brand, { part, color, mode = "default", scope = "role", name, added } = {}) {
+  const old = partRole(root, brand, part, mode);
+  if (!old) throw new Error(`${part} does not use one of your colors in ${mode === "dark" ? "dark" : "light"} mode`);
+  if (scope === "role") return { ops: roleColorOps(root, brand, { role: old, color, mode, added }), role: old, made: false };
+  if (scope !== "part") throw new Error(`no scope ${scope}`);
+  const brands = listBrands(root);
+  const taken = new Set([...brands.flatMap((b) => colorRoles(root, b).map(([k]) => k)), ...resolveBrand(root, brand).tokens.map((t) => t.name)]);
+  const asked = String(name ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (asked && taken.has(asked)) throw new Error(`${asked} is already a color or token name`);
+  const draft = newColorName(old, part);
+  let fresh = asked || draft;
+  for (let i = 2; taken.has(fresh); i++) fresh = `${draft}-${i}`;
+  const ops = [];
+  const mine = Object.fromEntries(colorRoles(root, brand))[old];
+  for (const b of brands) {
+    // A brand without the old color gets this brand's, so the part never points at nothing.
+    const node = Object.fromEntries(colorRoles(root, b))[old] ?? mine;
+    ops.push({ op: "set", file: brandFile(b), path: `color/${fresh}`, type: "color", value: node.$value, description: `${part.replaceAll("/", " ")} only (made from ${old})` });
+    if (darkOf(node) !== undefined) ops.push({ op: "set", file: brandFile(b), path: `color/${fresh}`, mode: "dark", value: darkOf(node) });
+  }
+  ops.push(...roleColorOps(root, brand, { role: fresh, color, mode, added, node: mine }));
+  // The part points at the new color in the mode changed, and in the other mode too while it uses the old one there.
+  const file = resolveBrand(root, brand).tokens.find((x) => x.key === part).source;
+  const own = part.split("/").reduce((n, k) => n?.[k], readJson(root, file));
+  const v = `{color.${fresh}}`, was = `{color.${old}}`;
+  // In dark mode only the dark value moves (light keeps the old color).
+  ops.push({ op: "set", file, path: part, ...(mode === "dark" ? { mode: "dark" } : {}), value: v });
+  if (mode === "default" && darkOf(own) === was) ops.push({ op: "set", file, path: part, mode: "dark", value: v });
+  return { ops, role: fresh, made: true };
 }
 
 // ---------------- glass ----------------
