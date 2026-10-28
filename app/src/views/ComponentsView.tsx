@@ -4,7 +4,6 @@ import { api, type ChangeResult, type Op, type Presets, type State, type StoryEn
 import { Cta } from "@/lib/cta";
 import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
 import { buildGraph, componentOf, remindersByToken, targetIn, valueIn, type Mode } from "@/lib/tokens";
-import { AddColor } from "@/views/AddColor";
 import { NodeGraph } from "@/views/NodeGraph";
 import { TypeGraph } from "@/views/TypeGraph";
 import { ModeSwitch } from "@/views/StyleView";
@@ -24,7 +23,6 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const [variant, setVariant] = useState("");
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [addingColor, setAddingColor] = useState(false);
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const catalog = presets?.components;
 
@@ -149,7 +147,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
             <div>
               <h2 className="text-base font-semibold">How {name} gets its colors</h2>
-              <p className="text-sm text-muted-foreground">Pick a part, then click one of your colors to connect it, or a base color to change that color itself. Light and dark mode each have their own: switch with Light and Dark above. Or tell Claude in the chat.</p>
+              <p className="text-sm text-muted-foreground">Pick a part, then click one of your colors to connect it. To change the color itself, click it again or use Change: pick from your palette or any color on the wheel. Light and dark mode each have their own: switch with Light and Dark above. Or tell Claude in the chat.</p>
             </div>
             {variants.length > 1 && (
               <div role="group" aria-label="Kind" className="flex flex-wrap gap-1.5">
@@ -158,9 +156,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
                 ))}
               </div>
             )}
-            <NodeGraph g={g} mode={tmode} parts={shown} selected={part} onSelect={setPart} onEdit={onEdit} onRoleColor={roleColor} />
-            {addingColor ? <AddColor hint="Plinth makes lighter and darker versions of it; they show up first in the base colors." onAdded={(r) => { onChanged(r, `Added ${r.name}.`); setAddingColor(false); }} onError={onError} />
-              : <button type="button" onClick={() => setAddingColor(true)} className="min-h-10 self-start text-sm font-medium text-info underline underline-offset-2">Add your own base color</button>}
+            <NodeGraph g={g} mode={tmode} brand={brand} parts={shown} selected={part} onSelect={setPart} onEdit={onEdit} onRoleColor={roleColor} onAdded={(r, title) => onChanged(r, title)} onError={onError} />
             {radius && <p className="text-sm text-muted-foreground">{partName(radius.path)} follow the corners you picked in Style.</p>}
             {fitted.map((f) => (
               <p key={f.path} className="text-sm text-muted-foreground">{cornersOf(f.path)}: {px(valueIn(f, tmode)?.resolved)}, {f.fit!.on ? <>fitting inside {f.fit!.outer === `${component.id}/radius` ? `the corners of ${name}` : `the ${cornersOf(f.fit!.outer).toLowerCase()}`} ({px(g.byKey.get(f.fit!.outer) ? valueIn(g.byKey.get(f.fit!.outer)!, tmode)?.resolved : null)}) so the gap stays even.</> : <>its own. Turn on "Fit its corners" in Style to keep the gap to its container even.</>}</p>

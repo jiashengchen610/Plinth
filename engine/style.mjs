@@ -269,15 +269,16 @@ export function styleOps(root, brand, { main, gray, corners, outer, inner, fitIn
  * Ops that point one color role at a palette step in one mode: { role: "primary", color: "blue.600", mode: "dark" }.
  * The other mode moves to the same family at the step it already uses, so the role stays one color in light and dark
  * (white, black and fixed values stay). A role with no dark value of its own follows the light one as before.
+ * added: a palette color being added in the same change ({ name, shades }), so the role can point at it already.
  */
-export function roleColorOps(root, brand, { role, color, mode = "default" } = {}) {
+export function roleColorOps(root, brand, { role, color, mode = "default", added } = {}) {
   const file = brandFile(brand);
   if (!existsSync(join(root, file))) throw new Error(`no brand ${brand}`);
   const t = Object.fromEntries(colorRoles(root, brand))[role];
   if (!t) throw new Error(`no color role ${role}`);
   if (!["default", "dark"].includes(mode)) throw new Error(`no mode ${mode}`);
   const [fam, step] = String(color ?? "").replace(/^\{|\}$/g, "").replace(/^color\./, "").split(/[./-](?=[^./-]*$)/);
-  const fams = families(root);
+  const fams = { ...families(root), ...(added ? { [added.name]: added.shades } : {}) };
   const single = (f) => readJson(root, PRIMITIVES).color?.[f]?.$value !== undefined;
   const value = step && fams[fam]?.[step] ? `{color.${fam}.${step}}` : !step && single(fam) ? `{color.${fam}}` : null;
   if (!value) throw new Error(`no palette color ${color}`);

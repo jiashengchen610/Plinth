@@ -152,7 +152,7 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/exceptions/remove": async (req) => { needsWorkspace(); return ws.removeException(ctx.root, await readJson(req)); },
     // A name for a color the user is about to add, for them to confirm: the nearest color word the palette lacks.
     "GET /api/color-name": (_req, url) => { needsWorkspace(); const st = readStyle(ctx.root, loadConfig(ctx.root).defaultBrand ?? listBrands(ctx.root)[0]); return { name: colorName(url.searchParams.get("color") ?? "#888888", [...st.hues, ...st.grays]) }; },
-    "POST /api/palette": async (req) => { needsWorkspace(); return tool("add_palette_color", await readJson(req)); },
+    "POST /api/palette": async (req) => { needsWorkspace(); return tool("add_palette_color", { ...(await readJson(req)), by: "you" }); },
     "POST /api/upgrade": () => { needsWorkspace(); return tool("upgrade_to_layers"); },
     // The Describe step: presets, Claude's suggestions after the first answer, and creating from the answers.
     "GET /api/presets": () => presets(),

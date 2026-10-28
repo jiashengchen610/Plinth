@@ -1,8 +1,10 @@
 // Chart colors from the palette, per brand and mode: categorical (up to 8 series), sequential (7 steps of one hue,
-// low to high) and diverging (7 steps: two hues through a neutral). Categorical series start from the main color and
-// each next one is the palette family that stays furthest from the ones picked, for normal vision and for protan,
-// deutan and tritan color vision deficiencies (simulated), at a step that reads 3:1 on the background. The colors are
-// written as roles (brands/<brand>/tokens.json → color.chart.*) pointing at palette steps, so they stay editable.
+// low to high) and diverging (7 steps: two hues through a neutral). Categorical series follow the main color: they
+// start from it and stay among hues near it (within 30°, widened 15° at a time only when nothing near it stays apart),
+// using lighter and darker steps; inside that range each next one is the color furthest from those picked, for normal
+// vision and for protan, deutan and tritan color vision deficiencies (simulated), at a step that reads 3:1 on the
+// background. The colors are written as roles (brands/<brand>/tokens.json → color.chart.*) pointing at palette steps,
+// so they stay editable.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { contrastRatio, CVD_TYPES, deltaE, parseColor, rgbToOklch, simulateCvd } from "./color.mjs";
@@ -11,8 +13,12 @@ import { GRAYS, readStyle } from "./style.mjs";
 
 const PRIMITIVES = "tokens/primitives.tokens.json";
 export const CHART_SERIES = 8;
-// Steps tried for a series, in order: light mode on a light page, dark mode on a dark one.
-const SERIES_STEPS = { default: ["600", "500", "700", "800"], dark: ["400", "300", "500", "200"] };
+// Steps tried for a series, in order (the first is series 1's): light mode on a light page, dark mode on a dark one.
+const SERIES_STEPS = { default: ["600", "500", "700", "800", "900", "400"], dark: ["400", "300", "500", "200", "600", "100"] };
+// 0.10 picked the most distant families at fewer steps; kept only to recognize chart colors it made.
+const SPREAD_STEPS = { default: ["600", "500", "700", "800"], dark: ["400", "300", "500", "200"] };
+/** Hues tried around the main one, in degrees: this far at first, then wider by the step while nothing stays apart. */
+export const CHART_HUE_RANGE = { start: 30, step: 15 };
 const SEQUENTIAL = { default: ["200", "300", "400", "500", "600", "700", "800"], dark: ["800", "700", "600", "500", "400", "300", "200"] };
 // Diverging: the opposite hue's three steps, the neutral, then the main hue's three (light mode); dark mode mirrors
 // the lightness so both ends stay strong on a dark page.
@@ -46,31 +52,38 @@ function separation(a, b) {
   }
   return min;
 }
+const hueGap = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
 
 /**
- * The chart colors for a brand: { categorical: [{ family, default, dark }], sequential: [...], diverging: [...] },
- * each entry a palette reference per mode ("{color.teal.600}").
+ * Series that follow the main color: every family at every usable step pair (light, dark) is a candidate; only hues
+ * within the range around the main one count, and the range widens only when none of them stays apart from the
+ * series picked. Inside it, the candidate furthest from those picked (in both modes) comes next.
  */
-export function chartPalette(root, brand, override = {}) {
-  const fams = hueFamilies(root);
-  const names = Object.keys(fams);
-  if (!names.length) throw new Error("no palette colors to make chart colors from");
-  const style = { ...readStyle(root, brand), ...Object.fromEntries(Object.entries(override).filter(([, v]) => v !== undefined)) };
-  const roles = resolveBrand(root, brand).tokens;
-  const background = (mode) => { const t = roles.find((x) => x.key === "color/background"); return (t?.values[mode] ?? t?.values.default)?.resolved ?? (mode === "dark" ? "#000000" : "#ffffff"); };
-  const modes = ["default", "dark"];
-  // Steps a family may use as a series per mode: those that read 3:1 on the page (else the one closest to it). The
-  // first is the preferred one; others give lightness to tell series apart when hue alone does not.
-  const usable = {};
-  for (const f of names) {
-    usable[f] = {};
-    for (const m of modes) {
-      const steps = SERIES_STEPS[m].filter((s) => fams[f][s]);
-      const reads = steps.filter((s) => (contrastRatio(fams[f][s], background(m)) ?? 0) >= 3);
-      usable[f][m] = reads.length ? reads : [steps.sort((a, b) => (contrastRatio(fams[f][b], background(m)) ?? 0) - (contrastRatio(fams[f][a], background(m)) ?? 0))[0]];
+function toneSeries(fams, usable, main, modes) {
+  const cache = new Map();
+  const apart = (a, b) => { const k = a < b ? `${a}|${b}` : `${b}|${a}`; if (!cache.has(k)) cache.set(k, separation(a, b).value); return cache.get(k); };
+  const h0 = hueOf(fams[main]["500"]);
+  const chosen = [{ f: main, default: usable[main].default[0], dark: usable[main].dark[0] }];
+  const same = (a, b) => a.f === b.f && a.default === b.default && a.dark === b.dark;
+  const candidates = Object.keys(fams).flatMap((f) => usable[f].default.flatMap((d) => usable[f].dark.map((k) => ({ f, default: d, dark: k, gap: hueGap(h0, hueOf(fams[f]["500"])) }))));
+  let range = CHART_HUE_RANGE.start;
+  while (chosen.length < CHART_SERIES) {
+    let best = null;
+    for (const c of candidates) {
+      if (c.gap > range || chosen.some((x) => same(x, c))) continue;
+      const score = Math.min(...modes.map((m) => Math.min(...chosen.map((x) => apart(fams[c.f][c[m]], fams[x.f][x[m]])))));
+      if (!best || score > best.score) best = { ...c, score };
     }
+    if (best && (best.score >= CHART_DISTINCT.normal || range >= 180)) chosen.push(best);
+    else if (range >= 180) break;
+    else range += CHART_HUE_RANGE.step;
   }
-  const main = names.includes(style.main) ? style.main : names.includes("blue") ? "blue" : names[0];
+  return chosen;
+}
+
+/** 0.10's series: after the main color, each next one is the family furthest from those picked. */
+function spreadSeries(fams, usable, main, modes) {
+  const names = Object.keys(fams);
   const chosen = [{ f: main, default: usable[main].default[0], dark: usable[main].dark[0] }];
   while (chosen.length < Math.min(CHART_SERIES, names.length)) {
     let best = null;
@@ -89,6 +102,35 @@ export function chartPalette(root, brand, override = {}) {
     }
     chosen.push(best);
   }
+  return chosen;
+}
+
+/**
+ * The chart colors for a brand: { categorical: [{ family, default, dark }], sequential: [...], diverging: [...] },
+ * each entry a palette reference per mode ("{color.teal.600}"). method "spread" is 0.10's way, for recognizing it.
+ */
+export function chartPalette(root, brand, override = {}, method = "tone") {
+  const fams = hueFamilies(root);
+  const names = Object.keys(fams);
+  if (!names.length) throw new Error("no palette colors to make chart colors from");
+  const style = { ...readStyle(root, brand), ...Object.fromEntries(Object.entries(override).filter(([, v]) => v !== undefined)) };
+  const roles = resolveBrand(root, brand).tokens;
+  const background = (mode) => { const t = roles.find((x) => x.key === "color/background"); return (t?.values[mode] ?? t?.values.default)?.resolved ?? (mode === "dark" ? "#000000" : "#ffffff"); };
+  const modes = ["default", "dark"];
+  // Steps a family may use as a series per mode: those that read 3:1 on the page (else the one closest to it). The
+  // first is the preferred one; others give lightness to tell series apart when hue alone does not.
+  const stepsFor = method === "spread" ? SPREAD_STEPS : SERIES_STEPS;
+  const usable = {};
+  for (const f of names) {
+    usable[f] = {};
+    for (const m of modes) {
+      const steps = stepsFor[m].filter((s) => fams[f][s]);
+      const reads = steps.filter((s) => (contrastRatio(fams[f][s], background(m)) ?? 0) >= 3);
+      usable[f][m] = reads.length ? reads : [steps.sort((a, b) => (contrastRatio(fams[f][b], background(m)) ?? 0) - (contrastRatio(fams[f][a], background(m)) ?? 0))[0]];
+    }
+  }
+  const main = names.includes(style.main) ? style.main : names.includes("blue") ? "blue" : names[0];
+  const chosen = (method === "spread" ? spreadSeries : toneSeries)(fams, usable, main, modes);
   const ref = (f, s) => `{color.${f}.${s}}`;
   // The opposite hue for diverging: the family whose hue is closest to the main one turned half way round.
   const target = (hueOf(fams[main]["500"]) + 180) % 360;
@@ -112,12 +154,12 @@ export const chartPaths = (p) => [
 ];
 
 /** Ops that write the chart colors into the brand file (only what changes). */
-export function chartOps(root, brand, override = {}) {
+export function chartOps(root, brand, override = {}, method = "tone") {
   const file = `brands/${brand}/tokens.json`;
   const tree = readJson(root, file);
   const at = (path) => path.split("/").reduce((n, k) => n?.[k], tree);
   const ops = [];
-  for (const [path, c] of chartPaths(chartPalette(root, brand, override))) {
+  for (const [path, c] of chartPaths(chartPalette(root, brand, override, method))) {
     const cur = at(path);
     const curDark = cur?.$extensions?.plinth?.modes?.dark;
     if (cur?.$value !== c.default) ops.push({ op: "set", file, path, type: "color", value: c.default, ...(cur ? {} : { description: CHART_DESCRIPTIONS[path.split("/")[2] === "seq" ? "seq" : path.split("/")[2] === "div" ? "div" : "series"] }) });
@@ -126,14 +168,22 @@ export function chartOps(root, brand, override = {}) {
   return ops;
 }
 /**
- * Chart colors that follow a new main color or grays: only while they are still exactly what Plinth made from the
- * current ones (someone who picked their own chart colors keeps them). [] when there are none yet.
+ * Who made the brand's chart colors: "plinth" (what Plinth makes now from the current main color), "older" (what
+ * 0.10 made, the most distant families), "hand" (picked by someone), or null when there are none.
+ */
+export function chartMaker(root, brand) {
+  if (!readJson(root, `brands/${brand}/tokens.json`).color?.chart) return null;
+  if (!chartOps(root, brand).length) return "plinth";
+  return chartOps(root, brand, {}, "spread").length ? "hand" : "older";
+}
+/**
+ * Chart colors that follow a new main color or grays: only while they are still what Plinth made from the current
+ * ones, now or in 0.10 (someone who picked their own chart colors keeps them). [] when there are none yet.
  */
 export function chartFollowOps(root, brand, { main, gray } = {}) {
   if (main === undefined && gray === undefined) return [];
-  const tree = readJson(root, `brands/${brand}/tokens.json`);
-  if (!tree.color?.chart) return [];
-  if (chartOps(root, brand).length) return [];
+  const maker = chartMaker(root, brand);
+  if (maker !== "plinth" && maker !== "older") return [];
   return chartOps(root, brand, { main, gray });
 }
 
@@ -162,7 +212,7 @@ export function chartView(root, brand) {
     series: series.map((t) => ({ name: t.name, path: t.key, ...view(t) })),
     sequential: pick(/^color\/chart\/seq\/\d+$/).map((t) => ({ name: t.name, ...view(t) })),
     diverging: pick(/^color\/chart\/div\/\d+$/).map((t) => ({ name: t.name, ...view(t) })),
-    safe, failing, madeByPlinth: chartOps(root, brand).length === 0,
+    safe, failing, madeBy: chartMaker(root, brand),
   };
 }
 

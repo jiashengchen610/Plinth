@@ -1,4 +1,4 @@
-// Chart colors on the Style page: the three sets Plinth made from the palette (categories, low to high, around a
+// Chart colors on the Style page: the three sets Plinth made from the main color (categories, low to high, around a
 // middle), seen with normal vision or with a color vision deficiency, on the page in light or dark mode, with how
 // many series stay apart for everyone. Everything here is computed by the engine.
 import { useEffect, useState } from "react";
@@ -25,7 +25,7 @@ export function ChartColors({ state, brand, mode, page, onChanged, onError }: Pr
   return (
     <section className="flex flex-col gap-4 rounded-2xl border bg-background p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 className="text-base font-semibold">Chart colors</h2><p className="text-sm text-muted-foreground">Made from your palette for the Chart component: categories, low to high values, and values around a middle.</p></div>
+        <div><h2 className="text-base font-semibold">Chart colors</h2><p className="text-sm text-muted-foreground">Made from your main color for the Chart component: categories, low to high values, and values around a middle.</p></div>
         <div role="group" aria-label="See it as" className="flex flex-wrap gap-1.5">
           {VISIONS.map(([id, name]) => (
             <button key={id} type="button" aria-pressed={vision === id} onClick={() => setVision(id)} className={`min-h-9 rounded-full border-2 px-3 text-sm ${vision === id ? "border-foreground" : "border-border"}`}>{name}</button>
@@ -57,8 +57,10 @@ export function ChartColors({ state, brand, mode, page, onChanged, onError }: Pr
               : `Series 1 to ${view.safe} stay apart for everyone. ${failing.slice(0, 3).map((f) => (f.kind === "contrast" ? `${label(f.a)} is faint on the page${f.mode === "dark" ? " in dark mode" : ""}` : `${label(f.a)} and ${label(f.b!)} look alike${f.vision && f.vision !== "normal" ? ` for ${f.vision} vision` : ""}${f.mode === "dark" ? " in dark mode" : ""}`)).join("; ")}.`}
           </p>
           <div className="flex flex-wrap items-center gap-3 border-t pt-3 text-sm">
-            <span className="flex-[1_1_260px] text-muted-foreground">{view.madeByPlinth ? "Plinth made these from your main color; they follow it when you change it. Never use color alone: label your series." : "Some were picked by hand, so they stay when the main color changes. Make them again from your palette to replace them."}</span>
-            {!view.madeByPlinth && <Button variant="outline" className="min-h-10" onClick={make}>Make from my colors</Button>}
+            <span className="flex-[1_1_260px] text-muted-foreground">{view.madeBy === "plinth" ? "Plinth made these from your main color and the colors next to it; they follow it when you change it. Never use color alone: label your series."
+              : view.madeBy === "older" ? "These were made the older way, from the most different colors in the palette. Plinth now makes them from your main color and the colors next to it."
+              : "Some were picked by hand, so they stay when the main color changes. Make them again from your main color to replace them."}</span>
+            {view.madeBy !== "plinth" && <Button variant="outline" className="min-h-10" onClick={make}>{view.madeBy === "older" ? "Use colors from my main color" : "Make from my main color"}</Button>}
           </div>
         </>
       )}

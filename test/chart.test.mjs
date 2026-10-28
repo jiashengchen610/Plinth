@@ -1,5 +1,6 @@
-// Chart colors: made from the palette (categories kept apart for normal vision and simulated color vision
-// deficiencies, 3:1 on the page; low to high; around a middle), following the main color while untouched, and the
+// Chart colors: made from the palette (categories near the main color's hue, kept apart for normal vision and
+// simulated color vision deficiencies, 3:1 on the page; low to high; around a middle), following the main color while
+// untouched (also colors 0.10 made), and the
 // Chart component bringing its colors and Recharts to a design system without them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -7,8 +8,8 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as ws from "../engine/workspace.mjs";
-import { chartFollowOps, chartOps, chartPalette, chartView, checkChart } from "../engine/chart.mjs";
-import { simulateCvd, deltaE } from "../engine/color.mjs";
+import { CHART_HUE_RANGE, chartFollowOps, chartMaker, chartOps, chartPalette, chartView, checkChart } from "../engine/chart.mjs";
+import { simulateCvd, deltaE, parseColor, rgbToOklch } from "../engine/color.mjs";
 import { styleOps } from "../engine/style.mjs";
 
 test("chart colors: eight series apart for everyone, 3:1 on the page; they follow the main color until edited", (t) => {
@@ -27,14 +28,28 @@ test("chart colors: eight series apart for everyone, 3:1 on the page; they follo
   assert.equal(chartPalette(root, "c").categorical[0].family, "teal");
   assert.match(JSON.parse(readFileSync(join(root, "brands/c/tokens.json"), "utf8")).color.chart["1"].$value, /^\{color\.teal\.\d+\}$/);
   assert.deepEqual(checkChart(root, ["c"]).filter((x) => !x.pass), [], "still apart and readable");
+  // They keep to the main color's hues: the first three within the first range around teal.
+  const palette = JSON.parse(readFileSync(join(root, "tokens/primitives.tokens.json"), "utf8")).color;
+  const hue = (f) => rgbToOklch(parseColor(palette[f]["500"].$value)).h;
+  const gap = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+  for (const s of chartPalette(root, "c").categorical.slice(0, 3)) assert.ok(gap(hue(s.family), hue("teal")) <= CHART_HUE_RANGE.start, `${s.family} is near teal`);
   const div = chartPalette(root, "c").diverging;
   assert.equal(div.length, 7);
   assert.match(div[3].default, /^\{color\.neutral\.200\}$/, "the middle is a neutral");
+  assert.equal(chartView(root, "c").madeBy, "plinth");
+
+  // Colors 0.10 made (the most distant families) are recognized, and follow the main color into the new way.
+  ws.change(root, { title: "older", ops: chartOps(root, "c", {}, "spread"), by: "test" });
+  assert.equal(chartMaker(root, "c"), "older");
+  const again = chartFollowOps(root, "c", { main: "violet" });
+  assert.ok(again.length > 0);
+  ws.change(root, { title: "violet", ops: [...styleOps(root, "c", { main: "violet" }), ...again], by: "test" });
+  assert.equal(chartMaker(root, "c"), "plinth");
 
   // A series picked by hand stays when the main color changes again.
   ws.change(root, { title: "mine", ops: [{ op: "set", file: "brands/c/tokens.json", path: "color/chart/2", value: "{color.lime.700}" }], by: "test" });
-  assert.deepEqual(chartFollowOps(root, "c", { main: "violet" }), []);
-  assert.equal(chartView(root, "c").madeByPlinth, false);
+  assert.deepEqual(chartFollowOps(root, "c", { main: "rose" }), []);
+  assert.equal(chartView(root, "c").madeBy, "hand");
 });
 
 test("color vision: simulated colors keep grays and move reds and greens together for deutan vision", () => {

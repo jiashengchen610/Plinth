@@ -156,12 +156,29 @@ export const TOOLS = [
   },
   {
     name: "add_palette_color",
-    description: "Add a color to the palette (bottom layer): from one color, the engine generates a full 50–950 scale shaped like Tailwind's, with the given color on its nearest step. Written at once. Then point roles at it, e.g. {color.lacquer-red.600}.",
-    inputSchema: { type: "object", properties: { name: { type: "string", description: "Palette name, kebab-case, e.g. lacquer-red" }, color: { type: "string", description: "Any CSS color: #d42515, oklch(0.55 0.2 27) …" } }, required: ["name", "color"] },
+    description: "Add a color to the palette (bottom layer): from one color, the engine generates a full 50–950 scale shaped like Tailwind's, with the given color on its nearest step. Written at once. Then point roles at it, e.g. {color.lacquer-red.600}; or give role (and mode, brand) to point that role at the given color's step in the same change, the way the UI's color wheel does.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Palette name, kebab-case, e.g. lacquer-red" }, color: { type: "string", description: "Any CSS color: #d42515, oklch(0.55 0.2 27) …" },
+        role: { type: "string", description: "Optional: a color role to point at the new color, e.g. primary (every component using it changes)" },
+        mode: { type: "string", enum: ["default", "dark"], description: "With role: the mode it changes in; the other mode moves to the same new color at the step it already uses" },
+        brand: { type: "string", description: "With role: brand id; default: the default brand" },
+        title: { type: "string", description: "Change title, followed by the color's name; default: '<role> → new color <name>'" },
+      },
+      required: ["name", "color"],
+    },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
       const p = paletteColorOps(ctx.root, { name: a.name, value: a.color, templateDir: ws.TEMPLATE_DIR });
-      const r = write(ctx, { title: `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`, ops: p.ops, by: "engine" });
+      let ops = p.ops, title = `${p.replacing ? "Replace" : "Add"} ${p.name} in the palette`;
+      if (a.role) {
+        const config = loadConfig(ctx.root);
+        const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+        ops = [...ops, ...roleColorOps(ctx.root, brand, { role: a.role, color: `${p.name}.${p.anchor}`, mode: a.mode ?? "default", added: { name: p.name, shades: p.shades } })];
+        title = a.title ? `${a.title} ${p.name}` :`${a.role} → new color ${p.name}${a.mode === "dark" ? " (dark)" : ""}`;
+      }
+      const r = write(ctx, { title, ops, by: a.by ?? "engine" });
       return { ...r, name: p.name, anchor: p.anchor, shades: p.shades };
     },
   },
@@ -222,7 +239,7 @@ export const TOOLS = [
   },
   {
     name: "make_chart_colors",
-    description: "Make the chart colors from the palette (what the Chart component's series use: chart-1…8 for categories, chart-seq-1…7 for low to high values, chart-div-1…7 around a middle): series start from the main color and each next one stays furthest from the others for normal vision and protan, deutan and tritan deficiencies, at a step that reads 3:1 on the page. Overwrites chart colors someone picked by hand. Returns the colors, how many series stay apart for everyone, and what does not. Written at once; undoable.",
+    description: "Make the chart colors from the palette (what the Chart component's series use: chart-1…8 for categories, chart-seq-1…7 for low to high values, chart-div-1…7 around a middle): series start from the main color and keep to hues near it (lighter and darker steps first, wider hues only when needed), each next one as far from the others as those hues allow for normal vision and protan, deutan and tritan deficiencies, at a step that reads 3:1 on the page. Overwrites chart colors someone picked by hand. Returns the colors, how many series stay apart for everyone, and what does not. Written at once; undoable.",
     inputSchema: { type: "object", properties: { brand: { type: "string", description: "Brand id; default: every brand" } } },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);

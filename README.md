@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.10.0.** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.11.0.** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -136,13 +136,16 @@ its main button in the bar at the bottom of the screen:
    or **That's on purpose**. **Glass** tunes the frosted material (color, how much of it shows, blur, how vivid what
    shows through is, edge light, a ripple in Chrome and Edge) live over color, text, black and white, with how its
    text reads over the darkest and the lightest backdrop and the least color that keeps it readable; **Save glass**
-   writes it as one change. **Chart colors** shows the three sets Plinth makes from the palette for the Chart
+   writes it as one change. **Chart colors** shows the three sets Plinth makes from the main color for the Chart
    component (eight categories, low to high, around a middle), seen with normal vision or as red-, green- or
-   blue-blind; they follow the main color until someone picks one by hand.
+   blue-blind. Categories keep to the main color and the hues next to it, using lighter and darker steps, and reach
+   for wider hues only when nothing closer stays apart. They follow the main color until someone picks one by hand.
+   With all eight series in use, the two closest ones are near the limit of the check.
 3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
-   (roles) → base colors (the whole palette: your own colors first, then Tailwind's). Click a part, then one of your
-   colors, to connect them; click a base color to change that color itself (every component using it changes, the
-   other mode follows in the same family). **Add your own base color** makes a scale from one color. A second graph
+   (roles), each labelled with the base color it uses. Click a part, then one of your colors, to connect them. To
+   change one of your colors itself, click it again or press **Change**: pick from your palette (your own colors
+   first, then Tailwind's) or any color on a color wheel, which Plinth turns into a 50–950 scale in your palette.
+   Every component using that color changes, and the other mode follows in the same family. A second graph
    shows its text: text parts → text styles → fonts; click a style to use it, or a font to change that style's font.
    A design system made by an older Plinth gets an **Upgrade** for what newer components use (components someone
    edited stay as they are). Add ready-made
@@ -251,7 +254,7 @@ errors, failing interaction tests, and components without their tokens or a stor
 | Component format: every component has `tokens/components/<name>.tokens.json` and a story | Publish, GitHub | **yes** | ask Claude |
 | Hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change (reminder) | **yes**, at Publish and on GitHub | ask Claude, or accept it as an exception |
 | Text on glass: the glass color at its opacity over a black and over a white backdrop (4.5:1), in every brand × mode | every change | no | the glass tool's least readable opacity (Style → Glass), or another text color |
-| Chart series colors: each 3:1 on the page; each pair apart for normal vision and simulated protan, deutan and tritan vision (ΔE_OK 0.08 / 0.04) | every change | no | **Make from my colors** (Style → Chart colors) |
+| Chart series colors: each 3:1 on the page; each pair apart for normal vision and simulated protan, deutan and tritan vision (ΔE_OK 0.08 / 0.04) | every change | no | **Make from my main color** (Style → Chart colors) |
 | Text sizes written in components (`text-sm`, `font-medium`, `leading-*`, `tracking-*`) instead of text tokens | every change, Publish, GitHub | no (reminder) | give the part a text token (`type-<component>-<part>`) |
 | A component's own corners on a part inside it (`rounded-<name>` twice) | every change, Publish, GitHub | no (reminder) | a radius token for the part that fits inside its container |
 | Generated files match the tokens (`tokens.css`, `fonts.css`, Foundations data) | GitHub | **yes** | open the folder in Plinth (it regenerates), save, push |
@@ -305,13 +308,13 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
 | `undo` | Take back the newest change |
 | `set_style` | Main color, grays, corners (preset, outer, inner, whether parts inside fit), text font, headings font, what buttons and labels follow (what the Style step does): roles re-pointed at readable palette steps, new fonts added to the palette |
-| `set_role_color` | One role on a palette step in one mode (what clicking a base color in Components does); the other mode follows in the same family |
+| `set_role_color` | One role on a palette step in one mode (what picking from the palette in Components does); the other mode follows in the same family |
 | `set_glass` | The glass material (preset, color, opacity, blur, saturation, edge light, ripple), with how its text reads over black and white |
-| `make_chart_colors` | Make the chart colors from the palette again (categories kept apart for color vision deficiencies, low to high, around a middle) |
+| `make_chart_colors` | Make the chart colors from the main color again (categories near its hue, kept apart for color vision deficiencies; low to high; around a middle) |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |
-| `add_palette_color` | Add a color to the palette as a 50–950 scale |
+| `add_palette_color` | Add a color to the palette as a 50–950 scale; optionally point a role at it in the same change (what the color wheel in Components does) |
 | `upgrade_to_layers`, `link_to_palette` | Bring a design system made by an older Plinth up to date (layers, then font roles, text styles and text tokens; component files only while exactly as shipped); point fixed colors at the palette |
 | `run_checks`, `fix_contrast` | Deterministic checks; computed contrast fixes, applied |
 | `run_tests` | Typecheck and story tests in the workspace |
@@ -356,10 +359,11 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Limitations and known issues
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
-- Decided but not built yet (PRD, "下一版"): glass effects with a tuning tool, and a Chart component with computed
-  data-visualization palettes (phase 2b); starting from something you have (a Storybook, a
-  website, a GitHub repo; the Describe step shows the option as coming later), and a shadcn registry plus
-  `plinth connect` so product repos get components and ask Plinth for new ones.
+- Decided but not built yet (PRD, "下一版"): changing a token by clicking the element in the Style sample or the
+  component preview, with a short prompt box and a question when the change would reach other components;
+  starting from something you have (a Storybook, a website, a GitHub repo; the Describe step shows the option as
+  coming later), and a shadcn registry plus `plinth connect` so product repos get components and ask Plinth for new
+  ones.
 - The five template components can't be removed: the Foundations pages of the component site use them.
 - Not built yet, although the PRD lists them: importing DTCG / Tokens Studio / DESIGN.md files, the token usage
   index ("used by these components"), screenshot previews, behavior that depends on the context (mobile vs

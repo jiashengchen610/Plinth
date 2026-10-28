@@ -47,7 +47,8 @@ type ChartSeen = { color: string; protan: string; deutan: string; tritan: string
 export type ChartEntry = { name: string; path?: string; default: ChartSeen; dark?: ChartSeen };
 export type ChartView = {
   series: ChartEntry[]; sequential: ChartEntry[]; diverging: ChartEntry[];
-  safe: number; madeByPlinth: boolean; failing: { mode: string; kind: "contrast" | "distinct"; a: string; b?: string; vision?: string }[];
+  /** Who made them: Plinth now (from the main color's hues), Plinth 0.10 (the most different colors), or by hand. */
+  safe: number; madeBy: "plinth" | "older" | "hand"; failing: { mode: string; kind: "contrast" | "distinct"; a: string; b?: string; vision?: string }[];
 };
 /** A glass recipe: how much of its color shows, blur (px), saturation (1 = unchanged), edge light, ripple (0–1). */
 export type GlassRecipe = { tintOpacity: number; blur: number; saturation: number; highlight: number; distortion: number };
@@ -152,7 +153,8 @@ export const api = {
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
   upgrade: () => edit("Upgrading", () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade")),
   linkPalette: () => edit("Linking colors to the palette", () => call<Partial<ChangeResult> & { message?: string; linked?: string[]; unmatched?: unknown[] }>("POST", "/api/link-palette")),
-  addPaletteColor: (name: string, color: string) => edit("Adding the color", () => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color })),
+  /** Adds a color to the palette; with use, one of your colors points at it in the same change. */
+  addPaletteColor: (name: string, color: string, use?: { brand: string; role: string; mode: "default" | "dark"; title?: string }) => edit("Adding the color", () => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color, ...use })),
   presets: () => call<Presets>("GET", "/api/presets"),
   suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
