@@ -1,5 +1,8 @@
 # Plinth
 
+**Plinth is under active development and changes often: new features and fixes land every few days, and the way
+things work may still change between versions.**
+
 Create and maintain a multi-brand design system by talking to Claude. Answer a few questions (most are one click:
 a palette, corners, a font), and get design tokens, design and writing guidelines, and shadcn/ui components. Every
 change applies at once in a local UI and can be undone; you decide when to save a version, and you publish the result
