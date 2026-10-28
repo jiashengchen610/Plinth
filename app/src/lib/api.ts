@@ -1,4 +1,7 @@
-// Client for the Plinth local API. The session token is injected into index.html by the server.
+// Client for the Plinth local API. The session token is injected into index.html by the server. Calls that edit the
+// design system go through edit(): the page is locked until they are written and shown.
+import { edit } from "@/lib/lock";
+
 const token = document.querySelector<HTMLMetaElement>('meta[name="plinth-token"]')?.content ?? import.meta.env.VITE_PLINTH_TOKEN ?? "";
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
@@ -69,7 +72,7 @@ export type PublishDefaults = {
 };
 /** What GitHub did with the last publish (the workflow tests, then deploys). */
 export type Deploy = {
-  status: "waiting" | "running" | "live" | "failed" | "unknown"; sha: string; pushedAt?: string; actions: string;
+  status: "waiting" | "running" | "live" | "failed" | "unknown"; sha: string; pushedAt?: string; repo?: string; github?: string; actions: string;
   run?: string; since?: string; site?: string | null; step?: string | null; failures?: string[]; errors?: string[]; error?: string;
 } | null;
 /** A description of the next version: the engine's at once, Claude's when it is ready. The user confirms or changes it. */
@@ -119,30 +122,31 @@ export const api = {
   resetChat: () => call<{ reset: boolean }>("POST", "/api/chat/reset"),
   install: () => call<{ started: boolean }>("POST", "/api/install"),
   runTests: () => call<{ started: boolean }>("POST", "/api/tests"),
-  change: (title: string, ops: Op[]) => call<ChangeResult>("POST", "/api/change", { title, ops }),
-  undo: () => call<{ undone: string; files: string[] }>("POST", "/api/undo"),
-  save: (message: string) => call<{ version: string | null; message?: string }>("POST", "/api/save", { message }),
-  discardUnsaved: () => call<{ discarded: string[] }>("POST", "/api/discard"),
+  change: (title: string, ops: Op[]) => edit("Making your change", () => call<ChangeResult>("POST", "/api/change", { title, ops })),
+  undo: () => edit("Undoing", () => call<{ undone: string; files: string[] }>("POST", "/api/undo")),
+  save: (message: string) => edit("Saving a version", () => call<{ version: string | null; message?: string }>("POST", "/api/save", { message })),
+  discardUnsaved: () => edit("Throwing away the changes", () => call<{ discarded: string[] }>("POST", "/api/discard")),
   review: () => call<{ started: boolean }>("POST", "/api/review"),
-  restore: (sha: string) => call<{ version: string }>("POST", `/api/versions/${sha}/restore`),
-  fixContrast: () => call<Partial<ChangeResult> & { message?: string; fixes?: string[] }>("POST", "/api/contrast-fixes"),
-  acceptException: (check: CheckName, key: string, reason: string) => call<{ accepted: string }>("POST", "/api/exceptions", { check, key, reason }),
-  removeException: (check: CheckName, key: string) => call<{ removed: string }>("POST", "/api/exceptions/remove", { check, key }),
+  restore: (sha: string) => edit("Going back to that version", () => call<{ version: string }>("POST", `/api/versions/${sha}/restore`)),
+  fixContrast: () => edit("Fixing contrast", () => call<Partial<ChangeResult> & { message?: string; fixes?: string[] }>("POST", "/api/contrast-fixes")),
+  acceptException: (check: CheckName, key: string, reason: string) => edit("Marking it as on purpose", () => call<{ accepted: string }>("POST", "/api/exceptions", { check, key, reason })),
+  removeException: (check: CheckName, key: string) => edit("Making your change", () => call<{ removed: string }>("POST", "/api/exceptions/remove", { check, key })),
   startStorybook: () => call<{ url?: string; error?: string; next?: string }>("POST", "/api/storybook/start"),
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
   publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
   publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
-  upgrade: () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade"),
-  linkPalette: () => call<Partial<ChangeResult> & { message?: string; linked?: string[]; unmatched?: unknown[] }>("POST", "/api/link-palette"),
-  addPaletteColor: (name: string, color: string) => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color }),
+  upgrade: () => edit("Upgrading", () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade")),
+  linkPalette: () => edit("Linking colors to the palette", () => call<Partial<ChangeResult> & { message?: string; linked?: string[]; unmatched?: unknown[] }>("POST", "/api/link-palette")),
+  addPaletteColor: (name: string, color: string) => edit("Adding the color", () => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color })),
   presets: () => call<Presets>("GET", "/api/presets"),
   suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
-  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick }),
-  removeComponent: (name: string) => call<ChangeResult>("POST", "/api/remove-component", { name }),
-  addComponent: (name: string) => call<ChangeResult>("POST", "/api/add-component", { name }),
+  style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners">> & { font?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
+  removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),
+  roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
+  addComponent: (name: string) => edit("Adding the component", () => call<ChangeResult>("POST", "/api/add-component", { name })),
   deploy: () => call<{ deploy: Deploy }>("GET", "/api/deploy"),
   versionDraft: () => call<VersionDraft>("GET", "/api/version-draft"),
   versionDraftByClaude: () => call<VersionDraft>("POST", "/api/version-draft"),

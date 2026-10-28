@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api, type Answers, type ChangeResult, type Op, type Presets, type State } from "@/lib/api";
 import { CtaSlot } from "@/lib/cta";
+import { setReload, useAfter, usePendingEdit } from "@/lib/lock";
 import { componentLabel, roleName } from "@/lib/plain";
-import { ChatPanel } from "@/views/ChatPanel";
+import { activityLabel, ChatPanel } from "@/views/ChatPanel";
 import { DescribeView } from "@/views/DescribeView";
 import { CreatingView } from "@/views/CreatingView";
 import { StyleView } from "@/views/StyleView";
@@ -58,6 +59,7 @@ export default function App() {
       setBrand((b) => (s.exists && (!b || !s.brands.includes(b)) ? s.config.defaultBrand ?? s.brands[0] : b));
     } catch (e) { setError((e as Error).message); }
   }, []);
+  useEffect(() => { setReload(load); }, [load]);
   useEffect(() => {
     load();
     api.presets().then(setPresets).catch(() => {});
@@ -109,6 +111,12 @@ export default function App() {
     try { await api.setup(answers); setRedo(false); setScreen("creating"); await load(); } catch (e) { onError((e as Error).message); } finally { setSending(false); }
   };
 
+  // One edit at a time: while yours is written, or while Claude works on a message, the page is locked (it still
+  // scrolls). Cards turn into a moving skeleton; for your own edits only when they take a moment.
+  const pendingEdit = usePendingEdit();
+  const lockBy = pendingEdit ? "you" : state?.exists && state.chat?.working ? "claude" : null;
+  const skeleton = useAfter(lockBy, lockBy === "you" ? 200 : 0);
+
   if (!state) return <main className="grid min-h-dvh place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
 
   const exists = state.exists;
@@ -154,7 +162,7 @@ export default function App() {
         </nav>
         {exists && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="min-h-10" disabled={busy || !state.lastChange} title={state.lastChange ? `Undo: ${state.lastChange.title}` : "Nothing to undo"} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "")}>Undo</Button>
+            <Button variant="outline" className="min-h-10" disabled={busy || Boolean(lockBy) || !state.lastChange} title={state.lastChange ? `Undo: ${state.lastChange.title}` : "Nothing to undo"} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "")}>Undo</Button>
             <Button variant="outline" className={`min-h-10 ${unsaved ? "border-warning/60 bg-warning/10" : ""}`} onClick={() => go("history")}>{unsaved ? `Not saved · Save` : "All saved"}</Button>
             <Button variant={effective === "history" ? "secondary" : "ghost"} className="min-h-10" aria-current={effective === "history" ? "page" : undefined} onClick={() => go("history")}>History</Button>
           </div>
@@ -175,10 +183,11 @@ export default function App() {
       )}
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-locked={skeleton ?? undefined} aria-busy={Boolean(lockBy)}>
+          {skeleton && <LockBar by={skeleton} label={skeleton === "claude" ? activityLabel(state.chat) : pendingEdit?.label ?? "Making your change"} since={skeleton === "claude" ? state.chat?.activity?.since ?? null : pendingEdit?.since ?? null} onError={onError} />}
           <main className="min-h-0 flex-1 px-4 py-5 lg:overflow-y-auto">
             <CtaSlot.Provider value={slot}>
-              <div className={`mx-auto ${effective === "describe" || effective === "creating" ? "max-w-3xl" : effective === "publish" || effective === "history" ? "max-w-4xl" : "max-w-6xl"}`}>
+              <div inert={Boolean(lockBy)} className={`mx-auto ${effective === "describe" || effective === "creating" ? "max-w-3xl" : effective === "publish" || effective === "history" ? "max-w-4xl" : "max-w-6xl"}`}>
                 {effective === "describe" && <DescribeView key={`${exists}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} sending={sending} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} />}
                 {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
                 {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => { confirmStep("style"); go("components"); }} onAsk={ask} />}
@@ -192,7 +201,7 @@ export default function App() {
               </div>
             </CtaSlot.Provider>
           </main>
-          <div ref={setSlot} className="sticky bottom-0 z-10 flex-none lg:static" />
+          <div ref={setSlot} inert={Boolean(lockBy)} className="sticky bottom-0 z-10 flex-none lg:static" />
         </div>
         {chatOn && (
           <aside className="flex min-h-[520px] flex-none flex-col border-t lg:h-auto lg:min-h-0 lg:w-[380px] lg:border-t-0 lg:border-l">
@@ -200,6 +209,24 @@ export default function App() {
           </aside>
         )}
       </div>
+    </div>
+  );
+}
+
+/** What is being changed while the page is locked. Claude's reply can be stopped from here. */
+function LockBar({ by, label, since, onError }: { by: "you" | "claude"; label: string; since: number | null; onError: (m: string) => void }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
+  const s = since ? Math.max(0, Math.round((Date.now() - since) / 1000)) : 0;
+  return (
+    <div role="status" className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-info/30 bg-info/5 px-4 py-2 text-sm">
+      <span aria-hidden="true" className="size-2.5 flex-none animate-pulse rounded-full bg-info" />
+      {by === "claude" ? (
+        <span className="min-w-0 flex-1"><strong>Claude is working on your message:</strong> {label.toLowerCase()}…{s > 3 ? ` ${s} s.` : ""} <span className="text-muted-foreground">The page is paused so nothing changes under your hands; you can edit again when it's done.</span></span>
+      ) : (
+        <span className="min-w-0 flex-1"><strong>{label}…</strong> <span className="text-muted-foreground">One moment.</span></span>
+      )}
+      {by === "claude" && <Button variant="outline" className="min-h-9" onClick={() => api.stopChat().catch((e) => onError((e as Error).message))}>Stop</Button>}
     </div>
   );
 }

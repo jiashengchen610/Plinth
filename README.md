@@ -8,7 +8,7 @@ steps in one UI, with Claude in a chat beside them: Describe → Style → Compo
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.6.1).** Tested by `npm test` (29 tests), by the 83 story tests in a generated workspace, and
+> **Status: early (0.6.2).** Tested by `npm test` (29 tests), by the 83 story tests in a generated workspace, and
 > end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
 > untested. Expect rough edges; issues and pull requests are welcome.
@@ -115,18 +115,25 @@ its main button in the bar at the bottom of the screen:
    roles at palette steps the engine chooses for readable text. **Things to look at** lists text that is hard to read
    and colors that look alike, with **Fix it** or **That's on purpose**.
 3. **Components.** The real component in Storybook, and a graph of how it gets its colors: its parts → your colors
-   (roles) → base colors (palette). Click a part, then a color, to connect them. Add ready-made components (free,
-   at once), ask Claude for others, or remove ones nothing else uses.
+   (roles) → base colors (the whole palette: your own colors first, then Tailwind's). Click a part, then one of your
+   colors, to connect them; click a base color to change that color itself (every component using it changes, the
+   other mode follows in the same family). **Add your own base color** makes a scale from one color. Add ready-made
+   components (free, at once), ask Claude for others, or remove ones nothing else uses.
 4. **Publish** (optional). Claude drafts the description of your changes (change it if you like) and **Save and
    publish** saves and publishes in one step; Claude's review appears (suggestions only). The first time, press **Connect GitHub** (a GitHub page opens; enter the code shown and authorize), then choose the
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
    does not work for private repositories there. After the push, the top of the page shows what GitHub does: testing,
    online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
+   While it works, the page shows each step (here, then on GitHub); once the site is online a success page lists where
+   to check it (the component site, DESIGN.md for AI tools, the repository, the test results) and your versions as a
+   tree.
 
 The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
 kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
 for the page you're on. **Undo** at the top takes the last change back, whoever made it; **History** lists what isn't
 in a version yet, saves a version (with a description Claude drafted), throws changes away, and restores any saved version.
+Edits happen one at a time: while one of yours is written, or while Claude works on a message, the page pauses (the
+cards turn into a moving skeleton, the control you pressed pulses) and comes back when the result is on screen.
 
 Options: `npx -y github:jiashengchen610/Plinth <folder> --port 4400 --no-open --no-setup`. If Plinth already runs
 for the folder, the command opens that one instead of starting a second.
@@ -266,6 +273,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
 | `undo` | Take back the newest change |
 | `set_style` | Main color, grays, corners, font in one step (what the Style step does): roles re-pointed at readable palette steps |
+| `set_role_color` | One role on a palette step in one mode (what clicking a base color in Components does); the other mode follows in the same family |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |

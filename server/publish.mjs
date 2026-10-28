@@ -199,7 +199,7 @@ export async function deployStatus(root, { after = 0 } = {}) {
   try { pub = JSON.parse(readFileSync(join(root, ".ds", "published.json"), "utf8")); } catch { return null; }
   const full = repoFromUrl(remoteUrl(root));
   if (!full) return null;
-  const base = { sha: pub.sha, pushedAt: pub.at, actions: `https://github.com/${full}/actions` };
+  const base = { sha: pub.sha, pushedAt: pub.at, repo: full, github: `https://github.com/${full}`, actions: `https://github.com/${full}/actions` };
   let run;
   try { run = JSON.parse(await ghAsync(root, ["run", "list", "-R", full, "--commit", pub.sha, "--workflow", "storybook.yml", "--limit", "1", "--json", "databaseId,status,conclusion,url,createdAt"]))[0]; }
   catch (e) { return { ...base, status: "unknown", error: errText(e) }; }

@@ -146,6 +146,37 @@ export function styleOps(root, brand, { main, gray, corners, font } = {}) {
   return ops;
 }
 
+/**
+ * Ops that point one color role at a palette step in one mode: { role: "primary", color: "blue.600", mode: "dark" }.
+ * The other mode moves to the same family at the step it already uses, so the role stays one color in light and dark
+ * (white, black and fixed values stay). A role with no dark value of its own follows the light one as before.
+ */
+export function roleColorOps(root, brand, { role, color, mode = "default" } = {}) {
+  const file = brandFile(brand);
+  if (!existsSync(join(root, file))) throw new Error(`no brand ${brand}`);
+  const t = Object.fromEntries(colorRoles(root, brand))[role];
+  if (!t) throw new Error(`no color role ${role}`);
+  if (!["default", "dark"].includes(mode)) throw new Error(`no mode ${mode}`);
+  const [fam, step] = String(color ?? "").replace(/^\{|\}$/g, "").replace(/^color\./, "").split(/[./-](?=[^./-]*$)/);
+  const fams = families(root);
+  const single = (f) => readJson(root, PRIMITIVES).color?.[f]?.$value !== undefined;
+  const value = step && fams[fam]?.[step] ? `{color.${fam}.${step}}` : !step && single(fam) ? `{color.${fam}}` : null;
+  if (!value) throw new Error(`no palette color ${color}`);
+  const cur = { default: t.$value, dark: darkOf(t) };
+  const ops = [];
+  const set = (m, v) => {
+    if ((m === "dark" ? cur.dark ?? cur.default : cur.default) === v) return;
+    ops.push({ op: "set", file, path: `color/${role}`, ...(m === "dark" ? { mode: "dark" } : {}), value: v });
+  };
+  set(mode, value);
+  const other = mode === "dark" ? "default" : "dark";
+  const otherRef = ref(cur[other]);
+  const otherFam = familyOf(otherRef);
+  const otherStep = otherRef?.split(".")[2];
+  if (cur[other] !== undefined && otherFam && otherStep && step && otherFam !== fam && fams[fam]?.[otherStep]) set(other, `{color.${fam}.${otherStep}}`);
+  return ops;
+}
+
 const CORNER_NAMES = { square: "square", slight: "slightly rounded", round: "rounded", pill: "pill" };
 /** A short title for a style change, in words the UI shows: "Main color: teal", "Corners: pill, font: Inter". */
 export function styleTitle({ main, gray, corners, font } = {}) {

@@ -23,10 +23,13 @@ function readImage(file: File): Promise<ChatImage> {
 /** "change" → "Making a change"; keeps the UI's language plain. */
 const ACTIVITY: Record<string, string> = {
   status: "Looking at the design system", "get tokens": "Reading the tokens", "get guidelines": "Reading the guidelines", "list components": "Listing the components",
-  change: "Making a change", undo: "Undoing the last change", "run checks": "Running the checks", "run tests": "Running the tests",
+  change: "Making a change", "set style": "Changing the style", "set role color": "Changing a color", "add component": "Adding a component", "remove component": "Removing a component", undo: "Undoing the last change", "run checks": "Running the checks", "run tests": "Running the tests",
   "fix contrast": "Fixing contrast", "add palette color": "Adding a palette color", "review changes": "Reading the changes", "save version": "Saving a version", "create design system": "Creating the design system", "install dependencies": "Installing dependencies (a few minutes)",
   "start storybook": "Starting Storybook", publish: "Publishing", "export design md": "Composing DESIGN.md", Read: "Looking at your image", Glob: "Looking through files", Grep: "Searching the files",
 };
+
+/** What Claude is doing right now, in plain words. */
+export const activityLabel = (chat: ChatState | null) => (chat?.activity?.tool ? ACTIVITY[chat.activity.tool] ?? `Working: ${chat.activity.tool}` : "Thinking");
 
 export function Reply({ text }: { text: string }) {
   // Claude's replies are rendered as Markdown with raw HTML escaped.
@@ -69,7 +72,7 @@ export function ChatPanel({ chat, onError, className = "", text, onText: setText
   };
 
   const elapsed = chat?.activity ? Math.round((Date.now() - chat.activity.since) / 1000) : 0;
-  const activity = chat?.activity?.tool ? ACTIVITY[chat.activity.tool] ?? `Working: ${chat.activity.tool}` : "Thinking";
+  const activity = activityLabel(chat);
   const cannotStart = chat?.error && /Could not start Claude Code/.test(chat.error);
 
   return (

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry } from "@/lib/api";
+import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry, type TokenRow } from "@/lib/api";
 import { Cta } from "@/lib/cta";
 import { componentLabel, partName, roleName, variantOf } from "@/lib/plain";
 import { buildGraph, componentOf, remindersByToken, targetIn, type Mode } from "@/lib/tokens";
+import { AddColor } from "@/views/AddColor";
 import { NodeGraph } from "@/views/NodeGraph";
 import { ModeSwitch } from "@/views/StyleView";
 
@@ -21,6 +22,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const [variant, setVariant] = useState("");
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [addingColor, setAddingColor] = useState(false);
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const catalog = presets?.components;
 
@@ -52,6 +54,9 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const missing = (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id));
   const protectedBy = component.usedBy.length > 0;
 
+  const roleColor = async (role: TokenRow, color: string, title: string) => {
+    try { onChanged(await api.roleColor(brand, role.path.replace(/^color\//, ""), color, tmode, title), title); } catch (e) { onError((e as Error).message); }
+  };
   const remove = async () => {
     try { onChanged(await api.removeComponent(component.id), `Removed ${name}.`); setSelected(null); } catch (e) { onError((e as Error).message); }
   };
@@ -61,7 +66,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-muted-foreground">Step 3 of 4</span>
         <h1 className="text-2xl font-semibold tracking-tight">Components</h1>
-        <p className="text-muted-foreground">Check each component and fine-tune it. Changes here only affect the component you're looking at.</p>
+        <p className="text-muted-foreground">Check each component and fine-tune its colors.</p>
       </div>
       <div className="flex flex-wrap items-start gap-5">
         <nav aria-label="Your components" className="flex min-w-0 flex-[1_1_190px] flex-col gap-0.5 rounded-2xl border bg-background p-2 md:max-w-56">
@@ -137,7 +142,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
           <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
             <div>
               <h2 className="text-base font-semibold">How {name} gets its colors</h2>
-              <p className="text-sm text-muted-foreground">Pick a part, then click one of your colors to connect it, or tell Claude in the chat. Base colors change with light and dark mode.</p>
+              <p className="text-sm text-muted-foreground">Pick a part, then click one of your colors to connect it, or a base color to change that color itself. Light and dark mode each have their own: switch with Light and Dark above. Or tell Claude in the chat.</p>
             </div>
             {variants.length > 1 && (
               <div role="group" aria-label="Kind" className="flex flex-wrap gap-1.5">
@@ -146,7 +151,9 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
                 ))}
               </div>
             )}
-            <NodeGraph g={g} mode={tmode} parts={shown} selected={part} onSelect={setPart} onEdit={onEdit} />
+            <NodeGraph g={g} mode={tmode} parts={shown} selected={part} onSelect={setPart} onEdit={onEdit} onRoleColor={roleColor} />
+            {addingColor ? <AddColor hint="Plinth makes lighter and darker versions of it; they show up first in the base colors." onAdded={(r) => { onChanged(r, `Added ${r.name}.`); setAddingColor(false); }} onError={onError} />
+              : <button type="button" onClick={() => setAddingColor(true)} className="min-h-10 self-start text-sm font-medium text-info underline underline-offset-2">Add your own base color</button>}
             {radius && <p className="text-sm text-muted-foreground">{partName(radius.path)} follow the corners you picked in Style.</p>}
           </section>
         </div>

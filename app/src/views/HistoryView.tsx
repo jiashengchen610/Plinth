@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import type { State } from "@/lib/api";
 import { Cta } from "@/lib/cta";
 import { useVersionDraft, VersionField } from "@/lib/draft";
-import { timeAgo } from "@/lib/format";
 import { fileName, isGenerated } from "@/lib/plain";
+import { useDeploy } from "@/views/PublishView";
+import { VersionTree } from "@/views/VersionTree";
 
 type Props = {
   state: State; busy: boolean; backLabel: string; onBack: () => void;
@@ -17,7 +18,7 @@ export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard,
   const [confirm, setConfirm] = useState(false);
   const unsaved = state.unsaved ?? [];
   const groups = [...new Set(unsaved.filter((u) => !isGenerated(u.file)).map((u) => fileName(u.file)))];
-  const live = state.versions.find((v) => v.published);
+  const { deploy } = useDeploy("history", state.versions.some((v) => v.published));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
@@ -42,15 +43,7 @@ export function HistoryView({ state, busy, backLabel, onBack, onSave, onDiscard,
       </section>
       <section className="flex flex-col rounded-2xl border bg-background p-5">
         <h2 className="mb-2 text-base font-semibold">Saved versions</h2>
-        {state.versions.map((v, i) => (
-          <div key={v.sha} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-muted py-2.5">
-            <span className="flex min-w-0 flex-[1_1_260px] flex-col leading-snug"><span className="font-semibold">{v.subject}</span><span className="text-xs text-muted-foreground">{timeAgo(v.date)} · {v.short}</span></span>
-            {live && v.sha === live.sha && <span className="rounded-full border border-success/50 bg-success/10 px-2.5 py-0.5 text-xs font-semibold">Your team sees this</span>}
-            {i === 0 ? <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold">Latest</span> : (
-              <Button variant="outline" className="min-h-10" disabled={busy || unsaved.length > 0} title={unsaved.length ? "Save or throw away your changes first" : undefined} onClick={() => onRestore(v.sha)}>Go back to this version</Button>
-            )}
-          </div>
-        ))}
+        <VersionTree versions={state.versions} unsaved={unsaved.length > 0} deploy={deploy} onRestore={onRestore} restoreBlocked={busy ? "One moment" : unsaved.length ? "Save or throw away your changes first" : null} />
         {unsaved.length > 0 && state.versions.length > 1 && <p className="mt-2 text-xs text-muted-foreground">Save or throw away your changes before going back to an older version.</p>}
       </section>
       <Cta back={{ label: `← Back to ${backLabel}`, onClick: onBack }} status={unsaved.length ? `${groups.length} kind${groups.length > 1 ? "s" : ""} of change not in a version yet` : "Everything is saved"}

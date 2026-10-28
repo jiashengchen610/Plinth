@@ -1,7 +1,7 @@
 ---
 name: create-design-system
 description: "This skill should be used when the user asks to \"create a design system\", \"make a design system for my app\", \"generate design tokens from this description\", \"start a brand\", \"turn this screenshot / mood board into a design system\", or describes a product and its look and wants tokens, guidelines and components. Creates a multi-brand design system (DTCG tokens, DESIGN.md, WRITING.md, base components, Storybook) through the Plinth MCP tools. Each step is written at once and shows up in the UI; the user can undo it and decides when to save a version."
-version: 0.4.0
+version: 0.4.1
 ---
 
 # Create a design system
@@ -50,7 +50,9 @@ so you use the exact paths.
    `add_palette_color` with a name (`lacquer-red`) and the color; the engine generates its 50–950 scale.
 2. `set_style` for the four big choices: main color (a palette family), grays, corners (`square`, `slight`, `round`,
    `pill`) and font. The engine picks the palette steps that keep text readable.
-3. Then `change` titled e.g. "Set Acme colors and type" for anything finer, with `set` ops on
+3. `set_role_color` to point one role at a palette step (`destructive` → `rose.600`): the other mode follows in
+   the same family.
+4. Then `change` titled e.g. "Set Acme colors and type" for anything finer, with `set` ops on
    `brands/<brand>/tokens.json` (roles) and `tokens/base.tokens.json` (radius roles, fonts, shadows, motion).
 
 How to choose values:

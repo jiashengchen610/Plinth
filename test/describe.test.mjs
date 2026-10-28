@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
-import { readStyle, styleOps } from "../engine/style.mjs";
+import { readStyle, roleColorOps, styleOps } from "../engine/style.mjs";
 import * as wsx from "../engine/workspace.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +33,16 @@ test("style: a pick re-points roles at readable palette steps; component removal
     assert.deepEqual(base.typography.body.$value.fontFamily, ["Source Serif 4", "serif"]);
     assert.equal(base.radius.control.$value, "{radius.full}");
     assert.throws(() => styleOps(root, "probe", { main: "not-a-color" }), /no palette color/);
+
+    // A base color clicked in Components: the mode shown takes it, the other moves to the same family at its own step.
+    assert.deepEqual(roleColorOps(root, "probe", { role: "destructive", color: "rose.600" }), [
+      { op: "set", file: "brands/probe/tokens.json", path: "color/destructive", value: "{color.rose.600}" },
+      { op: "set", file: "brands/probe/tokens.json", path: "color/destructive", mode: "dark", value: "{color.rose.400}" },
+    ]);
+    assert.deepEqual(roleColorOps(root, "probe", { role: "background", color: "{color.stone.900}", mode: "dark" }).map((o) => o.value), ["{color.stone.900}"], "white in light mode stays white");
+    assert.deepEqual(roleColorOps(root, "probe", { role: "primary-foreground", color: "white" }), [], "already white");
+    assert.throws(() => roleColorOps(root, "probe", { role: "primary", color: "nope.600" }), /no palette color/);
+    assert.throws(() => roleColorOps(root, "probe", { role: "nope", color: "red.600" }), /no color role/);
 
     // A component nothing imports can go; the template's ones are used by the Foundations pages.
     assert.throws(() => wsx.removeComponentOps(root, "button"), /used by .*foundations/);
@@ -124,6 +134,12 @@ test("describe: suggestions, create from answers, style pick, remove, answer aga
   assert.equal((await api("api/state")).json.style.pocket.main, "blue");
   assert.equal((await api("api/version-draft")).json.text, null, "nothing left to describe");
   assert.equal((await api("api/color-name?color=%23e2725b")).json.name, "terracotta");
+  // A base color picked for one of your colors: one undoable change, titled as the UI says it.
+  const recolor = (await api("api/role-color", { brand: "pocket", role: "destructive", color: "orange.700", mode: "default", title: "Errors: Orange 700" })).json;
+  assert.equal(recolor.title, "Errors: Orange 700");
+  assert.equal((await api("api/state")).json.lastChange.title, "Errors: Orange 700");
+  assert.equal((await api("api/role-color", { brand: "pocket", role: "destructive", color: "orange.700" })).json.unchanged, true);
+  await api("api/undo", {});
 
   // Removing: refused for a component the Foundations pages use.
   const refused = await api("api/remove-component", { name: "button" });

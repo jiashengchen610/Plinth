@@ -9,7 +9,7 @@ import { runChecks, contrastFixes } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps } from "../engine/upgrade.mjs";
-import { readStyle, styleOps, styleTitle } from "../engine/style.mjs";
+import { readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
 import { deployStatus } from "./publish.mjs";
@@ -170,6 +170,30 @@ export const TOOLS = [
       const ops = styleOps(ctx.root, brand, pick);
       if (!ops.length) return { title: styleTitle(pick), files: [], unchanged: true, style: readStyle(ctx.root, brand) };
       return { ...write(ctx, { title: styleTitle(pick), ops, by: a.by ?? "claude" }), style: readStyle(ctx.root, brand) };
+    },
+  },
+  {
+    name: "set_role_color",
+    description: "Point one color role (primary, destructive, border …) at a palette step in one mode, the way the UI's Components step does when a base color is clicked. The other mode moves to the same family at the step it already uses, so light and dark stay one color. Every component using the role changes. Written at once; undoable. Prefer this over hand-made ops for re-pointing a role.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Brand id; default: the default brand" },
+        role: { type: "string", description: "Role name, e.g. primary" },
+        color: { type: "string", description: "Palette step, e.g. blue.600, or white / black" },
+        mode: { type: "string", enum: ["default", "dark"], description: "default (light) or dark; default: default" },
+        title: { type: "string", description: "Change title; default: '<role> → <color>'" },
+      },
+      required: ["role", "color"],
+    },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+      const ops = roleColorOps(ctx.root, brand, { role: a.role, color: a.color, mode: a.mode ?? "default" });
+      const title = a.title || `${a.role} → ${a.color}${a.mode === "dark" ? " (dark)" : ""}`;
+      if (!ops.length) return { title, files: [], unchanged: true };
+      return write(ctx, { title, ops, by: a.by ?? "claude" });
     },
   },
   {

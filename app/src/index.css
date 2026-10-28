@@ -137,3 +137,46 @@
     @apply font-sans;
     }
 }
+
+/* While an edit is written (yours or Claude's) the page is locked: each card turns into a moving skeleton over its
+   content, and the control that started the edit pulses. */
+@keyframes plinth-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+@keyframes plinth-pulse {
+  50% { outline-color: transparent; }
+}
+[data-locked] main section,
+[data-locked] [data-lock-skeleton] {
+  position: relative;
+}
+[data-locked] main section > *,
+[data-locked] [data-lock-skeleton] > * {
+  opacity: 0.55;
+  transition: opacity 150ms;
+}
+[data-locked] main section::after,
+[data-locked] [data-lock-skeleton]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--muted-foreground) 14%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: plinth-shimmer 1.3s linear infinite;
+}
+[data-pending] {
+  cursor: progress;
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+  animation: plinth-pulse 0.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-locked] main section::after,
+  [data-locked] [data-lock-skeleton]::after,
+  [data-pending] {
+    animation: none;
+  }
+}

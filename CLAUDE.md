@@ -30,6 +30,8 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - AI drafts, the user confirms: text the user would otherwise write is drafted and shown in an editable field (prose
   by Claude through `server/quick.mjs`, names and values by the engine), never left empty. Status tells the truth: after
   a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
+- One edit at a time: UI calls that write go through `edit()` in `app/src/lib/lock.ts` (`api.ts` wraps them), which
+  locks the page until the write is done and the page has reloaded; a Claude reply locks it for the whole reply.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
 - After changing `engine/` or `server/`, run `npm test` (29 tests).
