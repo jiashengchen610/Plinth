@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.14.0.** Tested by `npm test` (43 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.15.0.** Tested by `npm test` (44 tests), by the 93 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -127,7 +127,11 @@ when the step is done:
    components you'll likely need, each with a short reason. Keep each suggestion with **Next**, pick another, say it your own way, or let Claude
    decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
    and asks Claude in the chat to write the style guides and any extra components you picked. The result is saved as
-   your first version. Dependencies for the preview install in the background (1–3 minutes, once).
+   your first version. Dependencies for the preview install in the background (1–3 minutes, once). Later, the same
+   page offers **Start over with new answers** (a new style; components and history stay) and **Start from scratch**:
+   after a confirmation that says what goes, the design system goes back to a fresh one (template tokens and style
+   guide, the five core components, one brand, no answers) and the questions come again; what there was is saved as
+   a version first, and Undo takes the reset back.
 2. **Style.** **Everything in your style**: a map of every token you plan to use, in tabs for colors, text, corners
    and effects. Three columns, joined by faint lines: the base values in use (**All** shows the whole palette), your
    colors and other shared settings (the chart colors folded into one), and the components that use them (open one
@@ -180,7 +184,11 @@ when the step is done:
    online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
    Before the push, the same tests run on this computer; a story test that fails runs once more, and one that passes
    then is reported as failing once (a timing problem worth fixing) without stopping the publish. What stopped the
-   last publish, with the failing tests, is kept in `.ds/` and Claude reads it (`deploy_status`).
+   last publish, with the failing tests, is kept in `.ds/` and Claude reads it (`deploy_status`). Once there is a
+   repository, **Where to publish** offers it or **A new repository** (a name Plinth checks is free on GitHub; you
+   can change it): this folder then publishes there, with its version history, and the old repository stays as it
+   is, so one folder can serve as a launcher for several design systems. After **Start from scratch** the new
+   repository is the suggestion.
    While it works, the page shows each step (here, then on GitHub); once the site is online a success page lists where
    to check it (the component site, DESIGN.md for AI tools, the repository, the test results) and your versions as a
    tree. **Make more changes** starts the next round.
@@ -194,7 +202,7 @@ when the step is done:
 
 The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
 kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
-for the page you're on. **Undo** at the top takes the last change back, whoever made it; **History** lists what isn't
+for the page you're on. **Undo** at the top (or Ctrl+Z, ⌘Z on a Mac, outside text fields) takes the last change back, whoever made it; **History** lists what isn't
 in a version yet, saves a version (with a description Claude drafted), throws changes away, and restores any saved version.
 Edits happen one at a time: while one of yours is written, or while Claude works on a message, the page pauses (the
 cards turn into a moving skeleton, the control you pressed pulses) and comes back when the result is on screen.
@@ -340,7 +348,8 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `install_dependencies` | `npm install` plus the Playwright browser |
 | `get_tokens`, `get_guidelines`, `list_components` | Read the system (per brand) |
 | `change` | Ops (`set`, `delete`, `rename`, `write`, `remove`), validated and written at once, with reminders |
-| `undo` | Take back the newest change |
+| `undo` | Take back the newest change (Ctrl+Z in the UI) |
+| `start_from_scratch` | Back to a fresh design system (template tokens and guides, the five core components, one brand, no answers) as one undoable change, after saving what there is as a version; only when the user asked and confirmed |
 | `set_style` | Main color, grays, corners (preset, outer, inner, whether parts inside fit), text font, headings font, what buttons and labels follow (what the Style step does): roles re-pointed at readable palette steps, new fonts added to the palette |
 | `set_role_color` | One role on a palette step in one mode (what picking from the palette in Components does); the other mode follows in the same family |
 | `set_part_color` | One component part's color in one mode, everywhere its color is used or only this part (a new color, copied into every brand); any CSS color joins the palette in the same change (what the edit panel does) |
@@ -357,8 +366,8 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `save_version`, `list_versions`, `restore_version` | Versions (the user decides when to save); a restore is a new version |
 | `export_design_md` | The complete DESIGN.md for one brand, with lint |
 | `start_storybook`, `open_ui` | Previews and the UI link |
-| `publish` | The full publish (or `dryRun`) |
-| `deploy_status` | What GitHub did with the last publish: testing, live, or the step and story tests that stopped it |
+| `publish` | The full publish (or `dryRun`); with `another`, to a new repository instead of the current one |
+| `deploy_status` | What stopped the last publish on this computer (step, failing tests), and what GitHub did with the last push: testing, live, or the step and story tests that stopped it |
 
 Changes may only touch token files, guideline files, `design-system.json` and `src/components/`. Everything else
 is refused.
@@ -425,7 +434,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 43 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 44 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

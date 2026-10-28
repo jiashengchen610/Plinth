@@ -783,6 +783,44 @@ export function catalogComponents(templateDir = TEMPLATE_DIR) {
   return listComponents(templateDir).map((c) => c.id);
 }
 
+// What a design system is made of (what starting from scratch replaces); the rest (dependencies, settings, the
+// managed and generated files) stays or is regenerated.
+const DESIGN_PATHS = ["tokens", "brands", "src/components", "icons", "DESIGN.md", "WRITING.md", "design-system.json"];
+/**
+ * Ops that put the design system back to a fresh one, as Create makes it before any answer: the template's tokens,
+ * guidelines and core components, one brand (the current default), no answers. One change, so Undo brings it all
+ * back. skipComponents: catalog components a fresh design system leaves out (all but the core ones).
+ */
+export function scratchOps(root, { skipComponents = [], templateDir = TEMPLATE_DIR } = {}) {
+  const config = loadConfig(root);
+  const brand = config.defaultBrand ?? listBrands(root, config)[0] ?? "default";
+  const fresh = mkdtempSync(join(tmpdir(), "plinth-scratch-"));
+  try {
+    initWorkspace(fresh, { name: config.name ?? "my-design-system", brand, context: config.context, naming: config.naming, templateDir, skipComponents });
+    const files = (base) => {
+      const out = [];
+      const walk = (rel) => {
+        const abs = join(base, rel);
+        if (!existsSync(abs)) return;
+        if (statSync(abs).isDirectory()) for (const n of readdirSync(abs)) walk(`${rel}/${n}`);
+        else out.push(rel);
+      };
+      for (const p of DESIGN_PATHS) walk(p);
+      return out;
+    };
+    const want = new Set(files(fresh));
+    const ops = [];
+    for (const f of want) {
+      const content = readFileSync(join(fresh, f), "utf8");
+      if (readText(root, f) !== content) ops.push({ op: "write", file: f, content });
+    }
+    for (const f of files(root)) if (!want.has(f)) ops.push({ op: "remove", file: f });
+    return ops;
+  } finally {
+    rmSync(fresh, { recursive: true, force: true });
+  }
+}
+
 /**
  * Ops that add a catalog component to a workspace: its folder, its token file, the icons it uses, and any base
  * roles it needs that an older workspace lacks (small corners, motion, stacking order). One undoable change.

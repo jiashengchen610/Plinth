@@ -176,22 +176,26 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
       const product = String(a?.product ?? "").trim();
       if (!product) throw new Error("Say what you're making first.");
       const exists = existsSync(join(ctx.root, "design-system.json"));
+      // Fresh: a new design system, or one started from scratch (no answers yet): it gets the new name, a style
+      // guide written anew and a first version, like Create in an empty folder.
+      let fresh = !exists;
+      try { fresh = fresh || !loadConfig(ctx.root).brief; } catch { /* unreadable: answer again */ }
       const picked = (a.components ?? []).filter((id) => COMPONENTS.some((c) => c.id === id && !c.core));
       const skipComponents = COMPONENTS.filter((c) => !c.core && !picked.includes(c.id)).map((c) => c.id);
       const custom = a.extraText?.trim() ? 1 : 0;
       cur = {
-        running: true, fresh: !exists, startedAt: new Date().toISOString(), finishedAt: null, error: null, cost: null,
+        running: true, fresh, startedAt: new Date().toISOString(), finishedAt: null, error: null, cost: null,
         steps: [
-          step("scaffold", exists ? "Keeping your components and history" : "Setting up your design system", "Automatic"),
+          step("scaffold", fresh ? "Setting up your design system" : "Keeping your components and history", "Automatic"),
           step("style", "Applying your colors, corners and font", "Automatic"),
           step("claude", custom ? "Writing your style guide and your new component" : "Writing your style guide", "Claude"),
           step("deps", "Installing the preview and tests", "Automatic"),
         ],
       };
       bump();
-      return this.run(a, { product, exists, picked, skipComponents });
+      return this.run(a, { product, exists, fresh, picked, skipComponents });
     },
-    async run(a, { product, exists, picked, skipComponents }) {
+    async run(a, { product, exists, fresh = !exists, picked, skipComponents }) {
       // Let the request that started it answer first: scaffolding blocks for a few seconds.
       await new Promise((r) => setImmediate(r));
       try {
@@ -229,9 +233,11 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         const cfg = JSON.parse(readFileSync(join(ctx.root, "design-system.json"), "utf8"));
         const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
         cfg.brief = brief;
-        if (!exists) cfg.context = KINDS.some((k) => k.id === a.kind) ? a.kind : cfg.context;
+        if (fresh) cfg.context = KINDS.some((k) => k.id === a.kind) ? a.kind : cfg.context;
+        // Started from scratch: the design system takes the new name (its brand keeps its id; files are named by it).
+        if (fresh && exists) { cfg.name = name; const b = cfg.brands?.find((x) => x.id === brand); if (b) b.name = name; }
         ops.push({ op: "write", file: "design-system.json", content: JSON.stringify(cfg, null, 2) + "\n" });
-        ws.change(ctx.root, { title: exists ? "Style from your new answers" : "Style from your answers", ops, by: "engine" });
+        ws.change(ctx.root, { title: fresh ? "Style from your answers" : "Style from your new answers", ops, by: "engine" });
         ctx.notify?.();
         set("style", "done");
 
@@ -248,13 +254,13 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
         set("claude", "active");
         const style = readStyle(ctx.root, brand);
         const before = ctx.chat.state().messages.length;
-        const { done } = await ctx.chat.send({ text: setupPrompt({ ...a, product }, style, !exists) });
+        const { done } = await ctx.chat.send({ text: setupPrompt({ ...a, product }, style, fresh) });
         await done.catch(() => {});
         const reply = ctx.chat.state().messages.slice(before).filter((m) => m.role === "assistant").at(-1);
         if (!reply || reply.error) set("claude", "error", reply?.text ?? ctx.chat.state().error ?? "Claude did not answer.");
         else set("claude", "done");
         cur.cost = reply?.cost ?? null;
-        if (!exists) { try { ws.saveVersion(ctx.root, `Style and guidelines for ${name}`); } catch { /* nothing left to save */ } }
+        if (fresh) { try { ws.saveVersion(ctx.root, `Style and guidelines for ${name}`); } catch { /* nothing left to save */ } }
       } catch (e) {
         cur.error = e.message;
         const active = cur.steps.find((s) => s.status === "active");

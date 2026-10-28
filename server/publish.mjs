@@ -38,14 +38,31 @@ export function publishDefaults(root) {
   let name = "design-system";
   try { name = loadConfig(root).name.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || name; } catch { /* no workspace */ }
   const freePlan = s.plan === "free";
+  const current = repoFromUrl(remote);
+  // Started from scratch since the last publish: a new design system, so a new repository is the suggestion.
+  const at = (f) => { try { return Date.parse(JSON.parse(readFileSync(join(root, ".ds", f), "utf8")).at) || 0; } catch { return 0; } };
+  const scratchSincePublish = Boolean(remote) && at("scratch.json") > at("published.json");
   return {
     ghInstalled: s.installed, ghAuthed: s.authed, scopesOk: s.scopesOk, missingScopes: s.missingScopes, user: s.user, plan: s.plan,
     // GitHub does not always report the plan (null); then Pages on a private repository may not work, so suggest public.
     privatePagesAllowed: s.plan === null ? null : !freePlan,
     suggestedVisibility: s.plan && !freePlan ? "private" : "public",
-    remote, repo: repoFromUrl(remote), suggestedRepo: s.user ? `${s.user}/${name}` : name,
-    ...remoteInfo(root, repoFromUrl(remote), s.authed),
+    remote, repo: current, suggestedRepo: s.user ? `${s.user}/${name}` : name,
+    // Another repository to publish to: the design system's name, or with a number when that one is taken.
+    suggestedAnother: remote && s.user && s.authed ? freeRepoName(root, `${s.user}/${name}`, current) : null,
+    scratchSincePublish,
+    ...remoteInfo(root, current, s.authed),
   };
+}
+
+/** owner/name, else owner/name-2, -3 …: the first that is not the current repository and does not exist yet. */
+function freeRepoName(root, base, current) {
+  for (let i = 1; i < 8; i++) {
+    const candidate = i === 1 ? base : `${base}-${i}`;
+    if (candidate === current) continue;
+    try { gh(root, ["repo", "view", candidate, "--json", "name"]); } catch { return candidate; }
+  }
+  return `${base}-${Date.now().toString(36)}`;
 }
 
 /** For a repository that already exists: its visibility and whether Pages is on (null when unknown). */
@@ -58,10 +75,10 @@ function remoteInfo(root, full, authed) {
 }
 
 /**
- * @param {object} opts { repo, visibility, dryRun }
+ * @param {object} opts { repo, visibility, dryRun, another } another: publish to repo instead of the current one
  * @param {object} deps { tests: createTests(), onStep(step) }
  */
-export async function publish(root, { repo, visibility = "private", dryRun = false } = {}, { tests, onStep = () => {} } = {}) {
+export async function publish(root, { repo, visibility = "private", dryRun = false, another = false } = {}, { tests, onStep = () => {} } = {}) {
   const steps = [];
   const step = (name, detail, ok = true) => { const s = { name, ok, detail }; steps.push(s); onStep(s); return s; };
   const stop = (stoppedAt, extra) => ({ published: false, stoppedAt, steps, ...extra });
@@ -129,6 +146,19 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
       url = remoteUrl(root);
       created = true;
       step("create repository", { repo, visibility });
+    } else if (another && repo && repo !== repoFromUrl(url)) {
+      // Another repository (this folder as a launcher, a design system started from scratch): create it, point
+      // origin at it, remember where it pointed before. The push carries the version history.
+      gh(root, ["repo", "create", repo, `--${visibility}`]);
+      const previous = url;
+      url = previous.startsWith("git@") ? `git@github.com:${repo}.git` : `https://github.com/${repo}.git`;
+      git(root, ["remote", "set-url", "origin", url]);
+      mkdirSync(join(root, ".ds"), { recursive: true });
+      let before = [];
+      try { before = JSON.parse(readFileSync(join(root, ".ds", "remotes.json"), "utf8")); } catch { /* first move */ }
+      writeFileSync(join(root, ".ds", "remotes.json"), JSON.stringify([...before, { url: previous, until: new Date().toISOString() }], null, 2) + "\n");
+      created = true;
+      step("create repository", { repo, visibility, previous: repoFromUrl(previous) });
     }
   } catch (e) {
     const msg = errText(e);

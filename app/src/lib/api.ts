@@ -89,6 +89,8 @@ export type PublishDefaults = {
   ghInstalled: boolean; ghAuthed: boolean; scopesOk: boolean; missingScopes: string[]; user: string | null; plan: string | null;
   privatePagesAllowed: boolean | null; suggestedVisibility: "private" | "public";
   remote: string | null; repo: string | null; suggestedRepo: string;
+  /** Another repository to publish to (free on GitHub), and whether the design system started from scratch since the last publish. */
+  suggestedAnother: string | null; scratchSincePublish: boolean;
   visibility: "PUBLIC" | "PRIVATE" | "INTERNAL" | null; pagesEnabled: boolean | null;
 };
 /** What GitHub did with the last publish (the workflow tests, then deploys). */
@@ -158,7 +160,10 @@ export const api = {
   startStorybook: () => call<{ url?: string; error?: string; next?: string }>("POST", "/api/storybook/start"),
   storyIndex: () => call<{ running: boolean; url?: string; entries: StoryEntry[] }>("GET", "/api/storybook/index"),
   publishDefaults: () => call<PublishDefaults>("GET", "/api/publish/defaults"),
-  publish: (opts: { repo?: string; visibility?: "private" | "public" }) => call<{ started: boolean }>("POST", "/api/publish", opts),
+  /** another: publish to repo, a new repository, instead of the current one. */
+  publish: (opts: { repo?: string; visibility?: "private" | "public"; another?: boolean }) => call<{ started: boolean }>("POST", "/api/publish", opts),
+  /** Deletes the design system's content (the user confirmed); what there was is saved as a version first. */
+  startFromScratch: () => edit("Starting from scratch", () => call<Partial<ChangeResult> & { saved?: string | null; version?: string | null; unchanged?: boolean }>("POST", "/api/start-from-scratch")),
   makePublicAndDeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/make-public"),
   redeploy: () => call<{ github: string; actions: string; storybook: string | null; note: string }>("POST", "/api/publish/redeploy"),
   upgrade: () => edit("Upgrading", () => call<Partial<ChangeResult> & { message?: string }>("POST", "/api/upgrade")),

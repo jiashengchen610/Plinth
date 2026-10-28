@@ -35,8 +35,15 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
   const phase = !started ? "form" : !result ? "progress" : !result.published || result.pagesBlocked ? "form" : github === "live" ? "success" : github === "failed" ? "form" : "progress";
   useEffect(() => { document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }); }, [phase]);
 
+  // With a repository already: update it, or publish to another one (drafted; suggested after starting from scratch).
+  const [target, setTarget] = useState<"current" | "another">("current");
+  const [another, setAnother] = useState("");
   const refresh = useCallback(() => {
-    api.publishDefaults().then((d) => { setDefaults(d); setRepo((r) => (!r || !r.includes("/") ? d.suggestedRepo : r)); setVisibility(d.suggestedVisibility); }).catch((e) => onError(e.message));
+    api.publishDefaults().then((d) => {
+      setDefaults(d); setRepo((r) => (!r || !r.includes("/") ? d.suggestedRepo : r)); setVisibility(d.suggestedVisibility);
+      setAnother((x) => x || d.suggestedAnother || "");
+      if (d.scratchSincePublish) setTarget("another");
+    }).catch((e) => onError(e.message));
   }, [onError]);
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { if (login.status === "done") refresh(); }, [login.status, refresh]);
@@ -62,19 +69,21 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
         setSaving(false);
         onSaved("Saved a version.");
       }
-      await api.publish(defaults?.remote ? {} : { repo, visibility });
+      await api.publish(!defaults?.remote ? { repo, visibility } : target === "another" ? { repo: another.trim(), visibility, another: true } : {});
     } catch (e) { setSaving(false); setStarted(false); onError((e as Error).message); }
   };
   const makePublic = async () => { setFixing(true); try { setFixed(await api.makePublicAndDeploy()); refresh(); } catch (e) { onError((e as Error).message); } finally { setFixing(false); } };
 
   const connected = Boolean(defaults?.ghInstalled && defaults.ghAuthed && defaults.scopesOk);
-  const privateBlocked = !defaults?.remote && visibility === "private" && defaults?.privatePagesAllowed === false;
+  const toAnother = Boolean(defaults?.remote) && target === "another";
+  const privateBlocked = (!defaults?.remote || toAnother) && visibility === "private" && defaults?.privatePagesAllowed === false;
   const contrast = state.checks.contrast.filter((c) => !c.pass && !c.accepted);
   const distinct = state.checks.distinct.filter((d) => !d.pass && !d.accepted);
   const brokenRefs = state.checks.tokenIssues;
   const published = state.versions.some((v) => v.published);
   const sinceLast = published ? state.versions.slice(0, state.versions.findIndex((v) => v.published)) : state.versions;
-  const blocked = !connected ? "Connect GitHub first." : privateBlocked ? "Your GitHub plan can't put a private component site online." : brokenRefs.length ? "Some colors point at something that no longer exists. Ask Claude to fix it." : !defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo) ? "Pick a repository name." : "";
+  const blocked = !connected ? "Connect GitHub first." : privateBlocked ? "Your GitHub plan can't put a private component site online." : brokenRefs.length ? "Some colors point at something that no longer exists. Ask Claude to fix it." : !defaults?.remote && !/^[\w.-]+\/[\w.-]+$/.test(repo) ? "Pick a repository name."
+    : toAnother && (!/^[\w.-]+\/[\w.-]+$/.test(another.trim()) || another.trim() === defaults?.repo) ? "Pick a name for the new repository." : "";
 
   const latest = state.versions.find((v) => !isPublishCommit(v));
   const subject = savedText || (latest ? versionTitle(latest) : "your design system");
@@ -157,7 +166,30 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
           </div>
         )}
         {defaults && (defaults.remote ? (
-          <p className="text-sm">Repository: <code>{defaults.repo ?? defaults.remote}</code>{defaults.visibility ? <span className="text-muted-foreground"> · {defaults.visibility === "PUBLIC" ? "anyone with the link can see it" : "only people you invite"}</span> : null}</p>
+          <fieldset className="flex flex-col gap-2 text-sm">
+            <legend className="mb-1.5 font-semibold">Where to publish</legend>
+            {defaults.scratchSincePublish && <p className="text-muted-foreground">You started from scratch since the last publish, so a new repository is suggested: the current one keeps the design system you had.</p>}
+            <label className={`flex items-start gap-2.5 rounded-xl border-[1.5px] px-3 py-2.5 ${target === "current" ? "border-foreground" : ""}`}>
+              <input type="radio" name="target" checked={target === "current"} onChange={() => setTarget("current")} className="mt-1 accent-foreground" />
+              <span className="flex flex-col"><strong>Update <code>{defaults.repo ?? defaults.remote}</code></strong><span className="text-muted-foreground">{defaults.visibility ? `${defaults.visibility === "PUBLIC" ? "Anyone with the link can see it" : "Only people you invite"}. ` : ""}Its component site shows this version.</span></span>
+            </label>
+            <label className={`flex items-start gap-2.5 rounded-xl border-[1.5px] px-3 py-2.5 ${target === "another" ? "border-foreground" : ""}`}>
+              <input type="radio" name="target" checked={target === "another"} onChange={() => setTarget("another")} className="mt-1 accent-foreground" />
+              <span className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="flex flex-col"><strong>A new repository</strong><span className="text-muted-foreground">With its own component site. The current repository stays on GitHub as it is; from now on this folder publishes to the new one, with your version history.</span></span>
+                {target === "another" && (
+                  <>
+                    <input aria-label="New repository (your-account/name)" value={another} onChange={(e) => setAnother(e.target.value)} placeholder="your-account/design-system-2" className="h-11 rounded-lg border bg-background px-3 font-mono" />
+                    <span role="group" aria-label="Who can see its component site" className="flex flex-wrap gap-2">
+                      {(["public", "private"] as const).map((v) => (
+                        <button key={v} type="button" aria-pressed={visibility === v} onClick={() => setVisibility(v)} className={`min-h-9 rounded-full border-2 px-3 text-sm ${visibility === v ? "border-foreground" : "border-border"}`}>{v === "public" ? "Anyone with the link" : "Only people you invite"}</button>
+                      ))}
+                    </span>
+                  </>
+                )}
+              </span>
+            </label>
+          </fieldset>
         ) : (
           <>
             <label className="flex flex-col gap-1 text-sm font-semibold">New repository (your-account/name)<input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="your-account/design-system" className="h-11 rounded-lg border bg-background px-3 font-mono font-normal" /></label>
@@ -214,7 +246,7 @@ export function PublishView({ state, onError, onAsk, onBack, onSaved, onNewRound
       </section>
       {nothingNew ? <Cta back={{ label: "← Components", onClick: onBack }} status="Your site has the latest version" next={{ label: "Make more changes →", onClick: onNewRound }} />
         : <Cta back={{ label: "← Components", onClick: onBack }} status={publish.running ? "Publishing… about a minute" : blocked || (deploy?.status === "running" || deploy?.status === "waiting" ? "GitHub is testing, then putting it online" : deploy?.status === "failed" ? "GitHub stopped the last publish: see the top of the page" : deploy?.status === "live" ? "Your site is online" : "")}
-        next={{ label: saving ? "Saving…" : publish.running ? "Publishing…" : `${unsaved.length ? "Save and " : ""}${defaults?.remote ? "publish" : "create the repository and publish"}`.replace(/^./, (c) => c.toUpperCase()), disabled: Boolean(blocked) || publish.running || saving, onClick: start }} />}
+        next={{ label: saving ? "Saving…" : publish.running ? "Publishing…" : `${unsaved.length ? "Save and " : ""}${toAnother ? "publish to a new repository" : defaults?.remote ? "publish" : "create the repository and publish"}`.replace(/^./, (c) => c.toUpperCase()), disabled: Boolean(blocked) || publish.running || saving, onClick: start }} />}
     </div>
   );
 }

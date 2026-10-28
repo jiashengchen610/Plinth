@@ -164,6 +164,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/setup": async (req) => { const answers = await readJson(req); const already = Boolean(ctx.setup.state()?.running); ctx.setup.start(answers).catch(() => {}); return { started: true, already }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },
+    // The UI asked the user to confirm first (it deletes the current style, components and style guide).
+    "POST /api/start-from-scratch": () => { needsWorkspace(); return tool("start_from_scratch", { by: "you" }); },
     "POST /api/part-color": async (req) => { needsWorkspace(); return tool("set_part_color", { ...(await readJson(req)), by: "you" }); },
     // This round's values, before → after (Publish shows them). null before the first publish: everything is new.
     "GET /api/round-changes": () => { needsWorkspace(); return { changes: ws.publishedRef(ctx.root) ? ws.changesSince(ctx.root) : null }; },

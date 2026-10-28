@@ -1,7 +1,7 @@
 // MCP tool definitions. Each tool: { name, description, inputSchema, run(args, ctx) → JSON-able result }.
 // ctx: see context.mjs ({ root, ui, deps, storybook, tests, publish, notify }). Tools run in the process that owns
 // the workspace (owner.mjs); other processes forward their calls to it.
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
@@ -252,6 +252,23 @@ export const TOOLS = [
     },
   },
   {
+    name: "start_from_scratch",
+    description: "Put the design system back to a fresh one, as Create makes it before any answer: the template's tokens, style guide and core components, one brand, no answers; your colors, other components and brands go. Only when the user asked for it and confirmed that their current style, components and style guide will go. What there is now is saved as a version first (History brings it back), and the reset is one change Undo takes back. Then the Describe step asks the questions again, and the next publish suggests a new repository.",
+    inputSchema: { type: "object", properties: {} },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      // What there is now becomes a version first (when there is anything not saved).
+      const saved = ws.unsavedChanges(ctx.root).length ? ws.saveVersion(ctx.root, "Before starting from scratch").version : null;
+      const ops = ws.scratchOps(ctx.root, { skipComponents: COMPONENTS.filter((c) => !c.core).map((c) => c.id) });
+      if (!ops.length) return { title: "Start from scratch", files: [], unchanged: true, saved };
+      const r = write(ctx, { title: "Start from scratch", ops, by: a.by ?? "claude" });
+      // Publish reads this to suggest a new repository for the new design system.
+      mkdirSync(join(ctx.root, ".ds"), { recursive: true });
+      writeFileSync(join(ctx.root, ".ds", "scratch.json"), JSON.stringify({ at: new Date().toISOString(), saved }) + "\n");
+      return { ...r, saved, version: saved ?? ws.versions(ctx.root, 1)[0]?.short ?? null };
+    },
+  },
+  {
     name: "set_part_color",
     description: "Change the color of one component part (a component token such as button/default/background) in one mode, the way the UI's edit panel does. scope \"role\": the color it uses changes, in every component that uses that color. scope \"part\": only this part changes: Plinth makes a new color of yours (a copy of the old one in every brand, so other brands keep their look; named `name` or by the engine), sets it, and points the part at it. color: a palette step (violet.600, white) or any CSS color (#9e5e00, oklch(…)), which joins the palette as a 50–950 scale (named paletteName or by the engine). Ask the user which scope they want when other parts use the same color. Written at once; undoable.",
     inputSchema: {
@@ -467,8 +484,9 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        repo: { type: "string", description: "owner/name for the first publish; ignored when a remote exists" },
-        visibility: { type: "string", enum: ["private", "public"], description: "First publish only. Default private." },
+        repo: { type: "string", description: "owner/name for the first publish, or with another for a different repository; else ignored when a remote exists" },
+        visibility: { type: "string", enum: ["private", "public"], description: "For a new repository. Default private." },
+        another: { type: "boolean", description: "Publish to repo, a new repository, instead of the current one (origin moves to it; the old one stays on GitHub as it is). Ask the user first." },
         dryRun: { type: "boolean", description: "Run every step except pushing and enabling Pages" },
       },
     },

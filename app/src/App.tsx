@@ -119,6 +119,34 @@ export default function App() {
   const lockBy = pendingEdit ? "you" : state?.exists && state.chat?.working ? "claude" : null;
   const skeleton = useAfter(lockBy, lockBy === "you" ? 200 : 0);
 
+  // Ctrl+Z (⌘Z on a Mac) takes back the newest change, as Undo does; in a text field it undoes the typing instead.
+  const undoRef = useRef<() => void>(() => {});
+  undoRef.current = () => {
+    if (!state?.exists || busy || lockBy || !state.lastChange) return;
+    act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "");
+  };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      undoRef.current();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  const scratch = async () => {
+    try {
+      const r = await api.startFromScratch();
+      try { localStorage.removeItem("plinth-answers"); } catch { /* private window */ }
+      setRedo(false);
+      setNotice(r.unchanged ? "It is already a fresh design system." : `Started from scratch. What you had is saved as a version${r.version ? ` (${r.version})` : ""}: History brings it back. Answer the questions for the new design system.`);
+      await load();
+      go("describe");
+    } catch (e) { onError((e as Error).message); }
+  };
+
   if (!state) return <main className="grid min-h-dvh place-items-center p-6 text-sm text-muted-foreground">{error ? `Cannot reach the Plinth server: ${error}` : "Loading…"}</main>;
 
   const exists = state.exists;
@@ -196,7 +224,7 @@ export default function App() {
         </nav>
         {exists && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="min-h-10" disabled={busy || Boolean(lockBy) || !state.lastChange} title={state.lastChange ? `Undo: ${state.lastChange.title}` : "Nothing to undo"} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "")}>Undo</Button>
+            <Button variant="outline" className="min-h-10" disabled={busy || Boolean(lockBy) || !state.lastChange} title={state.lastChange ? `Undo (Ctrl+Z): ${state.lastChange.title}` : "Nothing to undo"} onClick={() => act(async () => { const r = await api.undo(); setNotice(`Undid: ${r.undone}.`); }, "")}>Undo</Button>
             <Button variant="outline" className={`min-h-10 ${unsaved ? "border-warning/60 bg-warning/10" : ""}`} onClick={() => go("history")}>{unsaved ? `Not saved · Save` : "All saved"}</Button>
             <Button variant={effective === "history" ? "secondary" : "ghost"} className="min-h-10" aria-current={effective === "history" ? "page" : undefined} onClick={() => go("history")}>History</Button>
           </div>
@@ -222,7 +250,7 @@ export default function App() {
           <main className="min-h-0 flex-1 px-4 py-5 lg:overflow-y-auto">
             <CtaSlot.Provider value={slot}>
               <div inert={Boolean(lockBy)} className={`mx-auto ${effective === "describe" || effective === "creating" ? "max-w-3xl" : effective === "publish" || effective === "history" ? "max-w-4xl" : "max-w-6xl"}`}>
-                {effective === "describe" && <DescribeView key={`${exists}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} sending={sending} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} />}
+                {effective === "describe" && <DescribeView key={`${exists}-${Boolean(state.config?.brief)}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} sending={sending} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} onScratch={scratch} />}
                 {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
                 {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => { confirmStep("style"); go("components"); }} onAsk={ask} />}
                 {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => { confirmStep("components"); go("publish"); }} />}

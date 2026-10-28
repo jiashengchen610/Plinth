@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Answers, type Presets, type State, type Suggestions } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES } from "@/lib/plain";
+import { ConfirmDialog } from "@/views/ConfirmDialog";
 import { StepIntro } from "@/views/StepIntro";
 
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   /** True from the click on Create until the server answers: the button cannot be pressed twice. */
   sending?: boolean;
   onCreate: (answers: Answers) => void; onNext: () => void; onAsk: (text: string) => void; onError: (m: string) => void;
+  /** Delete the design system's content and start over (after the user confirmed). */
+  onScratch: () => Promise<void>;
 };
 
 type StepId = "product" | "followup" | "feel" | "palette" | "corners" | "font" | "components" | "summary";
@@ -42,8 +45,11 @@ function Bubble({ who, children }: { who: "claude" | "you"; children: React.Reac
 
 const ring = (on: boolean) => (on ? "border-foreground" : "border-border");
 
-export function DescribeView({ state, presets, redo, onRedo, sending = false, onCreate, onNext, onAsk, onError }: Props) {
-  const created = state.exists;
+export function DescribeView({ state, presets, redo, onRedo, sending = false, onCreate, onNext, onAsk, onError, onScratch }: Props) {
+  // Made from answers: a design system started from scratch has none yet, so the questions come again.
+  const created = state.exists && Boolean(state.config?.brief);
+  const [confirming, setConfirming] = useState(false);
+  const [scratching, setScratching] = useState(false);
   const editable = !created || redo;
   const [mode, setMode] = useState<"questions" | "import">("questions");
   const [a, setA] = useState<Draft>(() => {
@@ -334,6 +340,20 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
             </p>
           )}
         </div>
+      )}
+      {created && !redo && (
+        <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-background px-5 py-4">
+          <span className="flex-[1_1_300px] text-sm"><strong>Start from scratch?</strong> Delete this design system's style, components and style guide, and answer the questions for a new one. What you have now is saved as a version first.</span>
+          <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-lg border border-destructive/50 px-3.5 text-sm font-semibold text-destructive">Start from scratch</button>
+        </section>
+      )}
+      {confirming && (
+        <ConfirmDialog title="Delete this design system and start from scratch?" confirm="Delete and start from scratch" cancel={`Keep ${state.config?.name ?? "it"}`} busy={scratching}
+          onCancel={() => setConfirming(false)} onConfirm={async () => { setScratching(true); try { await onScratch(); } finally { setScratching(false); setConfirming(false); } }}>
+          <p>These go: your colors and corners, your fonts, {state.components.length} components (the five every design system has come back as new), {state.brands.length > 1 ? `${state.brands.length - 1} more brand${state.brands.length > 2 ? "s" : ""}, ` : ""}your style guide and writing guide, and your answers.</p>
+          <p>Your version history stays. What you have now is saved as a version first, so <strong>History</strong> can bring it back, and right after, <strong>Undo</strong> does too.</p>
+          <p className="text-muted-foreground">Then you answer the questions for the new design system. The next time you publish, Plinth suggests a new repository for it.</p>
+        </ConfirmDialog>
       )}
       {cta()}
     </div>
