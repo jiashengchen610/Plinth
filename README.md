@@ -1,20 +1,31 @@
 # Plinth
 
-**Plinth is under active development and changes often: new features and fixes land every few days, and the way
-things work may still change between versions.**
+> **Under development.** Plinth is an early, experimental project. It changes often, things may break between
+> versions, and only a few people have used it, mostly on Windows 11. Please do not rely on it for production work
+> yet.
 
-Create and maintain a multi-brand design system by talking to Claude. Answer a few questions (most are one click:
-a palette, corners, a font), and get design tokens, design and writing guidelines, and shadcn/ui components. Every
-change applies at once in a local UI and can be undone; you decide when to save a version, and you publish the result
-as Storybook on GitHub Pages, with pages for the tokens and guidelines next to the components. The whole loop is four
-steps in one UI, with Claude in a chat beside them: Describe → Style → Components → Publish.
+**Goal.** Plinth aims to be a reliable single source of truth for a design system, one that catches its own mistakes
+and, where it can, fixes them. The design decisions live in one place, as design tokens and written guidelines in a
+Git repository. Everything else is generated from them: the CSS, the component styles, the Storybook site, and the
+DESIGN.md files that AI tools read. Every change is checked before it is written (broken references, text contrast,
+colors that look alike, values hardcoded in components), and the same checks run again before anything is
+published. Where a program can work out the answer, such as a readable text color, a palette scale, or chart colors
+that color-blind readers can tell apart, Plinth computes it and offers the fix instead of leaving it to guesswork.
+It does not get there everywhere yet: many findings are reminders rather than fixes, and some problems still need a
+person, or Claude, to solve them.
+
+**What it does today.** You create and maintain a multi-brand design system by talking to Claude. A few questions,
+most of them one click (a palette, corners, a font), give you design tokens, design and writing guidelines, and
+shadcn/ui components. Each change applies at once in a local UI and can be undone; you decide when to save a version,
+and you can publish the result as Storybook on GitHub Pages, with pages for the tokens and guidelines next to the
+components. It is four steps in one UI, with Claude in a chat beside them: Describe → Style → Components → Publish.
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: early (0.10.0).** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and
-> end to end on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
-> ([example](https://jiashengchen610.github.io/plinth-demo/)). Few people have used it yet, and macOS and Linux are
-> untested. Expect rough edges; issues and pull requests are welcome.
+> **Status: 0.10.0.** Tested by `npm test` (37 tests), by the 93 story tests in a generated workspace, and end to end
+> on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
+> ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
+> issues and pull requests are welcome.
 
 ## Contents
 
@@ -239,6 +250,10 @@ errors, failing interaction tests, and components without their tokens or a stor
 | Look-alike roles: primary, destructive, success, warning and info too close (ΔE_OK < 0.08 or < 20° of hue) | every change | no | move one, or mark the pair as intended |
 | Component format: every component has `tokens/components/<name>.tokens.json` and a story | Publish, GitHub | **yes** | ask Claude |
 | Hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change (reminder) | **yes**, at Publish and on GitHub | ask Claude, or accept it as an exception |
+| Text on glass: the glass color at its opacity over a black and over a white backdrop (4.5:1), in every brand × mode | every change | no | the glass tool's least readable opacity (Style → Glass), or another text color |
+| Chart series colors: each 3:1 on the page; each pair apart for normal vision and simulated protan, deutan and tritan vision (ΔE_OK 0.08 / 0.04) | every change | no | **Make from my colors** (Style → Chart colors) |
+| Text sizes written in components (`text-sm`, `font-medium`, `leading-*`, `tracking-*`) instead of text tokens | every change, Publish, GitHub | no (reminder) | give the part a text token (`type-<component>-<part>`) |
+| A component's own corners on a part inside it (`rounded-<name>` twice) | every change, Publish, GitHub | no (reminder) | a radius token for the part that fits inside its container |
 | Generated files match the tokens (`tokens.css`, `fonts.css`, Foundations data) | GitHub | **yes** | open the folder in Plinth (it regenerates), save, push |
 | TypeScript and every story's interaction tests (Vitest browser mode); accessibility (axe) reported as warnings | **Run tests**, Publish, GitHub | interaction and types: **yes** | ask Claude |
 
