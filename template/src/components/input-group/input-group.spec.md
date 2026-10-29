@@ -15,9 +15,9 @@ Default, focus-visible (the whole frame shows focus), invalid (aria-invalid on t
 props with `size` ("xs", "sm", "icon-xs", "icon-sm"), ghost by default. Input and textarea props on the controls.
 
 ## Tokens
-input-group-radius, input-group-button-radius (fits inside), input-group-field-background, -field-border,
--addon-foreground, -addon-font, -text-font, -control-foreground, -control-placeholder, -control-font; ring,
-destructive; duration-fast.
+input-group-radius, input-group-multiline-radius (several lines, or addons above or below),
+input-group-button-radius (fits inside), input-group-field-background, -field-border, -addon-foreground, -addon-font,
+-text-font, -control-foreground, -control-placeholder, -control-font; ring, destructive; duration-fast.
 
 ## Accessibility
 Name the control (a Label, or aria-label). Clicking an addon puts the cursor in the field. Icon-only buttons inside

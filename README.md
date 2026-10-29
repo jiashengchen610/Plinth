@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.17.0.** Tested by `npm test` (47 tests), by the 133 story tests in a generated workspace, and end to end
+> **Status: 0.17.1.** Tested by `npm test` (47 tests), by the 133 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.

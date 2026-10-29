@@ -2,7 +2,7 @@
   "textarea": {
     "radius": {
       "$type": "dimension",
-      "$value": "{radius.control}"
+      "$value": "{radius.multiline}"
     },
     "$type": "color",
     "field": {

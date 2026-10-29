@@ -5,8 +5,9 @@ import { cn } from "cn"
 import { Button } from "@/components/button/button"
 import { Input } from "@/components/input/input"
 
-// Colors, text and radius come from the component tokens in tokens/components/input-group.tokens.json; a button
-// inside takes corners that fit the field's (input-group-button-radius).
+// Colors, text and radius come from the component tokens in tokens/components/input-group.tokens.json (several
+// lines, or buttons above or below, take the multi-line corners, never a pill); a button inside takes corners that
+// fit the field's (input-group-button-radius).
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -14,7 +15,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-input-group border border-input-group-field-border bg-input-group-field-background transition-colors duration-(--duration-fast) outline-none has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
+        "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-input-group has-[>textarea]:rounded-input-group-multiline has-[>[data-align=block-end]]:rounded-input-group-multiline has-[>[data-align=block-start]]:rounded-input-group-multiline border border-input-group-field-border bg-input-group-field-background transition-colors duration-(--duration-fast) outline-none has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
         className
       )}
       {...props}

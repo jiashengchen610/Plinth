@@ -115,6 +115,7 @@ test("from a website: Create applies the picks, keeps the main color exact and t
   assert.equal(tokens.color.background.$value, "{color.zinc.100}", "the off-white page");
   assert.equal(base.radius.control.$value, "{radius.full}");
   assert.equal(base.radius.container.$value, `{radius.${look.picks.corners.outer}}`);
+  assert.equal(base.radius.multiline.$value, "{radius.2xl}", "pill buttons, but text boxes keep corners their text fits in");
   assert.equal(base.font.body.$value, "{font.space-grotesk}");
   assert.equal(s.config.brief.site.url, "https://gumroad.com/");
   const ask = s.chat.messages.find((m) => m.role === "user");

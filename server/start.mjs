@@ -293,6 +293,9 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
 
         set("claude", "active");
         const style = readStyle(ctx.root, brand);
+        // A new design system (also one started from scratch) starts a new conversation: Claude needs none of the old
+        // one, and resuming a long thread re-reads all of it (US$2 instead of about US$0.35, measured).
+        if (fresh) ctx.chat.reset?.();
         const before = ctx.chat.state().messages.length;
         const { done } = await ctx.chat.send({ text: setupPrompt({ ...a, product }, style, fresh) });
         await done.catch(() => {});

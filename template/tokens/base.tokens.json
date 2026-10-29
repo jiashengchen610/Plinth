@@ -17,6 +17,10 @@
       "$value": "{radius.sm}",
       "$description": "Checkboxes, tooltips and other small marks"
     },
+    "multiline": {
+      "$value": "{radius.lg}",
+      "$description": "Fields with several lines (text boxes, message boxes): as round as fields, but never pill-shaped"
+    },
     "fit-inside": {
       "$type": "number",
       "$value": 1,

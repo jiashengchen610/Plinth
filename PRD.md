@@ -1,6 +1,6 @@
 # PRD：自然語言設計系統產生器
 
-狀態：v0.17.0（2026-10-29）。第一個可用版本的範圍；之後依實際使用修改。下面的需求表多一欄「現況」，標出已實作（✅）、部分（🟡）與尚未實作（⬜）。範圍不因尚未實作而縮小。
+狀態：v0.17.1（2026-10-29）。第一個可用版本的範圍；之後依實際使用修改。下面的需求表多一欄「現況」，標出已實作（✅）、部分（🟡）與尚未實作（⬜）。範圍不因尚未實作而縮小。
 
 ## 下一版：已定案
 
@@ -46,6 +46,7 @@
 23. ✅ **元件網站看起來簡陋的修正（0.15.1，使用者回報，2026-10-29）。** 字型從來沒載入：`src/index.css` 先 import Tailwind 再 import `fonts.css`，打包後 Google Fonts 的 `@import url()` 不在最前面，瀏覽器整條丟掉，所有字型退回系統字（Arial、Times）。改成 `fonts.css` 第一個 import（`index.css` 是受管檔案，舊的設計系統在 Plinth 啟動時就換掉；測試把關順序）。元件在畫布與文件預覽裡改成置中（`layout: "centered"`），不再貼左上角。All components 頁：甜甜圈與雷達圖原本寬度是 0（story 的 className 蓋掉了寬度），補上寬度；說明文字從 export 名稱改成文字（ExtraSmall → Extra small）；玻璃「Extremes」的白底加上外框。兩個 story 檔走 `TEMPLATE_FIXES`，只換還是原樣的檔案。
 24. ✅ **展示頁與八個新元件（0.16，使用者要求，2026-10-29）。** 目標是用 Plinth 做出跟 shadcn 首頁卡片差不多精細的範例。元件網站第一頁是 Showcase：一個記帳 App 的儀表板，四欄卡片（新增支出、導覽、儲蓄目標、支出紀錄圖表、本月可花、訂閱、設定目標表單、支出上限、帳號安全、連結銀行、聊天、轉帳），只用設計系統自己的元件，顏色、圓角、字型、間距全部來自 token，跟著品牌與深淺模式。每張卡寫明需要哪些元件，設計系統沒有就不出現；圖表用 Chart 元件自己的 `Monthly` story（新增：單一系列、這個月最深），頁面本身不 import 圖表套件。Plinth 的 Components 步驟可以在「Every component」與「Example screen」之間切換，兩邊都能點選部位來改。新元件（照 shadcn radix-nova 改寫成只用元件 token，各有 story、互動測試、spec）：Progress、Slider、Input group、Button group、Alert dialog、Item、Breadcrumb、Empty；只依賴五個核心元件（Input group 用 Button 與 Input，Alert dialog 用 Button；shadcn 原本依賴的 Separator、Textarea 改成元件內的元素）。內嵌的圓角用 fit（輸入框裡的按鈕、確認視窗的圖示框）。範本多了 24 個圖示。Web app 類型預設選進新元件與 Chart。story 測試 93 → 133。
 25. ✅ **從網站開始（0.17，使用者要求，2026-10-29）。** Describe 的「Start from a website」：貼網址，Plinth 用 dembrandt（MIT，固定版本，透過 npx；不經 shell，網址不會進命令列）在本機的無頭瀏覽器打開，讀主色、灰階、頁面底色、圓角與字型，約 20–40 秒、免費。換算全部在 engine（`engine/fromsite.mjs`）：主色取最常用的實心按鈕（dembrandt 標的 primary 常是連結色），跟色票某一階差 ΔE 0.02 內就用那一階，近黑或近灰用灰階家族，其餘用它自己做一組色階；主色維持網站的確切顏色，只要白、黑或該色系最深／最淺有一個能放上 4.5:1 的文字（例如粉紅按鈕配黑字），否則用 styleOps 挑的可讀階。灰階依頁面灰色的色相與飽和度挑最接近的家族；頁面底色接近某個灰階 50–100 就用（同色時網站自己的灰階優先）。按鈕圓角 40px 以上算膠囊；卡片圓角取 div、article、dialog 等最常見的 6–48px。字型先問 Google Fonts 有沒有（名稱整理：GeistSans → Geist），沒有就用一張常見付費字型的免費替代表，再不行依類型給 Inter、Source Serif 4 或 JetBrains Mono。使用者在結果卡上檢查、可以把主色換成第二個品牌色（常是 logo 的）、改字型，按「Use this look」後成為調色盤、圓角、字型三題的「From <網站>」答案，其他題照常。Create 時套用；brief 記下網址。給 Claude 的設定訊息說明外觀來自參考網站，寫準則時不要提網站名稱或照抄文字。Claude 也有唯讀的 `read_site` 工具。只讀一頁、桌面、淺色模式；間距、字級、陰影、動態與深色模式不讀。
+26. ✅ **重做範例時找到的兩個問題（0.17.1，2026-10-29）。** 一、從頭開始後的 Create 接續了舊對話，Claude 重讀整段歷史，寫準則花了 US$2.13（平常約 US$0.35）；新的設計系統（含從頭開始）現在先開新對話。二、按鈕是膠囊時，多行欄位（Textarea、放了多行文字或上下有按鈕的 Input group）也變成膠囊，文字被圓角切到；新增圓角角色 `radius.multiline`：膠囊預設用 2xl，其他預設與從網站讀到的內圓角都跟著按鈕，但不會是膠囊。
 - 玻璃的折射調整（強度、波紋、色散）使用者決定先不做：太複雜、應用太少（2026-10-29）。
 
 

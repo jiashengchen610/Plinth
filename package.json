@@ -1,6 +1,6 @@
 {
   "name": "plinth",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "private": true,
   "description": "Claude Code plugin: natural-language design system generator (tokens, guidelines, components, Storybook).",
   "type": "module",

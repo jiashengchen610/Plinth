@@ -4,6 +4,13 @@
       "$type": "dimension",
       "$value": "{radius.control}"
     },
+    "multiline": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.multiline}",
+        "$description": "The frame when it holds several lines, or buttons above or below"
+      }
+    },
     "button": {
       "radius": {
         "$type": "dimension",

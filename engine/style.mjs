@@ -11,11 +11,12 @@ const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "9
 /** Palette families used as grays. Picking one as the main color gives a black-and-white look. */
 export const GRAYS = ["slate", "gray", "zinc", "neutral", "stone", "mauve", "olive", "mist", "taupe"];
 /** Corner presets: radius roles → steps of the radius scale. "round" is the template's default. */
+// multiline: fields with several lines take the controls' corners, except that a pill would cut into their text.
 export const CORNERS = {
-  square: { control: "none", container: "none", pill: "none", small: "none" },
-  slight: { control: "sm", container: "md", pill: "sm", small: "xs" },
-  round: { control: "lg", container: "xl", pill: "full", small: "sm" },
-  pill: { control: "full", container: "2xl", pill: "full", small: "md" },
+  square: { control: "none", container: "none", pill: "none", small: "none", multiline: "none" },
+  slight: { control: "sm", container: "md", pill: "sm", small: "xs", multiline: "sm" },
+  round: { control: "lg", container: "xl", pill: "full", small: "sm", multiline: "lg" },
+  pill: { control: "full", container: "2xl", pill: "full", small: "md", multiline: "2xl" },
 };
 const BASE = "tokens/base.tokens.json";
 const PRIMITIVES = "tokens/primitives.tokens.json";
@@ -207,11 +208,16 @@ export function styleOps(root, brand, { main, gray, corners, outer, inner, fitIn
     for (const [role, s] of Object.entries(preset)) if (radius[role] && ref(radius[role].$value) !== `radius.${s}`) ops.push({ op: "set", file: BASE, path: `radius/${role}`, value: `{radius.${s}}` });
   }
   // Fine-tuning after a preset: outer corners (cards, dialogs, menus) and inner ones (buttons, fields) separately.
-  for (const [role, s] of [["container", outer], ["control", inner]]) {
+  // Multi-line fields follow the inner corners, unless those are a pill.
+  const multiline = inner !== undefined && inner !== "full" && (readJson(root, BASE).radius ?? {}).multiline ? inner : undefined;
+  for (const [role, s] of [["container", outer], ["control", inner], ["multiline", multiline]]) {
     if (s === undefined) continue;
     if (!radiusSteps(root).some((x) => x.step === s)) throw new Error(`no radius step ${s}`);
     const radius = readJson(root, BASE).radius ?? {};
-    if (ref(radius[role]?.$value) !== `radius.${s}` && !ops.some((o) => o.path === `radius/${role}` && o.value === `{radius.${s}}`)) ops.push({ op: "set", file: BASE, path: `radius/${role}`, value: `{radius.${s}}` });
+    // This setting replaces the preset's for the same role (one op per role); none when the file already has it.
+    const i = ops.findIndex((o) => o.path === `radius/${role}`);
+    if (i >= 0) ops.splice(i, 1);
+    if (ref(radius[role]?.$value) !== `radius.${s}`) ops.push({ op: "set", file: BASE, path: `radius/${role}`, value: `{radius.${s}}` });
   }
   if (fitInside !== undefined) {
     const cur = (readJson(root, BASE).radius ?? {})["fit-inside"];

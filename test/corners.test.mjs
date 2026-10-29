@@ -38,6 +38,12 @@ test("corners: outer and inner apart; parts inside fit the container's corners m
   assert.equal(readStyle(root, "c").fitInside, false);
   assert.equal(radius(root, "tabs/trigger/radius").css, "var(--control-radius)", "their own corners again");
   assert.deepEqual(styleOps(root, "c", { outer: "3xl", inner: "md", fitInside: false }), [], "nothing to change");
+  assert.equal(radius(root, "textarea/radius").resolved, "0.375rem", "fields with several lines follow the inner corners");
+  // Pill buttons: text boxes keep corners their text fits in; inner corners given with the preset replace its own.
+  ws.change(root, { title: "pill", ops: styleOps(root, "c", { corners: "pill" }), by: "test" });
+  assert.equal(radius(root, "textarea/radius").resolved, "1rem");
+  const both = styleOps(root, "c", { corners: "pill", inner: "lg" });
+  assert.deepEqual(both.filter((o) => /radius\/(control|multiline)$/.test(o.path)).map((o) => [o.path, o.value]), [["radius/control", "{radius.lg}"], ["radius/multiline", "{radius.lg}"]]);
   const css = readFileSync(join(root, "src/styles/tokens.css"), "utf8");
   assert.match(css, /--radius-tabs-trigger: var\(--tabs-trigger-radius\);/);
   assert.doesNotMatch(css, /--radius-fit-inside/, "the switch is not a corner utility");
