@@ -13,9 +13,10 @@ import { EditPanel } from "@/views/EditPanel";
 import { ModeSwitch } from "@/views/ModeSwitch";
 
 type Tab = "colors" | "text" | "corners" | "effects";
-export type QuickKind = "main" | "gray" | "corners" | "fonts";
+export type QuickKind = "look" | "main" | "gray" | "corners" | "fonts";
 const TABS: [Tab, string][] = [["colors", "Colors"], ["text", "Text"], ["corners", "Corners"], ["effects", "Effects"]];
-const QUICK: Record<Tab, QuickKind[]> = { colors: ["main", "gray"], text: ["fonts"], corners: ["corners"], effects: [] };
+// Looks (a whole style in one pick) sit on every tab; the others belong to one kind of token.
+const QUICK: Record<Tab, QuickKind[]> = { colors: ["look", "main", "gray"], text: ["look", "fonts"], corners: ["look", "corners"], effects: ["look"] };
 const isRadius = (r: TokenRow) => r.type === "dimension" && (/^radius/.test(r.name) || /radius$/.test(r.name));
 const tabOf = (r: TokenRow): Tab => (r.type === "color" ? "colors" : r.type === "typography" || r.type === "fontFamily" || r.type === "fontWeight" ? "text" : isRadius(r) || r.path === "radius/fit-inside" ? "corners" : "effects");
 const COLUMN: Record<string, Record<Tab, string>> = {

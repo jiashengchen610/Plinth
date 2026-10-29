@@ -5,6 +5,7 @@ import { CORNER_NAMES } from "@/lib/plain";
 import { ConfirmDialog } from "@/views/ConfirmDialog";
 import { SiteStart } from "@/views/SiteStart";
 import { StepIntro } from "@/views/StepIntro";
+import { ComponentGlyph } from "@/views/Vocab";
 
 type Props = {
   state: State; presets: Presets | null;
@@ -342,7 +343,7 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
                     <div className="flex flex-col gap-1.5">
                       <span className="text-sm font-semibold">Always included</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {ready.map((c) => <span key={c.id} title={c.hint} className="inline-flex min-h-10 items-center rounded-full border bg-muted/50 px-3.5 text-sm">✓&nbsp;{c.name}</span>)}
+                        {ready.map((c) => <span key={c.id} title={c.hint} className="inline-flex min-h-10 items-center gap-2 rounded-full border bg-muted/50 pr-3.5 pl-3 text-sm"><ComponentGlyph id={c.id} className="size-4" />{c.name}</span>)}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -353,7 +354,7 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
                           return (
                             <label key={c.id} title={c.hint} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border-[1.5px] px-3.5 text-sm ${on ? "border-foreground bg-muted/50" : ""}`}>
                               <input type="checkbox" checked={on} onChange={() => set({ components: on ? a.components.filter((x) => x !== c.id) : [...a.components, c.id] })} className="size-4 accent-foreground" />
-                              {c.name}{sugg?.components.includes(c.id) && <span className="rounded-full bg-info/10 px-2 text-[11px] font-semibold text-info">Suggested</span>}
+                              <ComponentGlyph id={c.id} className="size-4 text-muted-foreground" />{c.name}{sugg?.components.includes(c.id) && <span className="rounded-full bg-info/10 px-2 text-[11px] font-semibold text-info">Suggested</span>}
                             </label>
                           );
                         })}

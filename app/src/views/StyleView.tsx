@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { api, exceptionKey, type ChangeResult, type Presets, type State, type TokenRow } from "@/lib/api";
+import { api, exceptionKey, type ChangeResult, type Presets, type State, type TokenRow, type VocabEntry } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleName } from "@/lib/plain";
 import { buildGraph, type Mode } from "@/lib/tokens";
@@ -8,9 +8,10 @@ import { GlassTool } from "@/views/GlassTool";
 import { StepIntro } from "@/views/StepIntro";
 import { TokenMap, type QuickKind } from "@/views/TokenMap";
 import { ChartColors } from "@/views/ChartColors";
+import { VocabArt, vocabFontsHref } from "@/views/Vocab";
 
 type Props = {
-  state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
+  state: State; presets: Presets | null; vocab?: VocabEntry[]; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
   onChanged: (r: Partial<ChangeResult> & { unchanged?: boolean; message?: string }, fallback: string) => void; onError: (m: string) => void;
   onBack: () => void; onNext: () => void; onAsk: (text: string) => void;
 };
@@ -33,8 +34,10 @@ export function previewVars(rows: TokenRow[], mode: Mode) {
 }
 
 
-export function StyleView({ state, presets, brand, mode, onMode, onChanged, onError, onBack, onNext, onAsk }: Props) {
+export function StyleView({ state, presets, vocab = [], brand, mode, onMode, onChanged, onError, onBack, onNext, onAsk }: Props) {
   const st = state.style?.[brand];
+  const looks = vocab.filter((e) => e.kind === "look");
+  const currentLook = looks.find((e) => e.current);
   const rows = useMemo(() => state.tokens[brand]?.rows ?? [], [state.tokens, brand]);
   const g = useMemo(() => buildGraph(state, brand), [state, brand]);
   const tmode: Mode = mode === "dark" ? "dark" : "default";
@@ -71,9 +74,30 @@ export function StyleView({ state, presets, brand, mode, onMode, onChanged, onEr
     try { await api.acceptException(check, key, "Marked as on purpose in the Style step"); onChanged({ title: "Marked as on purpose" }, "Marked as on purpose."); } catch (e) { onError((e as Error).message); }
   };
 
-  // The quick picks, opened from the top of the map (one tab each: colors, text, corners).
-  const quickLabel = (k: QuickKind) => (k === "main" ? `Main color: ${familyName(st.main)}` : k === "gray" ? `Grays: ${GRAY_LABEL[st.gray] ?? familyName(st.gray)}` : k === "corners" ? `Corners: ${CORNER_NAMES[st.corners] ?? st.corners}` : `Fonts: ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`);
+  // The quick picks, opened from the top of the map (looks on every tab, then one for each kind: colors, text, corners).
+  const quickLabel = (k: QuickKind) => (k === "look" ? (currentLook ? `Look: ${currentLook.name}` : "Looks") : k === "main" ? `Main color: ${familyName(st.main)}` : k === "gray" ? `Grays: ${GRAY_LABEL[st.gray] ?? familyName(st.gray)}` : k === "corners" ? `Corners: ${CORNER_NAMES[st.corners] ?? st.corners}` : `Fonts: ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`);
+  const applyLook = async (e: VocabEntry) => {
+    setBusy(true);
+    try { onChanged(await api.applyVocab(brand, e.id), `${e.name}.`); } catch (err) { onError((err as Error).message); } finally { setBusy(false); }
+  };
+  const lookFonts = vocabFontsHref(looks);
   const quickPanel = (k: QuickKind): React.ReactNode => {
+    if (k === "look") return (
+      <div className="flex flex-col gap-3">
+        {lookFonts && <link rel="stylesheet" href={lookFonts} precedence="default" />}
+        <div><h3 className="text-base font-semibold">Looks</h3><p className="text-sm text-muted-foreground">A whole style in one pick: colors, corners and fonts together. Fine-tune anything after; Undo takes it back.</p></div>
+        {looks.length === 0 ? <p className="text-sm text-muted-foreground">Loading the looks…</p> : (
+          <div className="flex flex-wrap gap-2">
+            {looks.map((e) => (
+              <button key={e.id} type="button" disabled={busy} aria-pressed={e.current} onClick={() => applyLook(e)} className={`flex flex-[1_1_220px] items-center gap-3 rounded-xl border-2 bg-background py-2 pr-3 pl-2 text-left ${ring(e.current)}`}>
+                <VocabArt entry={e} className="size-11 rounded-lg [&>span]:h-6 [&>span]:w-9 [&>span]:text-xs" />
+                <span className="flex min-w-0 flex-col leading-tight"><span className="text-sm font-semibold">{e.name}{e.current && <span className="ml-1.5 text-xs font-normal text-muted-foreground">current</span>}</span><span className="text-xs text-muted-foreground">{e.hint}</span></span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
     if (k === "main") return (
       <div className="flex flex-col gap-3">
         <div><h3 className="text-base font-semibold">Main color</h3><p className="text-sm text-muted-foreground">For buttons, links and anything people should notice.</p></div>

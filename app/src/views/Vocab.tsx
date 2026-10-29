@@ -13,14 +13,17 @@ const GLYPHS: Record<string, LucideIcon> = {
 export const KIND_LABELS: Record<VocabKind, string> = { component: "Components", look: "Looks", color: "Colors", font: "Fonts", corners: "Corners", glass: "Glass" };
 const KIND_ORDER: VocabKind[] = ["component", "look", "color", "font", "corners", "glass"];
 
+/** The line icon for a catalog component, by its id. */
+export function ComponentGlyph({ id, className = "size-5" }: { id: string; className?: string }) {
+  const Icon = GLYPHS[id] ?? Component;
+  return <Icon className={className} strokeWidth={1.75} aria-hidden="true" />;
+}
+
 /** What an entry looks like, in a small square. */
 export function VocabArt({ entry, className = "" }: { entry: VocabEntry; className?: string }) {
   const a = entry.art;
   const base = `grid size-9 flex-none place-items-center overflow-hidden rounded-md border bg-muted/40 ${className}`;
-  if (entry.kind === "component") {
-    const Icon = GLYPHS[a.glyph ?? entry.key] ?? Component;
-    return <span aria-hidden="true" className={base}><Icon className="size-5" strokeWidth={1.75} /></span>;
-  }
+  if (entry.kind === "component") return <span aria-hidden="true" className={base}><ComponentGlyph id={a.glyph ?? entry.key} /></span>;
   if (entry.kind === "look") {
     const [main, , light] = a.swatches ?? [];
     return (
