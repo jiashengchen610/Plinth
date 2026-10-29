@@ -5,11 +5,11 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
-import { runChecks, contrastFixes, glassContrast } from "../engine/checks.mjs";
+import { runChecks, contrastFixes, glassContrast, gradientContrast } from "../engine/checks.mjs";
 import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { paletteColorOps } from "../engine/palette.mjs";
 import { upgradeProposal, linkToPaletteOps, typographyUpgrade, componentRefresh } from "../engine/upgrade.mjs";
-import { GLASS_PRESETS, glassOps, partColorOps, readGlass, readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
+import { GLASS_PRESETS, glassOps, gradientKey, gradientOps, partColorOps, readGlass, readGradients, readStyle, roleColorOps, styleOps, styleTitle } from "../engine/style.mjs";
 import { colorName } from "../engine/color-names.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
@@ -237,6 +237,31 @@ export const TOOLS = [
       const result = ops.length ? write(ctx, { title, ops, by: a.by ?? "claude" }) : { title, files: [], unchanged: true };
       const g = readGlass(ctx.root);
       return { ...result, glass: g, contrast: g ? glassContrast(ctx.root, brand, { tint: g.tint, foreground: g.foreground, tintOpacity: g.recipe.tintOpacity }) : [] };
+    },
+  },
+  {
+    name: "set_gradient",
+    description: "Set or create a gradient (gradient.<name> in the base tokens): 2–5 color stops that are color roles (primary, chart-2, background, muted, destructive…), so it follows the brand and the mode; angle in degrees (0 up, 90 right, 135 down-right, 180 down). Components and pages use it as bg-gradient-<name>, with text-gradient-<name>-foreground for text on it; foreground is that text role (default: the first stop's -foreground role, else foreground). A hero band, a featured card or the top bar take it; never write a gradient with raw colors. Returns every gradient and how the text reads against each stop in each mode (needs 4.5:1). Written at once; undoable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Brand id for the roles; default: the default brand" },
+        name: { type: "string", description: "Gradient name, e.g. brand, surface, hero (default brand)" },
+        stops: { type: "array", items: { type: "object", properties: { color: { type: "string", description: "A color role" }, position: { type: "number", description: "0–1" } }, required: ["color"] } },
+        angle: { type: "number" }, foreground: { type: "string" }, description: { type: "string" }, title: { type: "string" },
+      },
+    },
+    run: (a, ctx) => {
+      requireWorkspace(ctx.root);
+      const config = loadConfig(ctx.root);
+      const brand = a.brand ?? config.defaultBrand ?? listBrands(ctx.root, config)[0];
+      const key = gradientKey(a.name ?? "brand") || "brand";
+      const ops = gradientOps(ctx.root, brand, { ...a, name: key });
+      const title = a.title || `Gradient: ${key}`;
+      const result = ops.length ? write(ctx, { title, ops, by: a.by ?? "claude" }) : { title, files: [], unchanged: true };
+      const gradients = readGradients(ctx.root);
+      const g = gradients.find((x) => x.name === key);
+      return { ...result, gradients, contrast: g?.foreground ? gradientContrast(ctx.root, brand, { stops: g.stops, foreground: g.foreground }) : [] };
     },
   },
   {

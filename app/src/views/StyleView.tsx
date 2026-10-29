@@ -5,6 +5,7 @@ import { CORNER_NAMES, TAILWIND_FAMILIES, familyName, roleName } from "@/lib/pla
 import { buildGraph, type Mode } from "@/lib/tokens";
 import { AddColor } from "@/views/AddColor";
 import { GlassTool } from "@/views/GlassTool";
+import { GradientTool } from "@/views/GradientTool";
 import { StepIntro } from "@/views/StepIntro";
 import { TokenMap, type QuickKind } from "@/views/TokenMap";
 import { ChartColors } from "@/views/ChartColors";
@@ -254,6 +255,7 @@ export function StyleView({ state, presets, vocab = [], brand, mode, onMode, onC
         </section>
       )}
       <GlassTool state={state} presets={presets} brand={brand} mode={tmode} rows={rows} onChanged={onChanged} onError={onError} />
+      <GradientTool state={state} brand={brand} mode={tmode} rows={rows} onChanged={onChanged} onError={onError} />
       <ChartColors state={state} brand={brand} mode={tmode} page={(vars as Record<string, string>)["--background"]} onChanged={onChanged} onError={onError} />
       <Cta back={{ label: "← Describe", onClick: onBack }} status={nWarn ? `${nWarn} thing${nWarn > 1 ? "s" : ""} to look at` : `${familyName(st.main)} · ${familyName(st.gray)} · ${CORNER_NAMES[st.corners] ?? st.corners} · ${st.font ?? ""}${st.headingFont ? ` + ${st.headingFont}` : ""}`} next={{ label: "Next: Components →", onClick: onNext }} />
     </div>

@@ -119,6 +119,40 @@ export function glassContrast(root, brand, { tint: tintRole, foreground, tintOpa
   return out;
 }
 
+/** A gradient token's stops in one mode, each resolved to a color: [{ percent, color }]. */
+function gradientStops(byKey, g, mode) {
+  const stops = (g.values[mode] ?? g.values.default)?.raw;
+  if (!Array.isArray(stops)) return [];
+  return stops.map((s, i) => {
+    const m = /^\{([^}]+)\}$/.exec(String(s.color ?? "").trim());
+    const target = m ? byKey.get(m[1].replace(/\./g, "/")) : null;
+    const color = target ? (target.values[mode] ?? target.values.default)?.resolved ?? null : m ? null : String(s.color);
+    return { percent: Math.round((s.position ?? i / Math.max(1, stops.length - 1)) * 100), color };
+  });
+}
+
+/**
+ * The gradient tool's readout while it is edited (nothing written): the text role against each stop, per mode.
+ * stops: [{ color: role, position }]; foreground: a role. [{ mode, percent, color, ratio, pass }]
+ */
+export function gradientContrast(root, brand, { stops, foreground }) {
+  const r = resolveBrand(root, brand);
+  const byName = new Map(r.tokens.filter((t) => t.type === "color").map((t) => [t.name, t]));
+  const fg = byName.get(foreground);
+  if (!fg) throw new Error(`no color role ${foreground}`);
+  const out = [];
+  for (const mode of r.modes) {
+    (stops ?? []).forEach((s, i) => {
+      const stop = byName.get(String(s.color));
+      if (!stop) throw new Error(`no color role ${s.color}`);
+      const color = (stop.values[mode] ?? stop.values.default)?.resolved ?? null;
+      const ratio = contrastRatio((fg.values[mode] ?? fg.values.default)?.resolved, color);
+      out.push({ mode, percent: Math.round((s.position ?? i / Math.max(1, stops.length - 1)) * 100), color, ratio: ratio === null ? null : Number(ratio.toFixed(2)), pass: ratio !== null && ratio >= 4.5 });
+    });
+  }
+  return out;
+}
+
 /** The lowest tint opacity (in steps of 0.01) at which text on the glass reads over black and white in every mode. */
 export function glassMinOpacity(root, brand, { tint: tintRole, foreground }) {
   const r = resolveBrand(root, brand);
@@ -189,6 +223,16 @@ export function checkContrast(root, config = loadConfig(root)) {
         }
       }
     }
+    // Gradients: their text against every color stop, since it sits on each somewhere along the way.
+    for (const g of r.tokens.filter((t) => t.type === "gradient" && !t.derived)) {
+      const fg = `${g.name}-foreground`;
+      if (!byName.has(fg)) continue;
+      for (const mode of r.modes) {
+        for (const s of gradientStops(byKey, g, mode)) {
+          if (s.color) results.push(row({ fg, bg: `${g.name} at ${s.percent}%`, min: 4.5 }, mode, opaque(s.color, mode), { gradient: true }));
+        }
+      }
+    }
   }
   return results;
 }
@@ -247,6 +291,9 @@ export function contrastFixes(results) {
   // so one fix never undoes another or breaks a passing pair.
   const groups = new Map();
   for (const r of results) {
+    // Text on a gradient points at a role; moving the role for a stop it crosses would hold every other fix hostage.
+    // The gradient tool is where those are fixed (another stop, or another text color).
+    if (r.gradient) continue;
     const k = `${r.brand}|${r.mode}|${r.fgSource}|${r.fgToken}`;
     groups.set(k, [...(groups.get(k) ?? []), r]);
   }

@@ -41,7 +41,11 @@ export type UnsavedFile = { file: string; status: "modified" | "added" | "delete
 export type LastChange = { title: string; by: string; at: string; files: string[] };
 export type ReviewState = { running: boolean; since: number | null; result: { ok: boolean; text?: string; error?: string; cost?: number | null; model: string; at: string; seconds: number } | null };
 export type Component = { id: string; files: string[]; hasStories: boolean; spec: string | null; usedBy: string[] };
-export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; outer: string | null; inner: string | null; fitInside: boolean | null; radiusSteps: { step: string; px: number }[]; glass: { tint: string | null; foreground: string | null; recipe: GlassRecipe } | null; hues: string[]; grays: string[] };
+export type Style = { main: string; gray: string; corners: string; font: string | null; headingFont: string | null; labelFont: "body" | "heading"; codeFont: string | null; fontRoles: boolean; outer: string | null; inner: string | null; fitInside: boolean | null; radiusSteps: { step: string; px: number }[]; glass: { tint: string | null; foreground: string | null; recipe: GlassRecipe } | null; gradients: Gradient[]; hues: string[]; grays: string[] };
+/** A gradient: color stops that are color roles (so it follows brand and mode), its angle, and the role of text on it. */
+export type GradientStop = { color: string; position: number };
+export type Gradient = { name: string; stops: GradientStop[]; angle: number; foreground: string | null; description?: string };
+export type GradientContrast = { mode: string; percent: number; color: string | null; ratio: number | null; pass: boolean };
 /** Chart colors as the Style step shows them: per mode the color and how it looks with each deficiency. */
 type ChartSeen = { color: string; protan: string; deutan: string; tritan: string };
 export type ChartEntry = { name: string; path?: string; default: ChartSeen; dark?: ChartSeen };
@@ -117,6 +121,8 @@ export type PublishDefaults = {
 /** What GitHub did with the last publish (the workflow tests, then deploys). */
 export type Deploy = {
   status: "waiting" | "running" | "live" | "failed" | "unknown"; sha: string; pushedAt?: string; repo?: string; github?: string; actions: string;
+  /** The design system has an app (src/app): the site is the app, and the component site sits under /storybook/. */
+  app?: boolean;
   run?: string; since?: string; site?: string | null; step?: string | null; failures?: string[]; errors?: string[]; error?: string;
 } | null;
 /** A description of the next version: the engine's at once, Claude's when it is ready. The user confirms or changes it. */
@@ -222,6 +228,8 @@ export const api = {
   quickEdit: (b: { brand: string; mode: "default" | "dark"; title: string; picks: { path: string; prop: string; kind: string; state: string | null }[]; text: string }) => call<QuickEdit>("POST", "/api/quick-edit", b),
   roleColor: (brand: string, role: string, color: string, mode: "default" | "dark", title: string) => edit("Changing the color", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/role-color", { brand, role, color, mode, title })),
   glass: (brand: string, glass: GlassRecipe & { tint: string }) => edit("Saving the glass", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/glass", { brand, ...glass })),
+  gradient: (brand: string, g: { name: string; stops: GradientStop[]; angle: number; foreground?: string | null }) => edit("Saving the gradient", () => call<Partial<ChangeResult> & { unchanged?: boolean; gradients: Gradient[]; contrast: GradientContrast[] }>("POST", "/api/gradient", { brand, ...g, foreground: g.foreground ?? undefined })),
+  gradientCheck: (brand: string, stops: GradientStop[], foreground: string) => call<{ contrast: GradientContrast[] }>("GET", `/api/gradient-check?brand=${encodeURIComponent(brand)}&stops=${encodeURIComponent(JSON.stringify(stops))}&foreground=${encodeURIComponent(foreground)}`),
   glassCheck: (brand: string, tint: string, tintOpacity: number) => call<{ foreground: string; contrast: { mode: string; backdrop: string; ratio: number | null; pass: boolean }[]; minOpacity: number | null }>("GET", `/api/glass-check?brand=${encodeURIComponent(brand)}&tint=${encodeURIComponent(tint)}&tintOpacity=${tintOpacity}`),
   chart: (brand: string) => call<{ chart: ChartView | null }>("GET", `/api/chart?brand=${encodeURIComponent(brand)}`),
   makeChart: (brand: string) => edit("Making chart colors", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/chart", { brand })),

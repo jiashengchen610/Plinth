@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands, resolveBrand } from "../engine/tokens.mjs";
-import { glassContrast, glassMinOpacity, runChecks } from "../engine/checks.mjs";
+import { glassContrast, glassMinOpacity, gradientContrast, runChecks } from "../engine/checks.mjs";
 import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./publish.mjs";
 import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
@@ -189,6 +189,15 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     // A short request about a picked element, turned into values for the user to confirm (nothing is written here).
     "POST /api/quick-edit": async (req) => { needsWorkspace(); return quickEdit(ctx.root, await readJson(req)); },
     "POST /api/glass": async (req) => { needsWorkspace(); return tool("set_glass", { ...(await readJson(req)), by: "you" }); },
+    "POST /api/gradient": async (req) => { needsWorkspace(); return tool("set_gradient", { ...(await readJson(req)), by: "you" }); },
+    // The gradient tool's live readout while it is edited (nothing is written): its text against each stop.
+    "GET /api/gradient-check": (_req, url) => {
+      needsWorkspace();
+      const brand = url.searchParams.get("brand") || loadConfig(ctx.root).defaultBrand || listBrands(ctx.root)[0];
+      let stops = [];
+      try { stops = JSON.parse(url.searchParams.get("stops") ?? "[]"); } catch { throw new Error("stops must be JSON"); }
+      return { contrast: gradientContrast(ctx.root, brand, { stops, foreground: url.searchParams.get("foreground") || "foreground" }) };
+    },
     "GET /api/chart": (_req, url) => { needsWorkspace(); return { chart: chartView(ctx.root, url.searchParams.get("brand") || loadConfig(ctx.root).defaultBrand || listBrands(ctx.root)[0]) }; },
     "POST /api/chart": async (req) => { needsWorkspace(); return tool("make_chart_colors", { ...(await readJson(req)), by: "you" }); },
     // The glass tool's live readout while sliders move (nothing is written): its text over black and white.

@@ -1,7 +1,7 @@
 // Publish a workspace: checks → exports → commit → typecheck and story tests → push → GitHub Pages.
 // Uses git and the GitHub CLI (gh). Reports every step so the UI can show progress and where it stopped.
 import { execFileSync, execFile } from "node:child_process";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { runChecks } from "../engine/checks.mjs";
 import { checkRepo } from "../engine/check.mjs";
@@ -224,6 +224,9 @@ export function makePublicAndDeploy(root) {
  * does not put anything online; the workflow tests first and deploys only if everything passes.
  * { status: "waiting" | "running" | "live" | "failed" | "unknown", sha, run, site, step, failures, errors }
  */
+/** The design system has screens of its own (src/app): the managed workflow publishes them as the site's root. */
+export const hasApp = (root) => existsSync(join(root, "src", "app"));
+
 export async function deployStatus(root, { after = 0 } = {}) {
   let pub;
   try { pub = JSON.parse(readFileSync(join(root, ".ds", "published.json"), "utf8")); } catch { return null; }
@@ -240,7 +243,8 @@ export async function deployStatus(root, { after = 0 } = {}) {
   if (run.conclusion === "success") {
     let site = null;
     try { site = JSON.parse(await ghAsync(root, ["api", `repos/${full}/pages`])).html_url ?? null; } catch { /* Pages off since */ }
-    return { ...common, status: "live", site };
+    // With an app (src/app) the workflow puts it at the root and the component site under /storybook/.
+    return { ...common, status: "live", site, app: hasApp(root) };
   }
   let log = "";
   try { log = await ghAsync(root, ["run", "view", String(run.databaseId), "-R", full, "--log-failed"]); } catch { /* summary without details */ }

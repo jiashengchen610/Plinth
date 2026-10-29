@@ -158,7 +158,7 @@ export function TokenMap({ state, g, brand, mode, onMode, catalog, quick, quickL
     return (
       <button key={r.path} ref={reg(r.path)} type="button" aria-pressed={on} onClick={() => pick(r.path)}
         className={`relative flex min-h-9 w-full items-center gap-2 rounded-lg border bg-background px-2 py-1 text-left ${on ? "border-info ring-2 ring-info" : rel ? "border-info/60 bg-info/10" : "hover:bg-muted"} ${fade(r.path)}`}>
-        {r.type === "color" ? <span className="size-4 flex-none rounded border" style={{ background: v?.resolved ?? undefined }} />
+        {r.type === "color" || r.type === "gradient" ? <span className="size-4 flex-none rounded border" style={{ background: v?.resolved ?? undefined }} />
           : isRadius(r) ? <span aria-hidden="true" className="block size-4 flex-none border-t-2 border-l-2 border-foreground" style={{ borderTopLeftRadius: Math.min(parseFloat(v?.resolved ?? "0") * (/rem$/.test(v?.resolved ?? "") ? 16 : 1) || 0, 12) }} />
           : r.type === "typography" || r.type === "fontFamily" ? <span aria-hidden="true" className="w-4 flex-none text-center text-xs font-semibold">Aa</span> : null}
         <span className="flex min-w-0 flex-1 flex-col leading-tight">

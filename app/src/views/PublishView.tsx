@@ -324,7 +324,7 @@ function DeployStatus({ d, onAsk, onError, onRetry }: { d: Deploy; onAsk: (text:
   if (d.status === "live") {
     return (
       <div role="status" className="flex flex-col gap-1 rounded-xl border border-success/50 bg-success/10 p-3.5 text-sm">
-        <strong>Your component site is online with your last publish.</strong>
+        <strong>{d.app ? "Your app and your component site are" : "Your component site is"} online with your last publish.</strong>
         <span className="flex flex-wrap gap-x-4 gap-y-1">
           {d.site && <a className="underline" href={d.site} target="_blank" rel="noreferrer">{d.site}</a>}
           {d.github && <a className="underline" href={d.github} target="_blank" rel="noreferrer">Repository on GitHub</a>}
@@ -407,8 +407,10 @@ function PublishSuccess({ subject, deploy, state, onNewRound }: { subject: strin
     try { await navigator.clipboard.writeText(site); setCopied(true); window.setTimeout(() => setCopied(false), 2000); } catch { /* no clipboard access */ }
   };
   const docs = deploy.github ? state.brands.map((b) => ({ name: state.config.brands.find((x) => x.id === b)?.name ?? b, url: `${deploy.github}/blob/${deploy.sha}/exports/${b}/DESIGN.md` })) : [];
+  const storybook = site && deploy.app ? `${site.replace(/\/?$/, "/")}storybook/` : site;
   const places: { title: string; text: string; links: { label: string; url: string }[] }[] = [
-    { title: "Your component site", text: "Every component in light and dark mode, in each brand, with how to use it. Send this link to your team.", links: site ? [{ label: "Open the site", url: site }] : [] },
+    ...(deploy.app ? [{ title: "Your app", text: "The screens in src/app, built from your components. Send this link to try it.", links: site ? [{ label: "Open the app", url: site }] : [] }] : []),
+    { title: "Your component site", text: "Every component in light and dark mode, in each brand, with how to use it. Send this link to your team.", links: storybook ? [{ label: "Open the site", url: storybook }] : [] },
     { title: "Style guide for AI tools", text: "DESIGN.md: give it to Claude, Cursor or v0, and what they build matches your design system.", links: docs.map((d) => ({ label: docs.length > 1 ? `DESIGN.md for ${d.name}` : "Open DESIGN.md", url: d.url })) },
     { title: "Repository on GitHub", text: "Your colors, components and every saved version, for developers.", links: deploy.github ? [{ label: "Open on GitHub", url: deploy.github }] : [] },
     { title: "Test results", text: "What GitHub checked before putting it online.", links: [{ label: "See the results", url: deploy.run ?? deploy.actions }] },
@@ -423,7 +425,7 @@ function PublishSuccess({ subject, deploy, state, onNewRound }: { subject: strin
         </div>
         {site && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild className="min-h-11"><a href={site} target="_blank" rel="noreferrer">Open your component site</a></Button>
+            <Button asChild className="min-h-11"><a href={site} target="_blank" rel="noreferrer">{deploy.app ? "Open your app" : "Open your component site"}</a></Button>
             <Button variant="outline" className="min-h-11" onClick={copy}>{copied ? "Link copied" : "Copy the link"}</Button>
             <code className="text-sm break-all text-muted-foreground">{site}</code>
           </div>

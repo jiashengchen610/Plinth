@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { contrastRatio } from "./color.mjs";
-import { glassRecipe, listBrands, resolveBrand } from "./tokens.mjs";
+import { glassRecipe, gradientAngle, listBrands, resolveBrand } from "./tokens.mjs";
 
 const SHADES = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
 /** Palette families used as grays. Picking one as the main color gives a black-and-white look. */
@@ -122,6 +122,7 @@ export function readStyle(root, brand) {
     outer: step("container") ?? null, inner: step("control") ?? null, fitInside: fit === undefined ? null : Number(fit) !== 0,
     radiusSteps: radiusSteps(root),
     glass: readGlass(root),
+    gradients: readGradients(root),
     hues: Object.keys(fams).filter((f) => !GRAYS.includes(f)),
     grays: Object.keys(fams).filter((f) => GRAYS.includes(f)),
   };
@@ -397,6 +398,66 @@ export function glassOps(root, brand, change = {}) {
   }
   if (!cur || cur.foreground !== foreground) ops.push({ op: "set", file: BASE, path: `${MATERIAL_GLASS}-foreground`, type: "color", value: `{color.${foreground}}`, ...(cur ? {} : { description: "Text on glass" }) });
   return ops;
+}
+
+// ---------- gradients ----------
+const GRADIENTS = "gradient";
+/** A gradient's token name from what someone typed: "Brand" → brand, "hero band" → hero-band. */
+export const gradientKey = (name) => String(name ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+// Color roles by CSS name (primary, chart-2, muted …) → their alias, from the resolved brand: nested roles (chart)
+// are color/chart/2 on disk but chart-2 as a name.
+function colorAliases(root, brand) {
+  return new Map(resolveBrand(root, brand).tokens.filter((t) => t.type === "color" && t.key.startsWith("color/") && !t.derived).map((t) => [t.name, `{${t.key.replace(/\//g, ".")}}`]));
+}
+
+/** Gradients as stored: [{ name, stops: [{ color: role, position }], angle, foreground: role | null, description }]. */
+export function readGradients(root) {
+  const group = readJson(root, BASE)[GRADIENTS] ?? {};
+  const role = (v) => { const r = ref(v); return r ? r.replace(/^color\./, "").replace(/\./g, "-") : null; };
+  return Object.entries(group)
+    .filter(([k, t]) => !k.startsWith("$") && !k.endsWith("-foreground") && t && Array.isArray(t.$value))
+    .map(([name, t]) => ({
+      name,
+      stops: t.$value.map((s, i, all) => ({ color: role(s.color) ?? String(s.color), position: Number(s.position ?? i / Math.max(1, all.length - 1)) })),
+      angle: gradientAngle(t.$extensions?.plinth?.gradient),
+      foreground: role(group[`${name}-foreground`]?.$value),
+      description: t.$description ?? "",
+    }));
+}
+
+/**
+ * Ops for one gradient (created when missing): { name, stops: [{ color: role, position 0–1 }], angle (degrees),
+ * foreground?: role, description? }. Stops reference color roles, so the gradient follows the brand and the mode;
+ * 2 to 5 of them, sorted by position. Text on it defaults to the first stop's -foreground role.
+ */
+export function gradientOps(root, brand, { name, stops, angle, foreground, description } = {}) {
+  const key = gradientKey(name ?? "brand");
+  if (!key || key.endsWith("-foreground")) throw new Error("a gradient needs a name, like brand or hero");
+  const aliases = colorAliases(root, brand);
+  const cur = readGradients(root).find((g) => g.name === key) ?? null;
+  const clamp = (n) => Math.round(Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0)) * 100) / 100;
+  const roleName = (c) => String(c ?? "").replace(/^\{?color\./, "").replace(/\}$/, "").replace(/\./g, "-");
+  const list = (stops ?? cur?.stops ?? []).map((s, i, all) => ({ color: roleName(s.color), position: clamp(Number(s.position ?? i / Math.max(1, all.length - 1))) }));
+  if (list.length < 2 || list.length > 5) throw new Error("a gradient needs 2 to 5 color stops");
+  for (const s of list) if (!aliases.has(s.color)) throw new Error(`no color role ${s.color}`);
+  list.sort((a, b) => a.position - b.position);
+  const deg = gradientAngle({ angle: angle ?? cur?.angle ?? 135 });
+  const fg = roleName(foreground ?? cur?.foreground ?? (aliases.has(`${list[0].color}-foreground`) ? `${list[0].color}-foreground` : "foreground"));
+  if (!aliases.has(fg)) throw new Error(`no color role ${fg}`);
+  const ops = [];
+  if (!cur || JSON.stringify(cur.stops) !== JSON.stringify(list) || cur.angle !== deg) {
+    ops.push({ op: "set", file: BASE, path: `${GRADIENTS}/${key}`, type: "gradient", value: list.map((s) => ({ color: aliases.get(s.color), position: s.position })), gradient: { angle: deg },
+      ...(cur ? {} : { description: description ?? `The ${key} gradient: its stops are color roles, so it follows the brand and the mode. Use it as bg-gradient-${key}, with text-gradient-${key}-foreground for text on it.` }) });
+  }
+  if (!cur || cur.foreground !== fg) ops.push({ op: "set", file: BASE, path: `${GRADIENTS}/${key}-foreground`, type: "color", value: aliases.get(fg), ...(cur ? {} : { description: `Text on the ${key} gradient` }) });
+  return ops;
+}
+
+/** The first gradient for a design system without one: the main color into its nearest chart hue (or itself), down-right. */
+export function defaultGradient(root, brand) {
+  const aliases = colorAliases(root, brand);
+  return { name: "brand", stops: [{ color: "primary", position: 0 }, { color: aliases.has("chart-2") ? "chart-2" : "primary", position: 1 }], angle: 135 };
 }
 
 export const FIT_DESCRIPTION ="1: parts inside a rounded container (tabs in the tab bar, options in a menu, close buttons in a corner) take its corners minus the gap, so the space between stays even. 0: they keep their own corners.";

@@ -78,6 +78,7 @@ function flatten(tree, source, out, path = [], inheritedType, layer = { layer: 0
       alpha: ds.alpha ?? null,
       fit: ds.fit ?? null,
       glass: ds.glass ?? null,
+      gradient: ds.gradient ?? null,
       deprecated: Boolean(tree.$deprecated),
     };
     if (t.type === "typography" && tree.$value && typeof tree.$value === "object") {
@@ -176,6 +177,13 @@ export function glassRecipe(g = {}) {
   const n = (v, d, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
   return { tintOpacity: n(g.tintOpacity, 0.7, 0, 1), blur: n(g.blur, 16, 0, 64), saturation: n(g.saturation, 1.6, 0.5, 3), highlight: n(g.highlight, 0.6, 0, 1), distortion: n(g.distortion, 0, 0, 1) };
 }
+/** A gradient's angle in degrees (0 = up, 90 = right, 180 = down), from $extensions.plinth.gradient; 180 when unset. */
+export function gradientAngle(g) {
+  const a = Number(g?.angle);
+  return Number.isFinite(a) ? Math.round((((a % 360) + 360) % 360) * 10) / 10 : 180;
+}
+/** A gradient token's value as the CSS builder reads it: its stops (DTCG) with the angle from the extension. */
+const gradientValue = (t, v) => (t.type === "gradient" && Array.isArray(v) ? { stops: v, angle: `${gradientAngle(t.gradient)}deg` } : v);
 /** A CSS length in px: "0.75rem" → 12, "4px" → 4, "0" → 0; null for anything else (calc, %). */
 const toPx = (s) => { const m = /^(-?[\d.]+)(px|rem)?$/.exec(String(s ?? "").trim()); return m ? Number(m[1]) * (m[2] === "rem" ? 16 : 1) : null; };
 const fontList = (v) => (Array.isArray(v) ? v : [v]).map((f) => (/[^a-zA-Z0-9-]/.test(f) ? `'${f}'` : f)).join(", ");
@@ -194,9 +202,11 @@ function literal(value, type, ref) {
       return list.map((s) => (typeof s === "string" ? s : `${s.inset ? "inset " : ""}${dim(s.offsetX)} ${dim(s.offsetY)} ${dim(s.blur)} ${dim(s.spread)} ${ref(s.color, "color")}`)).join(", ");
     }
     case "gradient": {
+      // DTCG: a list of { color, position 0–1 }; stops without a position spread evenly. The angle (not in the
+      // spec) comes with the value from $extensions.plinth.gradient (gradientValue), else points down.
       const stops = Array.isArray(value) ? value : value.stops ?? [];
       const angle = (!Array.isArray(value) && value.angle) || "180deg";
-      return `linear-gradient(${angle}, ${stops.map((st) => `${ref(st.color, "color")} ${Math.round((st.position ?? 0) * 100)}%`).join(", ")})`;
+      return `linear-gradient(${angle}, ${stops.map((st, i) => `${ref(st.color, "color")} ${Math.round((st.position ?? i / Math.max(1, stops.length - 1)) * 100)}%`).join(", ")})`;
     }
     case "cubicBezier": return Array.isArray(value) ? `cubic-bezier(${value.join(", ")})` : String(value);
     case "transition": {
@@ -289,13 +299,13 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
         css = target ? `var(--${names.get(target)})` : null;
         if (!target) issues.push(`unresolved alias ${t.key} → ${v}`);
       } else {
-        css = literal(v, t.type, refCss);
+        css = literal(gradientValue(t, v), t.type, refCss);
         if (css === null) issues.push(`${t.key}: ${t.type} value is not emitted (unknown composite)`);
       }
       const own = t.type === "color" ? alphaIn(t, mode) : 1;
       if (css !== null && own < 1) css = `color-mix(in oklab, ${css} ${Number((own * 100).toFixed(2))}%, transparent)`;
       const raw = resolveRaw(t, mode);
-      let resolved = raw === undefined ? null : literal(raw, t.type, refResolvedIn(mode));
+      let resolved = raw === undefined ? null : literal(gradientValue(t, raw), t.type, refResolvedIn(mode));
       const alpha = t.type === "color" ? alphaChain(t, mode) : 1;
       if (resolved !== null && alpha < 1) resolved = withAlpha(resolved, alpha);
       values[mode] = { raw: v, css, resolved, alpha };
@@ -319,6 +329,7 @@ export function resolveBrand(root, brand, config = loadConfig(root)) {
       key: t.key, path: t.path, name: names.get(t), type: t.type, description: t.description, source: t.source, layer: t.layer, layerId: t.layerId, refs, linked: isAlias(first), derived: t.derived, deprecated: t.deprecated, values,
       ...(fit?.outer ? { fit: { outer: fit.outer.key, min: fit.min?.key ?? null, spacing: fit.spacing, border: fit.border, on: fitInside } } : {}),
       ...(t.glass && t.type === "color" ? { glass: glassRecipe(t.glass) } : {}),
+      ...(t.type === "gradient" ? { gradient: { angle: gradientAngle(t.gradient) } } : {}),
     };
   });
   // Glass: its parts as derived tokens (the color at the recipe's opacity, blur, saturation, edge light, ripple), for
@@ -401,6 +412,14 @@ function glassUtilities(tokens) {
 }
 
 /**
+ * One Tailwind utility per gradient token (bg-gradient-brand): the gradient as the background image. Its stops are
+ * var() references, so it follows the brand and the mode like any color. Text on it: text-<name>-foreground.
+ */
+function gradientUtilities(tokens) {
+  return tokens.filter((t) => t.type === "gradient" && !t.derived).flatMap((t) => [`@utility bg-${t.name} {`, `  background-image: var(--${t.name});`, "}"]);
+}
+
+/**
  * One Tailwind utility per text style and per component text token: the whole style (weight, size, line height,
  * family) through the font shorthand, plus the letter spacing of the style it ends at. Components write
  * `type-button-label`; the style behind it can change without touching the component.
@@ -473,6 +492,8 @@ export function buildCss(root, config = loadConfig(root)) {
   if (types.length) out.push(...types, "");
   const glass = glassUtilities(resolved.find((r) => r.brand === defaultBrand).tokens);
   if (glass.length) out.push(...glass, "");
+  const gradients = gradientUtilities(resolved.find((r) => r.brand === defaultBrand).tokens);
+  if (gradients.length) out.push(...gradients, "");
   // Reduced motion: every duration becomes 0, so anything animated with the motion tokens just appears.
   const motion = [...new Set(resolved.flatMap((r) => r.tokens.filter((t) => t.type === "duration" || t.type === "transition").map((t) => t.name)))].sort();
   // !important: the brand and mode blocks above are more specific than :root.

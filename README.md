@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.18.0.** Tested by `npm test` (48 tests), by the 133 story tests in a generated workspace, and end to end
+> **Status: 0.19.0.** Tested by `npm test` (50 tests), by the 133 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -153,7 +153,9 @@ when the step is done:
    or **That's on purpose**. **Glass** tunes the frosted material (color, how much of it shows, blur, how vivid what
    shows through is, edge light, a ripple in Chrome and Edge) live over color, text, black and white, with how its
    text reads over the darkest and the lightest backdrop and the least color that keeps it readable; **Save glass**
-   writes it as one change. **Chart colors** shows the three sets Plinth makes from the main color for the Chart
+   writes it as one change. **Gradients** are made of your colors (so they follow the brand and light or dark mode):
+   pick the colors from start to end, the direction and the text color, see it live and how the text reads at every
+   stop; **Save gradient** writes it as one change, and components use it as `bg-gradient-brand`. **Chart colors** shows the three sets Plinth makes from the main color for the Chart
    component (eight categories, low to high, around a middle), seen with normal vision or as red-, green- or
    blue-blind. Categories keep to the main color and the hues next to it, using lighter and darker steps, and reach
    for wider hues only when nothing closer stays apart. They follow the main color until someone picks one by hand.
@@ -187,6 +189,8 @@ when the step is done:
    repository name and who can see the component site. On GitHub's free plan choose **Anyone with the link**: Pages
    does not work for private repositories there. After the push, the top of the page shows what GitHub does: testing,
    online with the link, or where it stopped and which test failed, with **Ask Claude to fix it** and **Try again**.
+   A design system with screens of its own (`src/app/`, built from its components) publishes them too: the app at
+   the site's root, the component site under `/storybook/`, both from the same push and the same tests.
    Before the push, the same tests run on this computer; a story test that fails runs once more, and one that passes
    then is reported as failing once (a timing problem worth fixing) without stopping the publish. What stopped the
    last publish, with the failing tests, is kept in `.ds/` and Claude reads it (`deploy_status`). Once there is a
@@ -304,6 +308,7 @@ errors, failing interaction tests, and components without their tokens or a stor
 | Component format: every component has `tokens/components/<name>.tokens.json` and a story | Publish, GitHub | **yes** | ask Claude |
 | Hardcoded values in components: hex, color functions, Tailwind arbitrary values, magic px | every change (reminder) | **yes**, at Publish and on GitHub | ask Claude, or accept it as an exception |
 | Text on glass: the glass color at its opacity over a black and over a white backdrop (4.5:1), in every brand × mode | every change | no | the glass tool's least readable opacity (Style → Glass), or another text color |
+| Text on a gradient: against every color stop (4.5:1), in every brand × mode | every change | no | another stop or another text color (Style → Gradients) |
 | Chart series colors: each 3:1 on the page; each pair apart for normal vision and simulated protan, deutan and tritan vision (ΔE_OK 0.08 / 0.04) | every change | no | **Make from my main color** (Style → Chart colors) |
 | Text sizes written in components (`text-sm`, `font-medium`, `leading-*`, `tracking-*`) instead of text tokens | every change, Publish, GitHub | no (reminder) | give the part a text token (`type-<component>-<part>`) |
 | A component's own corners on a part inside it (`rounded-<name>` twice) | every change, Publish, GitHub | no (reminder) | a radius token for the part that fits inside its container |
@@ -364,6 +369,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `set_role_color` | One role on a palette step in one mode (what picking from the palette in Components does); the other mode follows in the same family |
 | `set_part_color` | One component part's color in one mode, everywhere its color is used or only this part (a new color, copied into every brand); any CSS color joins the palette in the same change (what the edit panel does) |
 | `set_glass` | The glass material (preset, color, opacity, blur, saturation, edge light, ripple), with how its text reads over black and white |
+| `set_gradient` | A gradient made of color roles (2–5 stops, angle, the text role), created when missing, with how its text reads at every stop |
 | `make_chart_colors` | Make the chart colors from the main color again (categories near its hue, kept apart for color vision deficiencies; low to high; around a middle) |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
 | `read_site` | Reads a public website's look (main color, grays, background, corners, fonts) as style picks; writes nothing |
@@ -448,7 +454,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 48 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 50 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

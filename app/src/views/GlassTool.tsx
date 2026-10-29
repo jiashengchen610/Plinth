@@ -23,7 +23,9 @@ export function GlassTool({ state, presets, brand, mode, rows, onChanged, onErro
   const saved = state.style[brand]?.glass;
   const initial = useMemo<Draft>(() => ({ tint: saved?.tint ?? "popover", ...(saved?.recipe ?? REGULAR) }), [saved]);
   const [draft, setDraft] = useState<Draft>(initial);
-  useEffect(() => setDraft(initial), [initial]);
+  // Reset only when what is saved really changed, not on every reload of the page's state (which would drop edits).
+  const initialKey = JSON.stringify(initial);
+  useEffect(() => setDraft(JSON.parse(initialKey)), [initialKey]);
   const [backdrop, setBackdrop] = useState<(typeof BACKDROPS)[number][0]>("color");
   const [check, setCheck] = useState<Check | null>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);

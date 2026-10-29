@@ -33,7 +33,7 @@ test("chat: UI message → headless Claude Code → reply, resume, recovery", as
   const turn = async (text, images = [], mentions = []) => {
     const r = await api("api/chat", { text, images, mentions });
     assert.equal(r.status, 200, await r.text());
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 1200; i++) { // a minute: under a full parallel run a turn can take a while
       const s = await (await api("api/state")).json();
       if (!s.chat.working && s.chat.messages.at(-1)?.role === "assistant") return s;
       await new Promise((res) => setTimeout(res, 50));

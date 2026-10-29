@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { buildCss, loadConfig, listBrands, resolveBrand, cssName, glassRecipe, TYPOGRAPHY_PARTS } from "./tokens.mjs";
+import { buildCss, loadConfig, listBrands, resolveBrand, cssName, glassRecipe, gradientAngle, TYPOGRAPHY_PARTS } from "./tokens.mjs";
 import { checkContrast, checkDistinct, exceptionKey, acceptedBy } from "./checks.mjs";
 import { fontsToLoad, fontsCss } from "./fonts.mjs";
 import { hueFamily, staleMentions } from "./prose.mjs";
@@ -436,6 +436,16 @@ function applyOp(root, op, files) {
         node.$extensions.plinth ??= {};
         if (op.glass === null) delete node.$extensions.plinth.glass;
         else node.$extensions.plinth.glass = glassRecipe(op.glass);
+        if (!Object.keys(node.$extensions.plinth).length) delete node.$extensions.plinth;
+        if (!Object.keys(node.$extensions).length) delete node.$extensions;
+      }
+      // The angle of a gradient token, in degrees: { angle }; null removes it (then it points down, 180).
+      if (op.gradient !== undefined) {
+        if (op.gradient !== null && (typeof op.gradient !== "object" || !Number.isFinite(Number(op.gradient.angle)))) throw new Error(`${op.path}: gradient needs { angle: <degrees> }`);
+        node.$extensions ??= {};
+        node.$extensions.plinth ??= {};
+        if (op.gradient === null) delete node.$extensions.plinth.gradient;
+        else node.$extensions.plinth.gradient = { angle: gradientAngle(op.gradient) };
         if (!Object.keys(node.$extensions.plinth).length) delete node.$extensions.plinth;
         if (!Object.keys(node.$extensions).length) delete node.$extensions;
       }

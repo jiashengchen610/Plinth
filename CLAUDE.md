@@ -24,6 +24,14 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   gap in spacing steps, border px, min); `buildCss` emits container radius minus the gap while `radius.fit-inside`
   is not 0 (the `nested-radius` check reminds when a component reuses its container's `rounded-<name>`).
   `componentRefresh` (engine/upgrade.mjs) brings older design systems what newer template components use.
+- Gradients are tokens too: `gradient.<name>` in `tokens/base.tokens.json` (DTCG `gradient`: stops that reference color
+  roles, so they follow brand and mode; the angle in `$extensions.plinth.gradient`). `buildCss` emits
+  `--gradient-<name>` and `@utility bg-gradient-<name>`; `checkContrast` tests `<name>-foreground` against every stop
+  (rows with `gradient: true`, left out of `contrastFixes`); `readGradients`/`gradientOps` (engine/style.mjs) back the
+  Style page's gradient tool and the `set_gradient` tool. Components and screens never write a gradient with raw colors.
+- A design system with screens of its own (`src/app/`) publishes them: the managed workflow builds the app at the
+  site root and Storybook under `/storybook/` (`hasApp` in `server/publish.mjs`; the Publish page shows both). `plinth
+  check` scans `src/app` like the rest of `src`: hardcoded values there are reminders, not blockers.
 - One Plinth per folder (`server/owner.mjs`): whichever process starts first serves the UI and runs every write;
   others forward tool calls to it. Writes go through `engine/workspace.mjs` `change` (validated, undoable); the user
   saves versions. Nothing restricts direct edits: checks run on the state, and `plinth check` (`engine/check.mjs`)
@@ -67,7 +75,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (48 tests).
+- After changing `engine/` or `server/`, run `npm test` (50 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (133 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the

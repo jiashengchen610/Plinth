@@ -484,5 +484,47 @@
       "$value": "{color.popover-foreground}",
       "$description": "Text on glass"
     }
+  },
+  "gradient": {
+    "$type": "gradient",
+    "$description": "Gradients: color stops that are color roles, so they follow the brand and the mode; the angle is in $extensions.plinth.gradient. Plinth writes --gradient-<name> and the bg-gradient-<name> utility, and checks the text beside each (<name>-foreground) against every stop.",
+    "brand": {
+      "$value": [
+        { "color": "{color.primary}", "position": 0 },
+        { "color": "{color.chart.2}", "position": 1 }
+      ],
+      "$description": "The brand gradient: hero bands, featured cards, the top bar. Use it as bg-gradient-brand, with text-gradient-brand-foreground for text on it.",
+      "$extensions": {
+        "plinth": {
+          "gradient": {
+            "angle": 135
+          }
+        }
+      }
+    },
+    "brand-foreground": {
+      "$type": "color",
+      "$value": "{color.primary-foreground}",
+      "$description": "Text on the brand gradient"
+    },
+    "surface": {
+      "$value": [
+        { "color": "{color.background}", "position": 0 },
+        { "color": "{color.muted}", "position": 1 }
+      ],
+      "$description": "A quiet gradient for page backgrounds and section bands. Use it as bg-gradient-surface, with text-gradient-surface-foreground for text on it.",
+      "$extensions": {
+        "plinth": {
+          "gradient": {
+            "angle": 180
+          }
+        }
+      }
+    },
+    "surface-foreground": {
+      "$type": "color",
+      "$value": "{color.foreground}",
+      "$description": "Text on the surface gradient"
+    }
   }
 }
