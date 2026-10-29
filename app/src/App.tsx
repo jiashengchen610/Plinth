@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, type Answers, type ChangeResult, type Op, type Presets, type State } from "@/lib/api";
+import { api, type Answers, type ChangeResult, type Op, type Presets, type State, type VocabEntry } from "@/lib/api";
 import { CtaSlot } from "@/lib/cta";
 import { setReload, useAfter, usePendingEdit } from "@/lib/lock";
 import { componentLabel, roleName } from "@/lib/plain";
@@ -38,6 +38,7 @@ const TIPS: Record<string, string[]> = {
 export default function App() {
   const [state, setState] = useState<State | null>(null);
   const [presets, setPresets] = useState<Presets | null>(null);
+  const [vocab, setVocab] = useState<VocabEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +58,8 @@ export default function App() {
       rev.current = s.rev;
       setState(s);
       setBrand((b) => (s.exists && (!b || !s.brands.includes(b)) ? s.config.defaultBrand ?? s.brands[0] : b));
+      // The vocabulary follows the state: which components are in, which style is current.
+      api.vocab().then((v) => setVocab(v.entries)).catch(() => {});
     } catch (e) { setError((e as Error).message); }
   }, []);
   useEffect(() => { setReload(load); }, [load]);
@@ -253,7 +256,7 @@ export default function App() {
                 {effective === "describe" && <DescribeView key={`${exists}-${Boolean(state.config?.brief)}-${redo}`} state={state} presets={presets} redo={redo} onRedo={setRedo} sending={sending} onCreate={create} onNext={() => go("style")} onAsk={ask} onError={onError} onScratch={scratch} />}
                 {effective === "creating" && <CreatingView state={state} onNext={() => go("style")} />}
                 {effective === "style" && exists && <StyleView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onChanged={onChanged} onError={onError} onBack={() => go("describe")} onNext={() => { confirmStep("style"); go("components"); }} onAsk={ask} />}
-                {effective === "components" && exists && <ComponentsView state={state} presets={presets} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => { confirmStep("components"); go("publish"); }} />}
+                {effective === "components" && exists && <ComponentsView state={state} presets={presets} vocab={vocab} brand={brand} mode={mode} onMode={setMode} onEdit={edit} onChanged={onChanged} onError={onError} onAsk={ask} onBack={() => go("style")} onNext={() => { confirmStep("components"); go("publish"); }} />}
                 {effective === "publish" && exists && <PublishView state={state} onError={onError} onAsk={ask} onBack={() => go("components")} onSaved={(m) => { setNotice(m); load(); }} onNewRound={() => go("style")} />}
                 {effective === "history" && exists && (
                   <HistoryView state={state} busy={busy} backLabel={STEPS.find((s) => s.id === lastStep)?.label ?? "Style"} onBack={() => go(lastStep)}
@@ -267,7 +270,7 @@ export default function App() {
         </div>
         {chatOn && (
           <aside className="flex min-h-[520px] flex-none flex-col border-t lg:h-auto lg:min-h-0 lg:w-[380px] lg:border-t-0 lg:border-l">
-            <ChatPanel chat={state.chat} onError={onError} className="min-h-0 flex-1" text={chatText} onText={setChatText} tips={tips} placeholder={placeholder} />
+            <ChatPanel chat={state.chat} onError={onError} className="min-h-0 flex-1" text={chatText} onText={setChatText} tips={tips} placeholder={placeholder} vocab={vocab} brand={brand} onChanged={onChanged} />
           </aside>
         )}
       </div>

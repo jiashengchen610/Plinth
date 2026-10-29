@@ -1,15 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api, inboxUrl, type ChatImage, type ChatState } from "@/lib/api";
+import { api, inboxUrl, type ChangeResult, type ChatImage, type ChatState, type VocabEntry } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import { matchVocab, VocabChip, VocabList, vocabFontsHref } from "@/views/Vocab";
 
 type Props = {
   chat: ChatState | null; onError: (message: string) => void; className?: string;
   /** The message box is controlled by the page, so "Ask Claude" buttons elsewhere can fill it in. */
   text: string; onText: (text: string) => void;
   tips?: string[]; placeholder?: string;
+  /** The shared vocabulary for the "/" menu: picked names go with the message as exact ids. */
+  vocab?: VocabEntry[]; brand?: string;
+  /** A pick applied without Claude (one entry, no text) reports its change here. */
+  onChanged?: (r: Partial<ChangeResult> & { unchanged?: boolean }, fallback: string) => void;
 };
+
+/** The "/word" being typed before the caret (at the start or after a space), or null. */
+function slashToken(text: string, caret: number) {
+  const m = /(^|\s)\/([^\s/]*)$/.exec(text.slice(0, caret));
+  return m ? { start: caret - m[2].length - 1, query: m[2] } : null;
+}
 
 function readImage(file: File): Promise<ChatImage> {
   return new Promise((resolve, reject) => {
@@ -37,9 +49,54 @@ export function Reply({ text }: { text: string }) {
   return <div className="text-sm leading-relaxed [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_li]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export function ChatPanel({ chat, onError, className = "", text, onText: setText, tips = [], placeholder }: Props) {
+export function ChatPanel({ chat, onError, className = "", text, onText: setText, tips = [], placeholder, vocab = [], brand = "", onChanged }: Props) {
   const [images, setImages] = useState<ChatImage[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Names picked from the "/" menu. The menu follows the caret: it opens on "/" and lists what matches the word after
+  // it; Enter or Tab takes the highlighted entry, Esc hides it until the text changes.
+  const [mentions, setMentions] = useState<VocabEntry[]>([]);
+  const [caret, setCaret] = useState(0);
+  const [active, setActive] = useState(0);
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
+  const token = hiddenFor === text ? null : slashToken(text, caret);
+  // The list renders a step behind the typing, so keystrokes are never held up by it.
+  const query = useDeferredValue(token?.query ?? null);
+  const matches = useMemo(() => (query === null ? [] : matchVocab(vocab.filter((e) => !mentions.some((m) => m.id === e.id)), query).slice(0, query ? 8 : 60)), [query, vocab, mentions]);
+  useEffect(() => { setActive(0); }, [query]);
+  const fontsHref = useMemo(() => (token ? vocabFontsHref(matches) : null), [token, matches]);
+  // The caret as the browser reports it after React has restored it (right after a keystroke it reads 0 for a moment).
+  const syncCaret = () => requestAnimationFrame(() => { if (inputRef.current) setCaret(inputRef.current.selectionStart ?? 0); });
+  useEffect(() => {
+    const on = () => { if (document.activeElement === inputRef.current) syncCaret(); };
+    document.addEventListener("selectionchange", on);
+    return () => document.removeEventListener("selectionchange", on);
+  }, []);
+  const pick = (e: VocabEntry) => {
+    if (!token) return;
+    // The "/word" goes; the chip takes its place above the box. No double space is left behind.
+    const before = text.slice(0, token.start);
+    const after = text.slice(caret).replace(/^ /, before.endsWith(" ") || !before ? "" : " ").replace(/^ (?=\S)/, before ? " " : "");
+    setText(before + after);
+    setMentions([...mentions, e]);
+    setHiddenFor(null);
+    requestAnimationFrame(() => { inputRef.current?.focus(); inputRef.current?.setSelectionRange(token.start, token.start); setCaret(token.start); });
+  };
+  const openMenu = () => {
+    const el = inputRef.current;
+    const at = el?.selectionStart ?? text.length;
+    const before = text.slice(0, at);
+    const insert = (before && !/\s$/.test(before) ? " " : "") + "/";
+    setText(before + insert + text.slice(at));
+    setHiddenFor(null);
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(at + insert.length, at + insert.length); setCaret(at + insert.length); });
+  };
+  // One pick and nothing else: Plinth can apply it itself, free and undoable, instead of asking Claude.
+  const direct = !text.trim() && !images.length && mentions.length === 1 && mentions[0].apply ? mentions[0] : null;
+  const applyDirect = async () => {
+    if (!direct || !onChanged) return;
+    setSending(true);
+    try { onChanged(await api.applyVocab(brand, direct.id), `Applied ${direct.name}.`); setMentions([]); } catch (e) { onError((e as Error).message); } finally { setSending(false); }
+  };
   // A page filled the box in (an "Ask Claude" button): put the cursor at the end so they can finish the sentence.
   useEffect(() => { if (text && document.activeElement !== inputRef.current) { inputRef.current?.focus(); inputRef.current?.setSelectionRange(text.length, text.length); } }, [text]);
   const [sending, setSending] = useState(false);
@@ -58,12 +115,13 @@ export function ChatPanel({ chat, onError, className = "", text, onText: setText
   };
 
   const submit = async () => {
-    if (!text.trim() && !images.length) return;
+    if (!text.trim() && !images.length && !mentions.length) return;
     setSending(true);
     try {
-      await api.sendChat(text, images);
+      await api.sendChat(text, images, mentions.map((m) => m.id));
       setText("");
       setImages([]);
+      setMentions([]);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -90,12 +148,17 @@ export function ChatPanel({ chat, onError, className = "", text, onText: setText
       <ol ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite">
         {messages.length === 0 && (
           <li className="text-sm text-muted-foreground">
-            Tell Claude what you'd like to change, in your own words, for example "make the buttons rounder" or "remove the toast". Paste a screenshot to show a look you like.
+            Tell Claude what you'd like to change, in your own words, for example "make the buttons rounder" or "remove the toast". Paste a screenshot to show a look you like. Type <kbd className="rounded border bg-background px-1 font-mono text-[11px] text-foreground">/</kbd> to pick a component or a style by name.
           </li>
         )}
         {messages.map((m) => (
           <li key={m.id} className={m.role === "user" ? "ml-8 self-end rounded-xl bg-primary px-3 py-2 text-sm text-primary-foreground" : `mr-4 rounded-xl px-3 py-2 ${m.error ? "border border-destructive/40 bg-destructive/5" : "bg-muted"}`}>
             {m.role === "user" ? <p className="whitespace-pre-wrap">{m.text}</p> : <Reply text={m.text} />}
+            {m.mentions && m.mentions.length > 0 && (
+              <div className={`flex flex-wrap gap-1 text-foreground ${m.text ? "mt-1.5" : ""}`}>
+                {m.mentions.map((v) => <VocabChip key={v.id} entry={vocab.find((e) => e.id === v.id) ?? v} />)}
+              </div>
+            )}
             {m.images && m.images.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {m.images.map((img) => <img key={img} src={inboxUrl(img)} alt="Attached image" className="h-20 rounded-md border object-cover" />)}
@@ -146,23 +209,56 @@ export function ChatPanel({ chat, onError, className = "", text, onText: setText
             ))}
           </div>
         )}
+        {mentions.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {mentions.map((m) => <VocabChip key={m.id} entry={m} onRemove={() => setMentions(mentions.filter((x) => x.id !== m.id))} />)}
+          </div>
+        )}
         <label htmlFor="chat-input" className="sr-only">Message to Claude</label>
-        <textarea
-          ref={inputRef}
-          id="chat-input"
-          rows={3}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }}
-          placeholder={working ? "Claude is working; you can type the next message" : placeholder ?? "Tell Claude what to change"}
-          className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        <div className="flex items-center justify-between gap-2">
+        <div className="relative">
+          {token && (
+            <div className="absolute inset-x-0 bottom-full z-20 mb-1 rounded-lg border bg-popover text-popover-foreground shadow-md">
+              {fontsHref && <link rel="stylesheet" href={fontsHref} precedence="default" />}
+              <div className="flex items-center justify-between border-b px-2.5 py-1.5 text-[11px] text-muted-foreground"><span>{query ? `Matching “${query}”` : "Components and styles"}</span><span>↑↓ then Enter · Esc closes</span></div>
+              <VocabList id="chat-vocab" matches={matches} active={active} onActive={setActive} onPick={pick} grouped={!query} />
+            </div>
+          )}
+          <textarea
+            ref={inputRef}
+            id="chat-input"
+            rows={3}
+            value={text}
+            role={token ? "combobox" : undefined}
+            aria-expanded={token ? true : undefined}
+            aria-controls={token ? "chat-vocab" : undefined}
+            aria-activedescendant={token && matches[active] ? `chat-vocab-${active}` : undefined}
+            onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart ?? e.target.value.length); }}
+            onKeyUp={syncCaret}
+            onClick={syncCaret}
+            onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (token) {
+                if (e.key === "ArrowDown" && matches.length) { e.preventDefault(); setActive((active + 1) % matches.length); return; }
+                if (e.key === "ArrowUp" && matches.length) { e.preventDefault(); setActive((active + matches.length - 1) % matches.length); return; }
+                if ((e.key === "Enter" || e.key === "Tab") && matches[active]) { e.preventDefault(); pick(matches[active]); return; }
+                if (e.key === "Escape") { e.preventDefault(); setHiddenFor(text); return; }
+              }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (direct && onChanged) applyDirect(); else submit(); }
+            }}
+            placeholder={working ? "Claude is working; you can type the next message" : placeholder ?? "Tell Claude what to change"}
+            className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
-          <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Add a picture</Button>
-          <span className="flex-1 text-right text-[11px] text-muted-foreground">About 30 s and US$0.30 per change</span>
-          <Button type="submit" disabled={sending || working || (!text.trim() && !images.length)}>{sending ? "Sending…" : working ? "Working…" : "Send"}</Button>
+          <div className="flex items-center gap-1">
+            {vocab.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={openMenu} title="Pick a component, a look, colors, a font or corners by name (or type / in the message)"><Plus /> Component or style</Button>}
+            <Button type="button" size="sm" variant="ghost" onClick={() => fileRef.current?.click()} disabled={images.length >= 4}>Add a picture</Button>
+          </div>
+          <span className="flex-1 text-right text-[11px] text-muted-foreground">{direct ? "Applying it yourself is free" : "About 30 s and US$0.30 per change"}</span>
+          {direct && onChanged && <Button type="button" disabled={sending || working} onClick={applyDirect}>{sending ? "Applying…" : direct.kind === "component" ? "Add it now" : "Apply now"}</Button>}
+          <Button type="submit" variant={direct && onChanged ? "outline" : "default"} disabled={sending || working || (!text.trim() && !images.length && !mentions.length)}>{sending && !direct ? "Sending…" : working ? "Working…" : direct && onChanged ? "Ask Claude" : "Send"}</Button>
         </div>
       </form>
     </section>

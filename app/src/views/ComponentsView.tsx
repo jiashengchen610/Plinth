@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry, type TokenRow } from "@/lib/api";
+import { api, type ChangeResult, type Op, type Presets, type State, type StoryEntry, type TokenRow, type VocabEntry } from "@/lib/api";
 import { Cta } from "@/lib/cta";
+import { matchVocab, VocabArt } from "@/views/Vocab";
 import { componentOfChain, picksFromChain, type ChainLink } from "@/lib/inspect";
 import { EditPanel } from "@/views/EditPanel";
 import { StepIntro } from "@/views/StepIntro";
@@ -12,12 +13,12 @@ import { TypeGraph } from "@/views/TypeGraph";
 import { ModeSwitch } from "@/views/ModeSwitch";
 
 type Props = {
-  state: State; presets: Presets | null; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
+  state: State; presets: Presets | null; vocab?: VocabEntry[]; brand: string; mode: "light" | "dark"; onMode: (m: "light" | "dark") => void;
   onEdit: (title: string, ops: Op[]) => void; onChanged: (r: Partial<ChangeResult>, fallback: string) => void; onError: (m: string) => void;
   onAsk: (text: string) => void; onBack: () => void; onNext: () => void;
 };
 
-export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, onChanged, onError, onAsk, onBack, onNext }: Props) {
+export function ComponentsView({ state, presets, vocab = [], brand, mode, onMode, onEdit, onChanged, onError, onAsk, onBack, onNext }: Props) {
   const g = useMemo(() => buildGraph(state, brand), [state, brand]);
   const tmode: Mode = mode === "dark" ? "dark" : "default";
   const [selected, setSelected] = useState<string | null>(state.components[0]?.id ?? null);
@@ -25,6 +26,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const [textPart, setTextPart] = useState<string | null>(null);
   const [variant, setVariant] = useState("");
   const [adding, setAdding] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [entries, setEntries] = useState<StoryEntry[]>([]);
   const [view, setView] = useState<"sheet" | "showcase">("sheet");
@@ -121,7 +123,11 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const sel = picked ? { title: `${componentLabel(componentOfChain(picked.chain, ids) ?? component.id, catalog)}${said ? ` · “${said.length > 28 ? `${said.slice(0, 27)}…` : said}”` : ""}`, picks: picksFromChain(g, picked.chain, ids) } : null;
   const deps = state.deps;
   const name = componentLabel(component.id, catalog);
-  const missing = (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id));
+  // What can still be added: the vocabulary's components not in the system (the catalog, before the vocabulary loads).
+  const missing = useMemo<VocabEntry[]>(() => (vocab.length
+    ? vocab.filter((e) => e.kind === "component" && !e.inSystem)
+    : (catalog ?? []).filter((c) => !state.components.some((x) => x.id === c.id)).map((c) => ({ id: `component:${c.id}`, kind: "component" as const, key: c.id, name: c.name, hint: c.hint, aliases: [c.id], inSystem: false, current: false, apply: c.ready === false ? null : [{ tool: "add_component", args: { name: c.id } }], art: { glyph: c.id } }))), [vocab, catalog, state.components]);
+  const addable = useMemo(() => matchVocab(missing, addQuery), [missing, addQuery]);
   const protectedBy = component.usedBy.length > 0;
 
   const roleColor = async (role: TokenRow, color: string, title: string) => {
@@ -186,18 +192,24 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
             <section className="flex flex-col gap-3 rounded-2xl border-2 border-foreground bg-background p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div><h2 className="text-base font-semibold">Add a component</h2><p className="text-sm text-muted-foreground">Ready-made components come in your style at once: free, and Undo takes them back.</p></div>
-                <Button variant="outline" onClick={() => setAdding(false)}>Close</Button>
+                <div className="flex items-center gap-2">
+                  {missing.length > 6 && <input type="search" value={addQuery} onChange={(e) => setAddQuery(e.target.value)} placeholder="Find: dropdown, toggle, 進度條…" aria-label="Find a component" className="h-10 w-64 rounded-lg border bg-background px-3 text-sm" />}
+                  <Button variant="outline" onClick={() => setAdding(false)}>Close</Button>
+                </div>
               </div>
-              {missing.length ? (
+              {missing.length ? addable.length ? (
                 <div className="flex flex-wrap gap-2">
-                  {missing.map((c) => (
-                    <div key={c.id} className="flex flex-[1_1_240px] items-center gap-3 rounded-xl border py-2 pr-2 pl-3">
-                      <span className="flex flex-1 flex-col leading-tight"><span className="font-semibold">{c.name}</span><span className="text-sm text-muted-foreground">{c.hint}</span></span>
-                      <Button variant="outline" className="min-h-10" onClick={async () => { try { onChanged(await api.addComponent(c.id), `Added ${c.name}.`); setSelected(c.id); setAdding(false); } catch (e) { onError((e as Error).message); } }}>Add</Button>
+                  {addable.map((c) => (
+                    <div key={c.id} className="flex flex-[1_1_260px] items-center gap-3 rounded-xl border py-2 pr-2 pl-2.5">
+                      <VocabArt entry={c} />
+                      <span className="flex min-w-0 flex-1 flex-col leading-tight"><span className="font-semibold">{c.name}</span><span className="text-sm text-muted-foreground">{c.hint}</span></span>
+                      {c.apply
+                        ? <Button variant="outline" className="min-h-10" onClick={async () => { try { onChanged(await api.addComponent(c.key), `Added ${c.name}.`); setSelected(c.key); setAdding(false); } catch (e) { onError((e as Error).message); } }}>Add</Button>
+                        : <Button variant="outline" className="min-h-10" onClick={() => { onAsk(`Add a ${c.name} component: ${c.hint}.`); setAdding(false); }}>Ask Claude</Button>}
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-sm">You have every ready-made component.</p>}
+              ) : <p className="text-sm text-muted-foreground">Nothing ready-made by that name. Describe it to Claude below.</p> : <p className="text-sm">You have every ready-made component.</p>}
               <div className="flex flex-wrap items-center gap-3 border-t pt-3">
                 <span className="flex-[1_1_260px] text-sm">Something else? Describe it to Claude, or paste a screenshot of one you like. A new component takes a few minutes and about US$1.50.</span>
                 <Button variant="outline" className="min-h-10" onClick={() => { onAsk("I need a component that "); setAdding(false); }}>Describe it in the chat</Button>

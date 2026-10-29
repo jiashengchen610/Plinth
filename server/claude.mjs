@@ -6,6 +6,7 @@
 //
 // The chat changes the design system through the Plinth tools, which write at once; Write/Edit/Bash stay disallowed,
 // so every change goes through the engine's validation and can be undone in the UI.
+import { mentionBlock } from "./vocab.mjs";
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -143,10 +144,12 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
 
   return {
     /** A message from the UI. Resolves when Claude's turn is complete. */
-    async send({ text, images = [] }) {
+    async send({ text, images = [], mentions = [] }) {
       if (child) throw new Error("Claude is still working on the previous message. Wait or press Stop.");
       const body = String(text ?? "").trim().slice(0, MAX_TEXT);
-      if (!body && !images.length) throw new Error("Write a message or attach an image.");
+      // Names picked from the menu travel beside the text and reach Claude as exact ids, with how to apply each.
+      const picked = mentionBlock(ctx.root, mentions);
+      if (!body && !images.length && !picked.mentions.length) throw new Error("Write a message or attach an image.");
       const id = randomUUID().slice(0, 8);
       const saved = [];
       for (const img of images.slice(0, 4)) {
@@ -159,8 +162,8 @@ export function createChat(ctx, { bump = () => {}, bin = process.env.PLINTH_CLAU
         writeFileSync(file, bytes);
         saved.push(file);
       }
-      push({ id, role: "user", text: body, images: saved.map((f) => f.split(/[\\/]/).slice(-2).join("/")), at: new Date().toISOString() });
-      const prompt = [body || "(see the attached image)", ...saved.map((f, i) => `Attached image ${i + 1}: ${f}`)].join("\n");
+      push({ id, role: "user", text: body, images: saved.map((f) => f.split(/[\\/]/).slice(-2).join("/")), ...(picked.mentions.length ? { mentions: picked.mentions } : {}), at: new Date().toISOString() });
+      const prompt = [body || (saved.length ? "(see the attached image)" : "(see what was picked below)"), ...saved.map((f, i) => `Attached image ${i + 1}: ${f}`)].join("\n") + picked.block;
       activity = { since: Date.now(), tool: null, tools: [] };
       lastError = null;
       bump();

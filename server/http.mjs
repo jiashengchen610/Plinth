@@ -13,6 +13,7 @@ import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 import { createSetup, presets, suggest } from "./start.mjs";
 import { readSite } from "./fromsite.mjs";
+import { vocabulary } from "./vocab.mjs";
 import { draftVersionMessage, quickEdit } from "./quick.mjs";
 import { colorName } from "../engine/color-names.mjs";
 import { readStyle } from "../engine/style.mjs";
@@ -161,6 +162,19 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     "POST /api/upgrade": () => { needsWorkspace(); return tool("upgrade_to_layers"); },
     // The Describe step: presets, Claude's suggestions after the first answer, and creating from the answers.
     "GET /api/presets": () => presets(),
+    // The shared vocabulary (components, looks, palettes, fonts, corners, glass) with what the design system has; the
+    // chat menu, the Add panel and the Style suggestions read it. Applying an entry runs its ops as the user.
+    "GET /api/vocab": () => ({ entries: vocabulary(ctx.root) }),
+    "POST /api/vocab/apply": async (req) => {
+      needsWorkspace();
+      const { id, brand } = await readJson(req);
+      const entry = vocabulary(ctx.root).find((e) => e.id === id);
+      if (!entry) throw new Error("That is not in the menu.");
+      if (!entry.apply) throw new Error(entry.kind === "component" ? "This component is already in your design system." : "This cannot be applied directly; ask Claude.");
+      let result = null;
+      for (const a of entry.apply) result = await tool(a.tool, { ...a.args, ...(brand && a.tool !== "add_component" ? { brand } : {}), by: "you" });
+      return result;
+    },
     "POST /api/suggest": async (req) => { const { product } = await readJson(req); if (!String(product ?? "").trim()) throw new Error("Say what you're making first."); return suggest(ctx, product); },
     // Describe's "Start from a website": reads the page's look (20–40 s); nothing is written.
     "POST /api/read-site": async (req) => { const { url } = await readJson(req); return readSite(url, { root: existsSync(join(ctx.root, "design-system.json")) ? ctx.root : undefined, templateDir: ws.TEMPLATE_DIR }); },

@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.17.1.** Tested by `npm test` (47 tests), by the 133 story tests in a generated workspace, and end to end
+> **Status: 0.17.1.** Tested by `npm test` (48 tests), by the 133 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -207,7 +207,11 @@ when the step is done:
 
 The chat with Claude stays on the right once the design system exists: "make the primary blue", "use Inter", "add a
 kids brand", "make a pricing card from this screenshot" (attach or paste images). **Try asking** suggests sentences
-for the page you're on. **Undo** at the top (or Ctrl+Z, ⌘Z on a Mac, outside text fields) takes the last change back, whoever made it; **History** lists what isn't
+for the page you're on. Type **/** (or press **Component or style**) to pick a component, a look, colors, a font,
+corners or glass by name from a list with pictures, in your words or Claude's ("toggle" finds Switch, "進度條" finds
+Progress bar): the pick travels with your message as its exact name, so Claude never guesses which one you meant.
+A pick on its own has an **Apply now** button: Plinth applies it itself, free. The same list, with the same pictures,
+is behind **Add a component** in Components. **Undo** at the top (or Ctrl+Z, ⌘Z on a Mac, outside text fields) takes the last change back, whoever made it; **History** lists what isn't
 in a version yet, saves a version (with a description Claude drafted), throws changes away, and restores any saved version.
 Edits happen one at a time: while one of yours is written, or while Claude works on a message, the page pauses (the
 cards turn into a moving skeleton, the control you pressed pulses) and comes back when the result is on screen.
@@ -444,7 +448,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 47 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 48 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319

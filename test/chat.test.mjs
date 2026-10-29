@@ -30,8 +30,8 @@ test("chat: UI message → headless Claude Code → reply, resume, recovery", as
   await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
   const ui = JSON.parse((await request("tools/call", { name: "open_ui", arguments: {} })).result.content[0].text).url;
   const api = (path, body) => fetch(new URL(path, ui), { method: body ? "POST" : "GET", headers: { "X-Plinth-Token": "tok", "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-  const turn = async (text, images = []) => {
-    const r = await api("api/chat", { text, images });
+  const turn = async (text, images = [], mentions = []) => {
+    const r = await api("api/chat", { text, images, mentions });
     assert.equal(r.status, 200, await r.text());
     for (let i = 0; i < 400; i++) {
       const s = await (await api("api/state")).json();
@@ -101,4 +101,33 @@ test("chat: UI message → headless Claude Code → reply, resume, recovery", as
   assert.ok(args.includes("mcp__plugin_plinth_plinth__review_changes"));
   assert.ok(args.indexOf("mcp__plugin_plinth_plinth__change") > args.indexOf("--disallowedTools"), "the review cannot write");
   assert.ok(!args.includes("--resume"), "the review is not part of the chat thread");
+
+  // 8. The vocabulary knows what this design system has; a pick applies without Claude; names picked from the menu
+  //    reach Claude as exact ids with how to apply them.
+  const vocab = async () => (await (await api("api/vocab")).json()).entries;
+  let v = await vocab();
+  assert.ok(v.find((e) => e.id === "component:button").inSystem && v.find((e) => e.id === "component:button").apply === null, "button is in the system");
+  assert.equal((await api("api/remove-component", { name: "tooltip" })).status, 200);
+  v = await vocab();
+  assert.deepEqual(v.find((e) => e.id === "component:tooltip").apply, [{ tool: "add_component", args: { name: "tooltip" } }], "a removed component can be added back from the menu");
+  assert.equal(v.find((e) => e.id === "corners:pill").current, false);
+  const applied = await api("api/vocab/apply", { id: "corners:pill", brand: "acme" });
+  assert.equal(applied.status, 200, await applied.text());
+  v = await vocab();
+  assert.equal(v.find((e) => e.id === "corners:pill").current, true, "the pick is now the current corners");
+  assert.equal((await api("api/vocab/apply", { id: "component:button", brand: "acme" })).status, 400, "already in the system");
+  assert.equal((await api("api/vocab/apply", { id: "nope" })).status, 400);
+  s = await turn("Make this rounder", [], ["component:button", "look:soft-rounded", "nope"]);
+  const p = lastCall().prompt;
+  assert.match(p, /^Make this rounder\n\nPicked from Plinth's menu/);
+  assert.match(p, /- Component "Button" \(button\): already in this design system at src\/components\/button/);
+  assert.match(p, /- Look "Soft and rounded": .*set_style \{"main":"teal"/);
+  assert.ok(!p.includes("nope"), "unknown ids are dropped");
+  assert.deepEqual(s.chat.messages.at(-2).mentions.map((m) => m.id), ["component:button", "look:soft-rounded"]);
+  assert.equal(s.chat.messages.at(-2).text, "Make this rounder");
+  s = await turn("", [], ["component:tooltip"]);
+  assert.match(lastCall().prompt, /^\(see what was picked below\)\n\nPicked from Plinth's menu.*\n- Component "Tooltip" \(tooltip\): not in this design system yet; add it with add_component/);
+  const added = await api("api/vocab/apply", { id: "component:tooltip", brand: "acme" });
+  assert.equal(added.status, 200, await added.text());
+  assert.equal((await vocab()).find((e) => e.id === "component:tooltip").inSystem, true, "applying the pick added it back");
 });

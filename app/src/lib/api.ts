@@ -122,7 +122,20 @@ export type Deploy = {
 /** A description of the next version: the engine's at once, Claude's when it is ready. The user confirms or changes it. */
 export type VersionDraft = { key: string; text: string | null; by: "plinth" | "claude" | "none"; seconds?: number; cost?: number | null };
 export type GithubLogin = { status: "idle" | "starting" | "waiting" | "done" | "error"; code?: string; url?: string; since?: number; error?: string };
-export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; at: string; tools?: string[]; error?: boolean; cost?: number };
+export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; images?: string[]; mentions?: VocabMention[]; at: string; tools?: string[]; error?: boolean; cost?: number };
+/** One name from the shared vocabulary: a component, a look, a palette, a font, corners or glass. */
+export type VocabKind = "component" | "look" | "color" | "font" | "corners" | "glass";
+export type VocabEntry = {
+  id: string; kind: VocabKind; key: string; name: string; hint: string; aliases: string[];
+  /** A component the design system already has. */
+  inSystem: boolean;
+  /** A style pick that is already the current setting. */
+  current: boolean;
+  /** What picking it does (ops Plinth runs itself), or null when there is nothing to apply. */
+  apply: { tool: string; args: Record<string, unknown> }[] | null;
+  art: { glyph?: string; swatches?: (string | null)[]; corners?: string | null; container?: string | null; font?: string; kind?: string; glass?: GlassRecipe | null };
+};
+export type VocabMention = { id: string; kind: VocabKind; name: string };
 export type ChatState = { messages: ChatMessage[]; working: boolean; activity: { since: number; tool: string | null; steps: number } | null; session: string | null; error: string | null };
 export type ChatImage = { type: string; data: string; name: string };
 export type State = {
@@ -164,7 +177,11 @@ export type StoryEntry = { id: string; title: string; name: string; type: "story
 export const api = {
   rev: () => call<{ rev: number }>("GET", "/api/rev"),
   state: () => call<State>("GET", "/api/state"),
-  sendChat: (text: string, images: ChatImage[]) => call<{ id: string }>("POST", "/api/chat", { text, images: images.map(({ type, data }) => ({ type, data })) }),
+  sendChat: (text: string, images: ChatImage[], mentions: string[] = []) => call<{ id: string }>("POST", "/api/chat", { text, images: images.map(({ type, data }) => ({ type, data })), mentions }),
+  /** The shared vocabulary, with what this design system has and uses. */
+  vocab: () => call<{ entries: VocabEntry[] }>("GET", "/api/vocab"),
+  /** Apply one entry (a look, a palette, corners, a font, glass, or add a component) without Claude. */
+  applyVocab: (brand: string, id: string) => edit("Applying your pick", () => call<Partial<ChangeResult> & { unchanged?: boolean; message?: string }>("POST", "/api/vocab/apply", { brand, id })),
   stopChat: () => call<{ stopped: boolean }>("POST", "/api/chat/stop"),
   resetChat: () => call<{ reset: boolean }>("POST", "/api/chat/reset"),
   install: () => call<{ started: boolean }>("POST", "/api/install"),

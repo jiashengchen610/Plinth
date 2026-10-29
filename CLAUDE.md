@@ -33,7 +33,11 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   before any workspace publishes with that version.
 - After changing `app/src`, run `npm run build:app` and commit `app/dist`.
 - The UI is four steps (Describe, Style, Components, Publish) in plain words: no token names in UI copy except the
-  small labels in the node graph. Presets the UI offers (palettes, fonts, corners, the component list) live in
+  small labels in the node graph. Everything the user can pick by name (components, looks, palettes, fonts, corners,
+  glass) is one vocabulary (`server/vocab.mjs`, `GET /api/vocab`): plain names, aliases in English and Chinese, an
+  illustration, and the ops that apply it. The chat's `/` menu, its mention chips (sent as ids; `mentionBlock` tells
+  Claude the exact ids and ops) and the Components step's Add panel all read it; add new words there, not in a view.
+  Presets the UI offers (palettes, fonts, corners, the component list) live in
   `server/start.mjs`; style picks become ops in `engine/style.mjs`. Every page's main action goes in `<Cta>`.
   Describe can start from a website: `server/fromsite.mjs` runs dembrandt and asks Google Fonts, `engine/fromsite.mjs`
   turns its JSON into picks that become "site" answers (palette, corners, font); only values are used, never the
@@ -63,7 +67,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (47 tests).
+- After changing `engine/` or `server/`, run `npm test` (48 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (133 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
