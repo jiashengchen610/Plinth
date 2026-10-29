@@ -17,6 +17,12 @@ type Sticker = { id: string; group: string; name: string; stories: [string, Comp
 // A story that opens an overlay on its own (a dialog with open or defaultOpen) would cover the whole page, and one
 // tagged "!sheet" asks to stay off it: both are left out here (their component's own page still shows them).
 const onSheet = ([, story]: [string, Composed]) => !story.args?.open && !story.args?.defaultOpen && !story.tags?.includes("!sheet");
+// A story without its own name is labeled from its export, in words: "ExtraSmall" → "Extra small".
+const label = (key: string, story: Composed) => {
+  if (story.storyName && story.storyName !== key) return story.storyName;
+  const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z])([A-Z][a-z])/g, "$1 $2");
+  return spaced.charAt(0) + spaced.slice(1).toLowerCase();
+};
 const toSticker = (path: string, mod: StoriesModule): Sticker => {
   const id = path.split("/").at(-2) ?? path;
   const title = (mod.default?.title ?? id).split("/");
@@ -50,7 +56,7 @@ function StickerSheet() {
                 {s.stories.map(([key, Story]) => (
                   <figure key={key} className="flex max-w-full min-w-0 flex-col gap-2">
                     <Story />
-                    <figcaption className="type-label-sm text-muted-foreground">{Story.storyName ?? key}</figcaption>
+                    <figcaption className="type-label-sm text-muted-foreground">{label(key, Story)}</figcaption>
                   </figure>
                 ))}
               </div>

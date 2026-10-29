@@ -1,7 +1,9 @@
+/* Fonts first: their Google Fonts @import url() rules must come before every other rule once the imports are
+   inlined, or browsers drop them and every font falls back to a system one. */
+@import "./styles/fonts.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "./styles/fonts.css";
 @import "./styles/tokens.css";
 
 @custom-variant dark (&:is(.dark *));

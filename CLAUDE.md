@@ -92,5 +92,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   A story that opens a dialog (`defaultOpen`) covers a page that renders it among others, and blocks clicks there.
 - shadcn CLI 4.21.1 (in the template): `build`, `search`, `view`, `docs` and an `mcp` server; registry items carry
   `cssVars` (theme/light/dark), `css`, `dependencies` and `registryDependencies`.
+- Tailwind v4 + Vite: imports are inlined where they stand, and the optimizer drops an `@import url()` that is not
+  the first rule ("@import rules must precede all rules aside from @charset and @layer statements", a build
+  warning only), so `src/index.css` imports `fonts.css` before `tailwindcss`. Storybook's default `layout`
+  ("padded") puts a component against the top left; the template sets "centered" in preview parameters.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,
   Components, Do's and Don'ts; no multi-brand or mode support, hence one composed file per brand.

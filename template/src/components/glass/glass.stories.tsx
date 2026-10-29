@@ -8,7 +8,7 @@ import { Glass } from "@/components/glass/glass";
 /** Something busy to put glass on: soft shapes in palette colors, or a page of text. */
 function Backdrop({ kind, children }: { kind: "color" | "text" | "dark" | "light"; children: ReactNode }) {
   return (
-    <div className={`relative grid min-h-80 w-xl max-w-full place-items-center overflow-hidden rounded-glass p-8 ${kind === "dark" ? "bg-black" : kind === "light" ? "bg-white" : "bg-linear-to-br from-rose-300 via-amber-200 to-sky-300"}`}>
+    <div className={`relative grid min-h-80 w-xl max-w-full place-items-center overflow-hidden rounded-glass p-8 ${kind === "dark" ? "bg-black" : kind === "light" ? "bg-white ring-1 ring-black/10 ring-inset" : "bg-linear-to-br from-rose-300 via-amber-200 to-sky-300"}`}>
       {kind === "color" && (
         <>
           <span aria-hidden="true" className="absolute top-6 left-10 size-40 rounded-full bg-rose-500" />

@@ -26,6 +26,8 @@ test("scaffold: template copied from an install under node_modules, with a .giti
     assert.ok(existsSync(join(root, f)), `missing ${f}`);
   }
   assert.ok(!existsSync(join(root, "gitignore")));
+  // Browsers drop a Google Fonts @import url() that is not the first rule, so the font file is imported first.
+  assert.match(readFileSync(join(root, "src/index.css"), "utf8").match(/^@import .*$/m)?.[0] ?? "", /fonts\.css/, "fonts.css is the first import");
   assert.match(readFileSync(join(root, ".gitignore"), "utf8"), /^\.ds\/$/m, ".ds/ (chat, inbox images) stays out of the user's repo");
   assert.match(readFileSync(join(root, ".gitignore"), "utf8"), /^node_modules$/m);
   assert.ok(!readdirSync(root).includes("node_modules"));

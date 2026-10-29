@@ -276,6 +276,8 @@ export function syncManaged(root, templateDir = TEMPLATE_DIR) {
 // takes back. `was`: sha256 of the shipped content with LF line endings.
 const TEMPLATE_FIXES = [
   { file: "src/components/toast/toast.stories.tsx", was: ["810cb871729011f6cac50bf3625bb63c583f421fe02d087c502db36854488acd"], title: "Fix the Toast test that stopped deploys on GitHub" },
+  { file: "src/components/chart/chart.stories.tsx", was: ["d5a272359b622839d935fd60c3ed518df7458077131ce5d87fd418406396fc7c"], title: "Show the donut and radar charts on the All components page" },
+  { file: "src/components/glass/glass.stories.tsx", was: ["c7fb53f85a43cbfc0f19337646f3cc4a2fd1b46318ebf242e06e5d9bb0698c00"], title: "Outline the white backdrop of the glass example" },
 ];
 const lfHash = (text) => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
 export function templateFixOps(root, templateDir = TEMPLATE_DIR) {

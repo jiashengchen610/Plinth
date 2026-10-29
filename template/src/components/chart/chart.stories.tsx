@@ -112,7 +112,7 @@ const shareConfig = {
 /** A donut: parts of one whole. Keep it to a few slices. */
 export const Donut: Story = {
   render: (args) => (
-    <ChartContainer {...args} config={shareConfig} className="aspect-square max-h-72" aria-label="Where the money went">
+    <ChartContainer {...args} config={shareConfig} className="aspect-square w-72 max-w-full" aria-label="Where the money went">
       <PieChart>
         <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
         <Pie data={shares} dataKey="value" nameKey="name" innerRadius={60} strokeWidth={4} />
@@ -135,7 +135,7 @@ const habitConfig = { thisYear: { label: "This year", color: "var(--chart-1)" },
 /** Radar: a few measures for two or three things side by side. */
 export const RadarCompare: Story = {
   render: (args) => (
-    <ChartContainer {...args} config={habitConfig} className="aspect-square max-h-80" aria-label="Habits this year and last">
+    <ChartContainer {...args} config={habitConfig} className="aspect-square w-80 max-w-full" aria-label="Habits this year and last">
       <RadarChart data={habits}>
         <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
         <PolarGrid />

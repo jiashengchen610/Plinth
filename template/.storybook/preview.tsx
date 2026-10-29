@@ -51,6 +51,9 @@ const preview: Preview = {
   },
   initialGlobals: { brand: defaultBrand, mode: "light" },
   parameters: {
+    // A component sits in the middle of its canvas and of its docs preview, not against the top left edge. Pages
+    // that fill the screen (All components) set "fullscreen" themselves.
+    layout: "centered",
     controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
     // Accessibility findings are reported as warnings in Storybook and in the tests, not failures: design problems
     // are reminders in Plinth. Interaction tests still fail on errors.
