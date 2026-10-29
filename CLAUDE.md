@@ -35,6 +35,9 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
 - The UI is four steps (Describe, Style, Components, Publish) in plain words: no token names in UI copy except the
   small labels in the node graph. Presets the UI offers (palettes, fonts, corners, the component list) live in
   `server/start.mjs`; style picks become ops in `engine/style.mjs`. Every page's main action goes in `<Cta>`.
+  Describe can start from a website: `server/fromsite.mjs` runs dembrandt and asks Google Fonts, `engine/fromsite.mjs`
+  turns its JSON into picks that become "site" answers (palette, corners, font); only values are used, never the
+  site's text, images or name (Claude is told not to name it).
 - AI drafts, the user confirms: text the user would otherwise write is drafted and shown in an editable field (prose
   by Claude through `server/quick.mjs`, names and values by the engine), never left empty. Status tells the truth: after
   a push the UI reads what GitHub did (`deployStatus`) instead of saying it is published.
@@ -60,7 +63,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   release committed): upgrades replace a user's component file only while it matches a version recorded there.
 - A template file shipped with a bug gets an entry in `TEMPLATE_FIXES` (`engine/workspace.mjs`): workspaces whose copy
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
-- After changing `engine/` or `server/`, run `npm test` (44 tests).
+- After changing `engine/` or `server/`, run `npm test` (47 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
   (133 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
@@ -100,5 +103,12 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   the first rule ("@import rules must precede all rules aside from @charset and @layer statements", a build
   warning only), so `src/index.css` imports `fonts.css` before `tailwindcss`. Storybook's default `layout`
   ("padded") puts a component against the top left; the template sets "centered" in preview parameters.
+- dembrandt 0.39.2 (`engine/fromsite.mjs` pins it; Describe's "Start from a website"): `npx -y dembrandt@0.39.2 <url>
+  --json-only` reads one page in about 20 s (`--crawl 3`: about 50 s, much the same result). It uses playwright-core
+  1.63.0, the template's Playwright version, so the browser Plinth's install fetched is reused (else
+  `dembrandt install-browser`). Its `colors.semantic.primary` is often a link color: the main color comes from filled
+  buttons. Fonts in `typography.sources.customFonts` are the site's own; Google Fonts' CSS API answers 400 for a
+  family it lacks. Windows: npx is a .cmd, so the server runs npm's `npx-cli.js` with node (no shell), keeping the
+  address off a command line.
 - Google DESIGN.md spec (alpha): sections Overview, Colors, Typography, Layout, Elevation & Depth, Shapes,
   Components, Do's and Don'ts; no multi-brand or mode support, hence one composed file per brand.

@@ -12,6 +12,7 @@ import { publishDefaults, makePublicAndDeploy, redeploy, deployStatus } from "./
 import { toolByName, upgradeKind } from "./tools.mjs";
 import { freePort, httpJson } from "./storybook.mjs";
 import { createSetup, presets, suggest } from "./start.mjs";
+import { readSite } from "./fromsite.mjs";
 import { draftVersionMessage, quickEdit } from "./quick.mjs";
 import { colorName } from "../engine/color-names.mjs";
 import { readStyle } from "../engine/style.mjs";
@@ -161,6 +162,8 @@ export async function startUi(ctx, { port: wanted = Number(process.env.PLINTH_PO
     // The Describe step: presets, Claude's suggestions after the first answer, and creating from the answers.
     "GET /api/presets": () => presets(),
     "POST /api/suggest": async (req) => { const { product } = await readJson(req); if (!String(product ?? "").trim()) throw new Error("Say what you're making first."); return suggest(ctx, product); },
+    // Describe's "Start from a website": reads the page's look (20–40 s); nothing is written.
+    "POST /api/read-site": async (req) => { const { url } = await readJson(req); return readSite(url, { root: existsSync(join(ctx.root, "design-system.json")) ? ctx.root : undefined, templateDir: ws.TEMPLATE_DIR }); },
     "POST /api/setup": async (req) => { const answers = await readJson(req); const already = Boolean(ctx.setup.state()?.running); ctx.setup.start(answers).catch(() => {}); return { started: true, already }; },
     "POST /api/style": async (req) => { needsWorkspace(); return tool("set_style", { ...(await readJson(req)), by: "you" }); },
     "POST /api/role-color": async (req) => { needsWorkspace(); return tool("set_role_color", { ...(await readJson(req)), by: "you" }); },

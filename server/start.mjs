@@ -8,8 +8,9 @@ import { join } from "node:path";
 import { quickClaude } from "./quick.mjs";
 import * as ws from "../engine/workspace.mjs";
 import { loadConfig, listBrands } from "../engine/tokens.mjs";
-import { paletteColorOps } from "../engine/palette.mjs";
-import { CORNERS, fontPickFor, GLASS_PRESETS, styleOps, readStyle } from "../engine/style.mjs";
+import { loadPrimitives, paletteColorOps } from "../engine/palette.mjs";
+import { CORNERS, fontPickFor, GLASS_PRESETS, GRAYS, radiusSteps, roleColorOps, styleOps, readStyle } from "../engine/style.mjs";
+import { exactPrimaryOps } from "../engine/fromsite.mjs";
 import { typographyUpgrade } from "../engine/upgrade.mjs";
 import { chartFollowOps } from "../engine/chart.mjs";
 
@@ -158,6 +159,7 @@ function setupPrompt(a, style, fresh) {
     `- Built for: ${label(KINDS, a.kind)}`,
     `- Already applied by Plinth: main color ${style.main}, grays ${style.gray}, corners ${style.corners}, text font ${style.font}${style.headingFont ? `, headings font ${style.headingFont}` : ""}.`,
   ];
+  if (a.site && [a.palette, a.corners, a.font].includes("site")) lines.push("- The colors, corners and fonts were read from a reference website. Describe that look in your own words; don't name the website or its brand, and don't copy its text.");
   if (a.palette === "claude") lines.push("- Colors: I let you choose. If another main color or gray fits better, change it with set_style.");
   if (a.corners === "claude") lines.push("- Corners: I let you choose; change them with set_style if another preset fits better.");
   if (a.font === "claude") lines.push("- Fonts: I let you choose; change them with set_style (font, headingFont, labelFont) if others fit better.");
@@ -233,13 +235,43 @@ export function createSetup(ctx, { bump = () => {} } = {}) {
           ws.change(ctx.root, { title: "Add your brand color to the palette", ops: p.ops, by: "engine" });
           main = p.name; gray = "neutral";
         }
-        const corners = CORNERS[a.corners] ? a.corners : "round";
-        const font = FONTS.some((f) => f.family === a.font) ? a.font : "Inter";
-        // A serif becomes the headings font; a sans is the text font, with headings in it too. Before font roles: one font.
-        const fonts = readStyle(ctx.root, brand).fontRoles ? { headingFont: "", ...fontPickFor(font) } : { font };
-        const ops = [...styleOps(ctx.root, brand, { main, gray, corners, ...fonts }), ...chartFollowOps(ctx.root, brand, { main, gray })];
+        // Picks read from a website ("site" answers): its main color stays exact where text can sit on it.
+        const site = a.site && typeof a.site === "object" ? a.site : null;
+        const after = [];
+        if (a.palette === "site" && site?.main) {
+          gray = GRAYS.includes(site.gray) ? site.gray : "neutral";
+          if (site.main.custom) {
+            const p = paletteColorOps(ctx.root, { name: "brand", value: site.main.custom, templateDir: ws.TEMPLATE_DIR });
+            ws.change(ctx.root, { title: "Add the site's main color to the palette", ops: p.ops, by: "engine" });
+            main = p.name;
+            after.push(...exactPrimaryOps(brand, p.name, p.anchor, p.shades));
+          } else if (loadPrimitives(ctx.root).color?.[site.main.family]) {
+            main = site.main.family;
+            const node = loadPrimitives(ctx.root).color[main];
+            after.push(...exactPrimaryOps(brand, main, site.main.step, Object.fromEntries(Object.entries(node).filter(([k, v]) => !k.startsWith("$") && v?.$value).map(([k, v]) => [k, v.$value]))));
+          }
+          if (site.background) { try { after.push(...roleColorOps(ctx.root, brand, { role: "background", color: site.background })); } catch { /* not in this palette: white stays */ } }
+        }
+        let corners = CORNERS[a.corners] ? a.corners : "round";
+        const steps = new Set(radiusSteps(ctx.root).map((s) => s.step));
+        const fineCorners = {};
+        if (a.corners === "site" && site?.corners) {
+          corners = CORNERS[site.corners.preset] ? site.corners.preset : "round";
+          if (steps.has(site.corners.inner)) fineCorners.inner = site.corners.inner;
+          if (steps.has(site.corners.outer)) fineCorners.outer = site.corners.outer;
+        }
+        const roles = readStyle(ctx.root, brand).fontRoles;
+        let fonts;
+        if (a.font === "site" && site?.fonts?.font) {
+          fonts = roles ? { font: site.fonts.font, headingFont: site.fonts.headingFont ?? "", labelFont: site.fonts.labelFont === "heading" ? "heading" : "body" } : { font: site.fonts.font };
+        } else {
+          const font = FONTS.some((f) => f.family === a.font) ? a.font : "Inter";
+          // A serif becomes the headings font; a sans is the text font, with headings in it too. Before font roles: one font.
+          fonts = roles ? { headingFont: "", ...fontPickFor(font) } : { font };
+        }
+        const ops = [...styleOps(ctx.root, brand, { main, gray, corners, ...fineCorners, ...fonts }), ...after, ...chartFollowOps(ctx.root, brand, { main, gray })];
         const cfg = JSON.parse(readFileSync(join(ctx.root, "design-system.json"), "utf8"));
-        const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
+        const brief = { product, feel: a.feel ?? "", kind: a.kind, palette: a.palette, brandColor: a.palette === "brand" ? a.brandColor : undefined, corners: a.corners, font: a.font, site: site ? { url: site.url, name: site.name, picks: { main: site.main, gray: site.gray, background: site.background, corners: site.corners, fonts: site.fonts } } : undefined, components: picked, extraText: a.extraText?.trim() || undefined, answeredAt: new Date().toISOString() };
         cfg.brief = brief;
         if (fresh) cfg.context = KINDS.some((k) => k.id === a.kind) ? a.kind : cfg.context;
         // Started from scratch: the design system takes the new name (its brand keeps its id; files are named by it).

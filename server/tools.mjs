@@ -14,6 +14,7 @@ import { colorName } from "../engine/color-names.mjs";
 import { addIconOps, findIcons, iconSet, listIcons } from "../engine/icons.mjs";
 import { COMPONENTS } from "./start.mjs";
 import { deployStatus } from "./publish.mjs";
+import { readSite } from "./fromsite.mjs";
 import { chartFollowOps, chartOps, chartView } from "../engine/chart.mjs";
 
 /** Change titles use the name people see in the UI (Text box, Dropdown); components outside the catalog keep their id. */
@@ -343,6 +344,15 @@ export const TOOLS = [
       ctx.deps?.install?.().catch(() => {});
       ctx.notify();
       return { ...r, packages: pkgs, message: `Added ${componentName(a.name)}. Installing ${Object.keys(pkgs).join(", ")} for it (about a minute); its preview shows after that.` };
+    },
+  },
+  {
+    name: "read_site",
+    description: "Read the look of a public website (its main color, grays, page background, corners and fonts) with a headless browser, for when the user wants their design system to look like a site. Takes 20–40 seconds; writes nothing. Returns what was found, the style picks (main: a palette step or a custom color; gray; corners preset with inner/outer radius steps; fonts, with free stand-ins for paid fonts) and notes. Apply the picks with set_style (and add_palette_color for a custom main color); describe the look in your own words and never name or copy the site's brand in the guidelines.",
+    inputSchema: { type: "object", properties: { url: { type: "string", description: "The site's address, e.g. monzo.com" } }, required: ["url"] },
+    run: async (a, ctx) => {
+      const r = await readSite(a.url, { root: existsSync(join(ctx.root, "design-system.json")) ? ctx.root : undefined, templateDir: ws.TEMPLATE_DIR });
+      return { url: r.url, seconds: r.seconds, found: r.look.found, picks: r.look.picks, notes: r.look.notes, accentAsMain: r.accent };
     },
   },
   {

@@ -1,0 +1,361 @@
+{
+ "url": "https://gumroad.com/",
+ "siteName": "Gumroad",
+ "logo": {},
+ "colors": {
+  "semantic": {
+   "background": "rgb(244, 244, 240)",
+   "text": "rgb(0, 0, 0)",
+   "primary": "rgb(255, 201, 0)",
+   "accent": "rgb(255, 144, 232)"
+  },
+  "palette": [
+   {
+    "color": "rgb(0, 0, 0)",
+    "normalized": "#000000",
+    "count": 183,
+    "role": "surface"
+   },
+   {
+    "color": "rgb(255, 255, 255)",
+    "normalized": "#ffffff",
+    "count": 148,
+    "role": "surface"
+   },
+   {
+    "color": "rgb(209, 213, 220)",
+    "normalized": "#d1d5dc",
+    "count": 102,
+    "role": "neutral"
+   },
+   {
+    "color": "rgb(255, 201, 0)",
+    "normalized": "#ffc900",
+    "count": 6,
+    "role": "accent"
+   },
+   {
+    "color": "rgb(241, 243, 51)",
+    "normalized": "#f1f333",
+    "count": 4,
+    "role": "accent"
+   },
+   {
+    "color": "rgb(220, 52, 30)",
+    "normalized": "#dc341e",
+    "count": 4,
+    "role": "accent"
+   },
+   {
+    "color": "rgb(255, 144, 232)",
+    "normalized": "#ff90e8",
+    "count": 1,
+    "role": "supporting"
+   },
+   {
+    "color": "rgb(16, 16, 16)",
+    "normalized": "#101010",
+    "count": 1
+   },
+   {
+    "color": "rgb(243, 244, 246)",
+    "normalized": "#f3f4f6",
+    "count": 1
+   }
+  ]
+ },
+ "borders": {
+  "combinations": [
+   {
+    "color": "oklch(0.872 0.01 258.338)",
+    "count": 102
+   },
+   {
+    "color": "rgb(0, 0, 0)",
+    "count": 21
+   },
+   {
+    "color": "oklab(0.259939 -0.000510752 0.00176638 / 0.5)",
+    "count": 14
+   },
+   {
+    "color": "rgb(0, 0, 0)",
+    "count": 4
+   },
+   {
+    "color": "rgb(0, 0, 0)",
+    "count": 2
+   },
+   {
+    "color": "rgb(36, 36, 35)",
+    "count": 2
+   },
+   {
+    "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.3)",
+    "count": 1
+   }
+  ]
+ },
+ "typography": {
+  "styles": [
+   {
+    "context": "display",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "display",
+    "family": "ABC Favorit",
+    "count": 2
+   },
+   {
+    "context": "heading-2",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "display",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "text",
+    "family": "ABC Favorit",
+    "count": 2
+   },
+   {
+    "context": "heading-2",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "heading-3",
+    "family": "ABC Favorit",
+    "count": 2
+   },
+   {
+    "context": "text",
+    "family": "ABC Favorit",
+    "count": 4
+   },
+   {
+    "context": "text",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 10
+   },
+   {
+    "context": "link",
+    "family": "ABC Favorit",
+    "count": 102
+   },
+   {
+    "context": "link",
+    "family": "ABC Favorit",
+    "count": 3
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 8
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "link",
+    "family": "ABC Favorit",
+    "count": 16
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 6
+   },
+   {
+    "context": "heading-3",
+    "family": "ABC Favorit",
+    "count": 4
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 14
+   },
+   {
+    "context": "link",
+    "family": "ABC Favorit",
+    "count": 20
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "ui",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "ABC Favorit",
+    "count": 4
+   }
+  ],
+  "sources": {
+   "googleFonts": [],
+   "customFonts": [
+    "ABC Favorit"
+   ]
+  }
+ },
+ "borderRadius": {
+  "values": [
+   {
+    "value": "4px",
+    "count": 14,
+    "elements": [
+     "div",
+     "a",
+     "input",
+     "button"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "6px",
+    "count": 1,
+    "elements": [
+     "Search"
+    ],
+    "confidence": "low"
+   },
+   {
+    "value": "16px",
+    "count": 9,
+    "elements": [
+     "div"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "24px",
+    "count": 6,
+    "elements": [
+     "div"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "24px 24px 24px 4px",
+    "count": 4,
+    "elements": [
+     "div"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "9999px",
+    "count": 129,
+    "elements": [
+     "Visit Gumroad on GitHub",
+     "a",
+     "div",
+     "img"
+    ],
+    "confidence": "high"
+   }
+  ]
+ },
+ "components": {
+  "buttons": [
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 144, 232)",
+      "color": "rgb(0, 0, 0)",
+      "borderRadius": "4px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(0, 0, 0)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "3.35544e+07px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(0, 0, 0)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "0px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(0, 0, 0)",
+      "borderRadius": "3.35544e+07px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(0, 0, 0)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "4px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(0, 0, 0)",
+      "borderRadius": "3.35544e+07px"
+     }
+    }
+   }
+  ]
+ }
+}

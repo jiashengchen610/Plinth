@@ -57,7 +57,9 @@ export type RoundChanges = { since: string; tokens: { token: string; path: strin
 export type QuickEdit = { changes: { path: string; kind: "color" | "radius" | "text"; to: string }[]; reply: string; chat: boolean; seconds?: number; cost?: number | null; error: string | null };
 /** A glass recipe: how much of its color shows, blur (px), saturation (1 = unchanged), edge light, ripple (0–1). */
 export type GlassRecipe = { tintOpacity: number; blur: number; saturation: number; highlight: number; distortion: number };
-export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string };
+export type Brief = { product: string; feel?: string; kind?: string; palette?: string; brandColor?: string; corners?: string; font?: string; components?: string[]; extraText?: string; answeredAt?: string;
+  /** Where the look came from, when it was read from a website. */
+  site?: { url: string; name: string | null; picks: Omit<SitePicks, "url" | "name"> } };
 export type SetupStep = { id: string; label: string; who: string; status: "waiting" | "active" | "done" | "error"; detail?: string };
 export type SetupState = { running: boolean; fresh: boolean; startedAt: string; finishedAt: string | null; error: string | null; cost: number | null; steps: SetupStep[] } | null;
 export type Presets = {
@@ -71,7 +73,26 @@ export type Presets = {
 export type Suggestions = { name: string | null; kind: string; feels: string[]; palette: string; corners: string; font: string; components: string[]; question: string | null; answers?: string[];
   /** Why each pick fits, in Claude's words. */
   why?: Partial<Record<"palette" | "corners" | "font" | "components", string>>; by: "claude" | "fallback"; error?: string; seconds?: number; cost?: number | null };
-export type Answers = { product: string; name?: string; feel: string; kind: string; palette: string; brandColor?: string; corners: string; font: string; components: string[]; extraText: string };
+export type Answers = { product: string; name?: string; feel: string; kind: string; palette: string; brandColor?: string; corners: string; font: string; components: string[]; extraText: string; site?: SitePicks };
+/** A main color as a palette pick: a step of a family, or a color of its own (it gets its own scale). */
+export type MainPick = { family?: string; step?: string; custom?: string; color: string };
+export type FontFound = { family: string; from: string; free: boolean };
+/** The look read from a website, as Describe's answers use it ("site" for palette, corners and font). */
+export type SitePicks = {
+  url: string; name: string | null;
+  main: MainPick | null; gray: string; background: string | null;
+  corners: { preset: string; inner?: string; outer?: string } | null;
+  fonts: { font: string; headingFont: string; labelFont: string } | null;
+};
+export type SiteRead = {
+  url: string; seconds: number; favicon: string | null; accent: MainPick | null;
+  swatches: { gray: string[]; main: string[] };
+  look: {
+    found: { name: string | null; url: string | null; main?: { color: string; from: string; text?: string }; gray: string; accent?: string; background?: string; corners: { buttons: number | "pill" | null; cards: number | null }; fonts: { body: FontFound | null; heading: FontFound | null; label: FontFound | null } };
+    picks: Omit<SitePicks, "url" | "name">;
+    notes: string[];
+  };
+};
 export type TestResult = {
   ok: boolean; at?: string; error?: string; next?: string;
   typecheck?: { ok: boolean; tail?: string };
@@ -172,6 +193,7 @@ export const api = {
   addPaletteColor: (name: string, color: string, use?: { brand: string; role: string; mode: "default" | "dark"; title?: string }) => edit("Adding the color", () => call<ChangeResult & { name: string; anchor: string; shades: Record<string, string> }>("POST", "/api/palette", { name, color, ...use })),
   presets: () => call<Presets>("GET", "/api/presets"),
   suggest: (product: string) => call<Suggestions>("POST", "/api/suggest", { product }),
+  readSite: (url: string) => call<SiteRead>("POST", "/api/read-site", { url }),
   setup: (answers: Answers) => call<{ started: boolean }>("POST", "/api/setup", answers),
   style: (brand: string, pick: Partial<Pick<Style, "main" | "gray" | "corners" | "labelFont">> & { outer?: string; inner?: string; fitInside?: boolean; font?: string; headingFont?: string }) => edit("Changing the style", () => call<Partial<ChangeResult> & { unchanged?: boolean }>("POST", "/api/style", { brand, ...pick })),
   removeComponent: (name: string) => edit("Removing the component", () => call<ChangeResult>("POST", "/api/remove-component", { name })),

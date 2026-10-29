@@ -1,0 +1,403 @@
+{
+ "url": "https://monzo.com/",
+ "siteName": "Monzo",
+ "logo": {
+  "color": "#ff4f40"
+ },
+ "colors": {
+  "semantic": {
+   "primary": "rgb(9, 23, 35)",
+   "secondary": "rgb(242, 248, 243)",
+   "background": "rgb(255, 255, 255)",
+   "text": "rgb(0, 0, 0)",
+   "accent": "rgb(255, 79, 64)"
+  },
+  "palette": [
+   {
+    "color": "rgb(9, 23, 35)",
+    "normalized": "#091723",
+    "count": 186,
+    "role": "accent"
+   },
+   {
+    "color": "rgb(255, 255, 255)",
+    "normalized": "#ffffff",
+    "count": 111,
+    "role": "surface"
+   },
+   {
+    "color": "rgb(117, 129, 126)",
+    "normalized": "#75817e",
+    "count": 6,
+    "role": "neutral"
+   },
+   {
+    "color": "rgb(255, 79, 64)",
+    "normalized": "#ff4f40",
+    "count": 5,
+    "role": "accent"
+   },
+   {
+    "color": "#112231",
+    "normalized": "#112231",
+    "count": 10
+   }
+  ]
+ },
+ "borders": {
+  "combinations": [
+   {
+    "color": "rgb(9, 23, 35)",
+    "count": 34
+   },
+   {
+    "color": "rgba(9, 23, 35, 0.1)",
+    "count": 5
+   },
+   {
+    "color": "rgb(9, 23, 35)",
+    "count": 4
+   },
+   {
+    "color": "rgb(195, 200, 207)",
+    "count": 4
+   },
+   {
+    "color": "rgba(9, 23, 35, 0.1)",
+    "count": 2
+   },
+   {
+    "color": "rgb(255, 255, 255)",
+    "count": 2
+   },
+   {
+    "color": "rgb(255, 255, 255)",
+    "count": 1
+   }
+  ]
+ },
+ "typography": {
+  "styles": [
+   {
+    "context": "display",
+    "family": "MonzoSansDisplay",
+    "count": 3
+   },
+   {
+    "context": "heading-1",
+    "family": "MonzoSansDisplay",
+    "count": 1
+   },
+   {
+    "context": "heading-2",
+    "family": "MonzoSansDisplay",
+    "count": 2
+   },
+   {
+    "context": "heading-2",
+    "family": "MonzoSansDisplay",
+    "count": 10
+   },
+   {
+    "context": "heading-2",
+    "family": "MonzoSansDisplay",
+    "count": 2
+   },
+   {
+    "context": "text",
+    "family": "MonzoSansText",
+    "count": 1
+   },
+   {
+    "context": "heading-3",
+    "family": "MonzoSansDisplay",
+    "count": 5
+   },
+   {
+    "context": "heading-3",
+    "family": "MonzoSansDisplay",
+    "count": 37
+   },
+   {
+    "context": "text",
+    "family": "MonzoSansDisplay",
+    "count": 6
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 10
+   },
+   {
+    "context": "text",
+    "family": "MonzoSansDisplay",
+    "count": 21
+   },
+   {
+    "context": "heading-2",
+    "family": "MonzoSansDisplay",
+    "count": 2
+   },
+   {
+    "context": "ui",
+    "family": "MonzoSansDisplay",
+    "count": 5
+   },
+   {
+    "context": "link",
+    "family": "MonzoSansText",
+    "count": 98
+   },
+   {
+    "context": "link",
+    "family": "MonzoSansText",
+    "count": 47
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 95
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 183
+   },
+   {
+    "context": "ui",
+    "family": "MonzoSansText",
+    "count": 40
+   },
+   {
+    "context": "heading-3",
+    "family": "MonzoSansDisplay",
+    "count": 2
+   },
+   {
+    "context": "link",
+    "family": "MonzoSansText",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 3
+   },
+   {
+    "context": "ui",
+    "family": "MonzoSansText",
+    "count": 1
+   },
+   {
+    "context": "link",
+    "family": "MonzoSansText",
+    "count": 6
+   },
+   {
+    "context": "ui",
+    "family": "MonzoSansText",
+    "count": 18
+   },
+   {
+    "context": "body",
+    "family": "MonzoSansText",
+    "count": 18
+   }
+  ],
+  "sources": {
+   "googleFonts": [],
+   "customFonts": [
+    "Maison Neue Mono Web",
+    "Maison Neue Web",
+    "MonzoSansDisplay",
+    "MonzoSansText",
+    "Oldschool"
+   ]
+  }
+ },
+ "borderRadius": {
+  "values": [
+   {
+    "value": "4px",
+    "count": 66,
+    "elements": [
+     "graphics-symbol",
+     "img",
+     "badge",
+     "button",
+     "div"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "8px",
+    "count": 16,
+    "elements": [
+     "badge",
+     "div"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "12px",
+    "count": 6,
+    "elements": [
+     "img"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "16px",
+    "count": 27,
+    "elements": [
+     "button",
+     "div",
+     "a"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "32px",
+    "count": 61,
+    "elements": [
+     "image",
+     "div",
+     "article",
+     "dialog",
+     "details"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "64px",
+    "count": 16,
+    "elements": [
+     "div",
+     "section",
+     "Feature cards showcasing Monzo's savings products"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "64px 64px 0px 0px",
+    "count": 1,
+    "elements": [
+     "footer"
+    ],
+    "confidence": "low"
+   },
+   {
+    "value": "100px",
+    "count": 4,
+    "elements": [
+     "ul",
+     "div",
+     "a",
+     "button"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "128px",
+    "count": 61,
+    "elements": [
+     "a",
+     "Go to previous slide",
+     "Go to next slide",
+     "Start auto-playing slides",
+     "span"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "500px",
+    "count": 10,
+    "elements": [
+     "Monzo Bank Homepage",
+     "Sign up",
+     "Open a Monzo account",
+     "button",
+     "Instagram"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "25%",
+    "count": 4,
+    "elements": [
+     "image"
+    ],
+    "confidence": "medium"
+   }
+  ]
+ },
+ "components": {
+  "buttons": [
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(9, 23, 35)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "128px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(9, 23, 35)",
+      "borderRadius": "128px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(9, 23, 35)",
+      "borderRadius": "500px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(9, 23, 35)",
+      "borderRadius": "128px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(9, 23, 35)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "500px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "128px"
+     }
+    }
+   }
+  ]
+ }
+}

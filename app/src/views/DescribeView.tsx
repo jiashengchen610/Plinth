@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Answers, type Presets, type State, type Suggestions } from "@/lib/api";
+import { api, type Answers, type Presets, type SitePicks, type SiteRead, type State, type Suggestions } from "@/lib/api";
 import { Cta, fontsHref } from "@/lib/cta";
 import { CORNER_NAMES } from "@/lib/plain";
 import { ConfirmDialog } from "@/views/ConfirmDialog";
+import { SiteStart } from "@/views/SiteStart";
 import { StepIntro } from "@/views/StepIntro";
 
 type Props = {
@@ -17,7 +18,9 @@ type Props = {
 };
 
 type StepId = "product" | "followup" | "feel" | "palette" | "corners" | "font" | "components" | "summary";
-type Draft = Answers & { followup: string; feelOwn: string };
+/** What the questions show of a look read from a website: swatches and corner sizes. */
+type SiteView = { favicon: string | null; grays: string[]; buttons: number | "pill" | null; cards: number | null };
+type Draft = Answers & { followup: string; feelOwn: string; siteView?: SiteView };
 
 const KEY = "plinth-answers";
 const empty: Draft = { product: "", followup: "", name: "", feel: "", feelOwn: "", kind: "mobile-app", palette: "", corners: "", font: "", components: [], extraText: "" };
@@ -52,9 +55,13 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
   const [scratching, setScratching] = useState(false);
   const editable = !created || redo;
   const [mode, setMode] = useState<"questions" | "import">("questions");
+  const [siteUrl, setSiteUrl] = useState("");
+  const [reading, setReading] = useState(false);
+  const [siteRead, setSiteRead] = useState<SiteRead | null>(null);
+  const [sitePicks, setSitePicks] = useState<SitePicks | null>(null);
   const [a, setA] = useState<Draft>(() => {
     const brief = state.config?.brief;
-    return created && brief ? { ...empty, ...brief, components: brief.components ?? [], extraText: brief.extraText ?? "", feel: brief.feel ?? "", kind: brief.kind ?? "mobile-app", palette: brief.palette ?? "", corners: brief.corners ?? "", font: brief.font ?? "" } : load();
+    return created && brief ? { ...empty, ...brief, components: brief.components ?? [], extraText: brief.extraText ?? "", feel: brief.feel ?? "", kind: brief.kind ?? "mobile-app", palette: brief.palette ?? "", corners: brief.corners ?? "", font: brief.font ?? "", site: brief.site ? { url: brief.site.url, name: brief.site.name, ...brief.site.picks } : undefined } : load();
   });
   const [sugg, setSugg] = useState<Suggestions | null>(null);
   const [thinking, setThinking] = useState(false);
@@ -70,11 +77,14 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
 
   const palettes = presets?.palettes ?? [];
   const fonts = presets?.fonts ?? [];
-  const href = fontsHref(fonts.map((f) => f.family));
+  const siteFonts = [a.site?.fonts?.font, a.site?.fonts?.headingFont, sitePicks?.fonts?.font, sitePicks?.fonts?.headingFont].filter((f): f is string => Boolean(f?.trim()));
+  const href = fontsHref([...new Set([...fonts.map((f) => f.family), ...siteFonts])]);
+  const siteName = a.site?.name ?? (a.site ? new URL(a.site.url).hostname : "the site");
   const extras = (presets?.components ?? []).filter((c) => !c.core);
   const ready = (presets?.components ?? []).filter((c) => c.core);
   const kindPreset = (kind: string, s: Suggestions | null) => [...new Set([...(presets?.kindComponents[kind] ?? []), ...(s?.components ?? [])])];
-  const main = palettes.find((p) => p.id === a.palette)?.main600 ?? (a.palette === "brand" ? a.brandColor : null) ?? palettes[0]?.main600 ?? "#0f766e";
+  const main = palettes.find((p) => p.id === a.palette)?.main600 ?? (a.palette === "brand" ? a.brandColor : a.palette === "site" ? a.site?.main?.color : null) ?? palettes[0]?.main600 ?? "#0f766e";
+  const cornerCss = (v: number | "pill" | null | undefined) => (v === "pill" ? "9999px" : v == null ? undefined : `${v}px`);
 
   const answerProduct = async () => {
     if (!a.product.trim()) return;
@@ -90,6 +100,27 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
       go(1);
     } catch (e) { onError((e as Error).message); } finally { setThinking(false); }
   };
+  const readSiteNow = async () => {
+    setReading(true);
+    try {
+      const r = await api.readSite(siteUrl);
+      setSiteRead(r);
+      setSitePicks({ url: r.url, name: r.look.found.name, ...r.look.picks });
+    } catch (e) { onError((e as Error).message); } finally { setReading(false); }
+  };
+  // The checked look becomes the palette, corners and font answers ("site"); the other questions come as usual.
+  const useSite = () => {
+    if (!sitePicks || !siteRead) return;
+    const f = sitePicks.fonts && sitePicks.fonts.font.trim() ? { ...sitePicks.fonts, font: sitePicks.fonts.font.trim(), headingFont: sitePicks.fonts.headingFont.trim() } : null;
+    const site = { ...sitePicks, fonts: f };
+    const found = siteRead.look.found;
+    set({
+      site, siteView: { favicon: siteRead.favicon, grays: siteRead.swatches.gray, buttons: found.corners.buttons, cards: found.corners.cards },
+      palette: site.main ? "site" : a.palette === "site" ? "" : a.palette, corners: site.corners ? "site" : a.corners === "site" ? "" : a.corners, font: f ? "site" : a.font === "site" ? "" : a.font,
+    });
+    setMode("questions");
+    go(0);
+  };
   const skipRest = () => {
     setA((x) => ({ ...x, feel: x.feel || "claude", palette: x.palette || "claude", corners: x.corners || "claude", font: x.font || "claude" }));
     go(steps.length - 1);
@@ -99,9 +130,9 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
     if (id === "product") return a.product;
     if (id === "followup") return a.followup.trim() || "(skipped)";
     if (id === "feel") return !a.feel || a.feel === "claude" ? "Let Claude choose" : a.feel;
-    if (id === "palette") return a.palette === "brand" ? `My brand color, ${a.brandColor ?? ""}` : palettes.find((p) => p.id === a.palette)?.name ?? "Let Claude choose";
-    if (id === "corners") return !a.corners || a.corners === "claude" ? "Let Claude choose" : CORNER_NAMES[a.corners] ?? a.corners;
-    if (id === "font") return !a.font || a.font === "claude" ? "Let Claude choose" : a.font;
+    if (id === "palette") return a.palette === "site" ? `From ${siteName}: main color ${a.site?.main?.color ?? ""}` : a.palette === "brand" ? `My brand color, ${a.brandColor ?? ""}` : palettes.find((p) => p.id === a.palette)?.name ?? "Let Claude choose";
+    if (id === "corners") return a.corners === "site" ? `From ${siteName}` : !a.corners || a.corners === "claude" ? "Let Claude choose" : CORNER_NAMES[a.corners] ?? a.corners;
+    if (id === "font") return a.font === "site" ? `From ${siteName}: ${a.site?.fonts?.font ?? ""}${a.site?.fonts?.headingFont ? `, headings in ${a.site.fonts.headingFont}` : ""}` : !a.font || a.font === "claude" ? "Let Claude choose" : a.font;
     if (id === "components") {
       const names = [...ready, ...extras.filter((c) => a.components.includes(c.id))].map((c) => c.name);
       return `${names.join(", ")}${a.extraText.trim() ? `; plus one Claude writes: ${a.extraText.trim()}` : ""}`;
@@ -113,6 +144,7 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
     product: [a.product.trim(), a.followup.trim()].filter(Boolean).join("\n"), name: a.name || undefined,
     feel: a.feel === "claude" ? "" : a.feel, kind: a.kind, palette: a.palette || "claude", brandColor: a.palette === "brand" ? a.brandColor : undefined,
     corners: a.corners || "claude", font: a.font || "claude", components: a.components, extraText: a.extraText,
+    site: [a.palette, a.corners, a.font].includes("site") ? a.site : undefined,
   });
 
   const past = steps.slice(0, created && !redo ? steps.length - 1 : Math.min(at, steps.length - 1)).filter((s) => s !== "summary");
@@ -120,7 +152,11 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
 
   const cta = () => {
     if (created && !redo) return <Cta alt={{ label: "Start over with new answers", onClick: () => { onRedo(true); go(0); } }} status="These answers made your design system." next={{ label: "Next: Style →", onClick: onNext }} />;
-    if (mode === "import") return <Cta status="Starting from what you have comes in a later version." next={{ label: "Answer the questions instead", onClick: () => setMode("questions") }} />;
+    if (mode === "import") {
+      const back = { label: "Answer the questions instead", onClick: () => setMode("questions") };
+      if (siteRead && sitePicks && !reading) return <Cta alt={back} status="Then the other questions: what you're making and which components." next={{ label: "Use this look", onClick: useSite }} />;
+      return <Cta alt={back} status={reading ? "Reading the site…" : "About 20 to 40 seconds, free."} next={{ label: reading ? "Reading…" : "Read the site", disabled: reading || !siteUrl.trim(), onClick: readSiteNow }} />;
+    }
     if (step === "summary") {
       return <Cta back={{ label: "← Back", onClick: () => setAt(steps.length - 2) }} alt={redo ? { label: "Cancel", onClick: () => onRedo(false) } : undefined}
         status={`About a minute${newCount ? ` plus a few for your new component` : ""} · about US$${(0.35 + newCount * 1.5).toFixed(2)} of Claude usage`}
@@ -141,25 +177,16 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
         change={redo ? "Change any answer. Your components and history stay; Claude rewrites the style guide to match." : "Claude suggests an answer to each question, with why. Keep it, pick another, or say it in your own words."}
         done={created && !redo ? "Done: your design system was made from these answers. Answer again to change them." : "Create makes your style, your style guide and the ready-made components you picked."} />
 
-      {!created && (
+      {editable && (
         <div role="group" aria-label="How do you want to start?" className="inline-flex flex-wrap self-start rounded-xl bg-muted p-1">
-          {([["questions", "Answer a few questions"], ["import", "Start from something you have"]] as const).map(([m, l]) => (
+          {([["questions", "Answer a few questions"], ["import", "Start from a website"]] as const).map(([m, l]) => (
             <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`min-h-10 rounded-lg px-3.5 text-sm font-medium ${mode === m ? "bg-background shadow-sm" : "text-muted-foreground"}`}>{l}</button>
           ))}
         </div>
       )}
 
-      {mode === "import" && !created ? (
-        <section className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
-          <h2 className="text-base font-semibold">Start from something you have</h2>
-          <p className="text-sm text-muted-foreground">Plinth will read a Storybook, a website, a GitHub repo or a design file, show what it found and rebuild the components the Plinth way. This comes in a later version.</p>
-          <div className="flex flex-wrap gap-2">
-            {["A Storybook", "A website", "A GitHub repo", "A file (DESIGN.md or tokens)"].map((k) => (
-              <span key={k} className="flex-[1_1_160px] rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">{k}</span>
-            ))}
-          </div>
-          <p className="text-sm">For now: answer the questions, then paste a screenshot of what you have into the chat and ask Claude to match it.</p>
-        </section>
+      {mode === "import" && editable ? (
+        <SiteStart url={siteUrl} onUrl={setSiteUrl} onRead={readSiteNow} reading={reading} read={siteRead} picks={sitePicks} onPicks={setSitePicks} />
       ) : (
         <div className="flex flex-col gap-4">
           {past.map((id) => (
@@ -224,6 +251,16 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
                 {step === "palette" && (
                   <>
                     <div className="flex flex-wrap gap-2">
+                      {a.site?.main && (
+                        <button type="button" aria-pressed={a.palette === "site"} onClick={() => set({ palette: "site" })} className={`flex flex-[1_1_200px] flex-col gap-2 rounded-xl border-2 p-3 text-left ${ring(a.palette === "site")}`}>
+                          <span className="flex h-8 w-full overflow-hidden rounded-lg border">
+                            <span className="flex-[3]" style={{ background: a.site.main.color }} />
+                            {(a.siteView?.grays ?? []).filter((_, i) => i % 3 === 1).map((c, i) => <span key={i} className="flex-1" style={{ background: c }} />)}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">From {siteName}<span className="rounded-full bg-info/10 px-2 text-[11px] font-semibold text-info">Read from the site</span></span>
+                          <span className="text-sm text-muted-foreground">Its main color and grays</span>
+                        </button>
+                      )}
                       {palettes.map((p) => (
                         <button key={p.id} type="button" aria-pressed={a.palette === p.id} onClick={() => set({ palette: p.id })} className={`flex flex-[1_1_200px] flex-col gap-2 rounded-xl border-2 p-3 text-left ${ring(a.palette === p.id)}`}>
                           <span className="flex h-8 w-full overflow-hidden rounded-lg border">
@@ -251,6 +288,13 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
                 {step === "corners" && (
                   <>
                     <div className="flex flex-wrap gap-2">
+                      {a.site?.corners && (
+                        <button type="button" aria-pressed={a.corners === "site"} onClick={() => set({ corners: "site" })} className={`flex flex-[1_1_140px] flex-col items-center gap-2.5 rounded-xl border-2 px-2.5 py-3.5 ${ring(a.corners === "site")}`}>
+                          <span className="px-4 py-2 text-sm font-semibold text-white" style={{ background: main ?? undefined, borderRadius: cornerCss(a.siteView?.buttons) }}>Button</span>
+                          <span className="block h-8 w-full max-w-32 border-[1.5px]" style={{ borderRadius: cornerCss(a.siteView?.cards) }} />
+                          <span className="text-sm font-semibold">From {siteName}</span>
+                        </button>
+                      )}
                       {(presets?.corners ?? []).map((c) => (
                         <button key={c.id} type="button" aria-pressed={a.corners === c.id} onClick={() => set({ corners: c.id })} className={`flex flex-[1_1_140px] flex-col items-center gap-2.5 rounded-xl border-2 px-2.5 py-3.5 ${ring(a.corners === c.id)}`}>
                           <span className="px-4 py-2 text-sm font-semibold text-white" style={{ background: main ?? undefined, borderRadius: c.control ?? undefined }}>Button</span>
@@ -265,6 +309,14 @@ export function DescribeView({ state, presets, redo, onRedo, sending = false, on
                 {step === "font" && (
                   <>
                     <div className="flex flex-wrap gap-2">
+                      {a.site?.fonts && (
+                        <button type="button" aria-pressed={a.font === "site"} onClick={() => set({ font: "site" })} className={`flex flex-[1_1_150px] flex-col items-start gap-0.5 rounded-xl border-2 p-3 text-left ${ring(a.font === "site")}`}>
+                          <span className="text-2xl font-bold leading-tight" style={{ fontFamily: `'${a.site.fonts.headingFont || a.site.fonts.font}', sans-serif` }}>Aa</span>
+                          <span className="text-sm" style={{ fontFamily: `'${a.site.fonts.font}', sans-serif` }}>Spent $1,240 of $2,000</span>
+                          <span className="mt-1.5 text-sm font-semibold">From {siteName}</span>
+                          <span className="text-sm text-muted-foreground">{a.site.fonts.font}{a.site.fonts.headingFont ? ` and ${a.site.fonts.headingFont}` : ""}</span>
+                        </button>
+                      )}
                       {fonts.map((f) => (
                         <button key={f.family} type="button" aria-pressed={a.font === f.family} onClick={() => set({ font: f.family })} className={`flex flex-[1_1_150px] flex-col items-start gap-0.5 rounded-xl border-2 p-3 text-left ${ring(a.font === f.family)}`}>
                           <span className="text-2xl font-bold leading-tight" style={{ fontFamily: `'${f.family}', sans-serif` }}>Aa</span>

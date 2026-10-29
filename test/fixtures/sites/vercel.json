@@ -1,0 +1,322 @@
+{
+ "url": "https://vercel.com/",
+ "siteName": "Vercel",
+ "logo": null,
+ "colors": {
+  "semantic": {
+   "secondary": "rgb(102, 102, 102)",
+   "background": "rgb(250, 250, 250)",
+   "text": "rgb(23, 23, 23)",
+   "primary": "rgba(82, 174, 255, 0.8)"
+  },
+  "palette": [
+   {
+    "color": "rgb(77, 77, 77)",
+    "normalized": "#4d4d4d",
+    "count": 92,
+    "role": "neutral"
+   },
+   {
+    "color": "rgb(23, 23, 23)",
+    "normalized": "#171717",
+    "count": 56,
+    "role": "neutral"
+   },
+   {
+    "color": "rgb(255, 255, 255)",
+    "normalized": "#ffffff",
+    "count": 20,
+    "role": "surface"
+   },
+   {
+    "color": "rgba(82, 174, 255, 0.8)",
+    "normalized": "#52aeff",
+    "count": 3,
+    "role": "accent"
+   },
+   {
+    "color": "rgb(143, 143, 143)",
+    "normalized": "#8f8f8f",
+    "count": 3,
+    "role": "neutral"
+   },
+   {
+    "color": "#000000",
+    "normalized": "#000000",
+    "count": 10
+   },
+   {
+    "color": "rgb(16, 16, 16)",
+    "normalized": "#101010",
+    "count": 1
+   }
+  ]
+ },
+ "borders": {
+  "combinations": [
+   {
+    "color": "rgba(0, 0, 0, 0.08)",
+    "count": 3
+   },
+   {
+    "color": "oklab(0.999998 -0.00000980496 0.0000234246 / 0.4)",
+    "count": 3
+   },
+   {
+    "color": "rgba(0, 0, 0, 0.08)",
+    "count": 2
+   },
+   {
+    "color": "rgb(242, 242, 242)",
+    "count": 1
+   }
+  ]
+ },
+ "typography": {
+  "styles": [
+   {
+    "context": "display",
+    "family": "GeistSans",
+    "count": 1
+   },
+   {
+    "context": "heading-2",
+    "family": "GeistSans",
+    "count": 5
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 9
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 3
+   },
+   {
+    "context": "link",
+    "family": "GeistSans",
+    "count": 5
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 21
+   },
+   {
+    "context": "text",
+    "family": "Geist Mono",
+    "count": 8
+   },
+   {
+    "context": "link",
+    "family": "GeistSans",
+    "count": 3
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 14
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 3
+   },
+   {
+    "context": "ui",
+    "family": "GeistSans",
+    "count": 1
+   },
+   {
+    "context": "ui",
+    "family": "GeistSans",
+    "count": 11
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 112
+   },
+   {
+    "context": "link",
+    "family": "GeistSans",
+    "count": 82
+   },
+   {
+    "context": "link",
+    "family": "GeistSans",
+    "count": 4
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 17
+   },
+   {
+    "context": "ui",
+    "family": "GeistSans",
+    "count": 4
+   },
+   {
+    "context": "heading-2",
+    "family": "GeistSans",
+    "count": 12
+   },
+   {
+    "context": "link",
+    "family": "Geist Mono",
+    "count": 1
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 9
+   },
+   {
+    "context": "body",
+    "family": "GeistSans",
+    "count": 1
+   },
+   {
+    "context": "caption",
+    "family": "Geist Mono",
+    "count": 1
+   },
+   {
+    "context": "caption",
+    "family": "GeistSans",
+    "count": 4
+   }
+  ],
+  "sources": {
+   "googleFonts": [],
+   "customFonts": [
+    "Geist Mono",
+    "GeistPixelCircle",
+    "GeistPixelGrid",
+    "GeistPixelLine",
+    "GeistPixelSquare",
+    "GeistPixelTriangle",
+    "GeistSans"
+   ]
+  }
+ },
+ "borderRadius": {
+  "values": [
+   {
+    "value": "4px",
+    "count": 4,
+    "elements": [
+     "div",
+     "View as AI agent"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "6px",
+    "count": 54,
+    "elements": [
+     "a",
+     "menuitem",
+     "span",
+     "link",
+     "button"
+    ],
+    "confidence": "high"
+   },
+   {
+    "value": "8px",
+    "count": 6,
+    "elements": [
+     "link",
+     "div"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "12px",
+    "count": 1,
+    "elements": [
+     "menu"
+    ],
+    "confidence": "low"
+   },
+   {
+    "value": "20px",
+    "count": 6,
+    "elements": [
+     "span"
+    ],
+    "confidence": "medium"
+   },
+   {
+    "value": "9999px",
+    "count": 21,
+    "elements": [
+     "img",
+     "link",
+     "div",
+     "span",
+     "Onboard your agent"
+    ],
+    "confidence": "high"
+   }
+  ]
+ },
+ "components": {
+  "buttons": [
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(23, 23, 23)",
+      "borderRadius": "3.35544e+07px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(0, 114, 245)",
+      "borderRadius": "6px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(255, 255, 255)",
+      "color": "rgb(23, 23, 23)",
+      "borderRadius": "6px"
+     }
+    }
+   },
+   {
+    "confidence": "high",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(23, 23, 23)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "6px"
+     }
+    }
+   },
+   {
+    "confidence": "medium",
+    "states": {
+     "default": {
+      "backgroundColor": "rgb(23, 23, 23)",
+      "color": "rgb(255, 255, 255)",
+      "borderRadius": "3.35544e+07px"
+     }
+    }
+   }
+  ]
+ }
+}

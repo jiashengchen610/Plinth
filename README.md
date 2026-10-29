@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.16.0.** Tested by `npm test` (44 tests), by the 133 story tests in a generated workspace, and end to end
+> **Status: 0.17.0.** Tested by `npm test` (47 tests), by the 133 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -122,7 +122,12 @@ Then the UI opens at http://localhost:4319. Keep the terminal window open while 
 its main button in the bar at the bottom of the screen, and at the top what you decide there, how to change it and
 when the step is done:
 
-1. **Describe.** Say what you're making ("a budgeting app for young professionals"). Claude reads that one answer
+1. **Describe.** Optionally start from a website whose look you like (**Start from a website**): Plinth opens it in a
+   hidden browser on this computer ([dembrandt](https://github.com/dembrandt/dembrandt), 20–40 seconds, free), reads
+   its main color, grays, page background, corners and fonts (paid fonts get a free stand-in from Google Fonts), and
+   shows what it found for you to check and adjust; **Use this look** makes those the palette, corner and font
+   answers, and the main color stays exactly the site's where text can sit on it. Only these values are used: no
+   text, pictures or logos. Then say what you're making ("a budgeting app for young professionals"). Claude reads that one answer
    (a few seconds, a cheap model) and suggests the rest: how it should feel, a palette, corners, a font and the
    components you'll likely need, each with a short reason. Keep each suggestion with **Next**, pick another, say it your own way, or let Claude
    decide. **Create my design system** then sets up the repo, applies the colors, corners and font at once (no AI),
@@ -329,6 +334,7 @@ previous Storybook online.
 | The review at publish: the changes since the last publish and the guidelines | Anthropic, through your Claude Code sign-in | **Yes** |
 | Your first answer in Describe (what you're making), for the suggestions | Anthropic, through your Claude Code sign-in | **Yes**: only that text, no files |
 | A request in the edit panel ("a bit darker"), for suggested values | Anthropic, through your Claude Code sign-in | **Yes**: that text, the picked part's token names and current colors, and the names of your palette, corner steps and text styles; no files |
+| Start from a website: the address you paste | That website, opened by a headless browser on your computer (dembrandt through npx); the font names it uses, to Google Fonts, to check which are free | The page request and font-name checks only; nothing of yours |
 | Plinth UI, engine, checks, tests | localhost (127.0.0.1 only, per-session token) | No |
 | Install dependencies | the npm registry, and Playwright's browser download | Package requests only |
 | Fonts | Google Fonts, from the browser showing Storybook, your app, or the font choices in the Plinth UI | Font requests only (no content) |
@@ -356,6 +362,7 @@ block DNS rebinding. Images you attach are stored in `.ds/inbox/` and stay out o
 | `set_glass` | The glass material (preset, color, opacity, blur, saturation, edge light, ripple), with how its text reads over black and white |
 | `make_chart_colors` | Make the chart colors from the main color again (categories near its hue, kept apart for color vision deficiencies; low to high; around a middle) |
 | `add_component` | A ready-made component from the catalog (code, story, spec, tokens, icons), free and undoable |
+| `read_site` | Reads a public website's look (main color, grays, background, corners, fonts) as style picks; writes nothing |
 | `remove_component` | A component's folder and token file as one undoable change; refused when other code imports it |
 | `find_icons`, `add_icons` | Search the shipped Lucide set (about 1,900 icons, offline) and add icons to `icons/` |
 | `add_palette_color` | Add a color to the palette as a 50–950 scale; optionally point a role at it in the same change (what the color wheel in Components does) |
@@ -404,9 +411,12 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Limitations and known issues
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
-- Decided but not built yet (PRD, "下一版"): starting from something you have (a Storybook, a website, a GitHub repo;
-  the Describe step shows the option as coming later), and a shadcn registry plus `plinth connect` so product repos
-  get components and ask Plinth for new ones.
+- Decided but not built yet (PRD, "下一版"): starting from a Storybook, a GitHub repo or a design file (a website
+  works since 0.17), and a shadcn registry plus `plinth connect` so product repos get components and ask Plinth for
+  new ones.
+- Starting from a website reads one page in a desktop, light-mode browser: colors, corners and fonts, not spacing,
+  type sizes, shadows or motion, and not the site's dark mode. Sites that block headless browsers or hide behind a
+  cookie wall may read poorly; the results are shown for checking before anything is used.
 - The edit panel changes colors, corners and text styles only (not shadows, spacing or motion), and picking in the
   preview works only for a Storybook on this computer (the published component site never loads the picker). Several
   changes from one request are applied one after another, so each is its own Undo step.
@@ -434,7 +444,7 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 ## Develop
 
 ```bash
-npm test                        # 44 tests: engine, checks, scaffold from an npx-style install, MCP end to end
+npm test                        # 47 tests: engine, checks, scaffold from an npx-style install, MCP end to end
                                 #   (one Plinth per folder, UI edits), UI chat and review with a stand-in for `claude`
 npm run build:app               # rebuild app/dist after changing app/src
 npm run dev:app                 # UI with hot reload; proxies /api to a server on :4319
