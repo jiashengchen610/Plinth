@@ -45,7 +45,11 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   nodes; a click lights the chain; base values only when used; components and the chart colors folded; quick picks
   open from the top; on the right the sticker sheet narrowed to where the token is used, via the picker's `focus`).
   Components shows the managed sticker sheet (`src/foundations/sticker-sheet.stories.tsx`: every component's stories
-  on one page, loaded when the page renders, never imported eagerly, and skipping stories that open an overlay).
+  on one page, loaded when the page renders, never imported eagerly, and skipping stories that open an overlay), or
+  the managed Showcase (`src/foundations/showcase.stories.tsx`, the first page of the component site): a budgeting
+  dashboard in cards, made only from the workspace's components, loaded the same way; each card declares the
+  components it needs and shows only when they are all there, icons missing from `icons/` render nothing, and its
+  chart is the chart component's own `Monthly` story, so the page imports no chart library.
 - Picking to edit: a story in Components loads `server/inspect.js` from the Plinth UI (the managed
   `.storybook/preview.tsx` adds it only for a localhost Storybook opened with `plinthInspect=<UI origin>`), which
   reports clicked classes by `postMessage` and scrolls to a component on request (`reveal`); `app/src/lib/inspect.ts`
@@ -58,7 +62,7 @@ Read `PRD.md` first: it defines scope, inputs, outputs and the data boundary. `R
   is still exactly the shipped one get the fix as an undoable change when Plinth starts.
 - After changing `engine/` or `server/`, run `npm test` (44 tests).
 - `template/` must stay installable and green: create a workspace from it, `npm ci`, `npm run typecheck`, `npm test`
-  (93 story tests).
+  (133 story tests).
 - Writing files from Bash heredocs mangles backslashes here (`\\b` became a backspace); write code files with the
   Write/Edit tools. Never pass text with backticks inside double quotes to Bash (`node -e "…"`): the shell runs the
   backticked words as commands, and Windows has a `label` command that renames drives. Edit docs with Edit.

@@ -1,0 +1,28 @@
+{
+  "slider": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.pill}"
+    },
+    "$type": "color",
+    "track": {
+      "$value": "{color.muted}"
+    },
+    "range": {
+      "$value": "{color.primary}"
+    },
+    "thumb": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.pill}",
+        "$description": "The handle"
+      },
+      "background": {
+        "$value": "{color.background}"
+      },
+      "border": {
+        "$value": "{color.ring}"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "progress": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.pill}"
+    },
+    "$type": "color",
+    "track": {
+      "$value": "{color.muted}"
+    },
+    "indicator": {
+      "$value": "{color.primary}"
+    }
+  }
+}

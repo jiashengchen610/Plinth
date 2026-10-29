@@ -1,0 +1,25 @@
+{
+  "breadcrumb": {
+    "$type": "color",
+    "list": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "The trail of pages"
+      }
+    },
+    "link": {
+      "foreground-hover": {
+        "$value": "{color.foreground}"
+      }
+    },
+    "page": {
+      "foreground": {
+        "$value": "{color.foreground}"
+      }
+    }
+  }
+}

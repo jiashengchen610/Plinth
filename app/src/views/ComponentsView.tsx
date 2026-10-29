@@ -27,6 +27,7 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [entries, setEntries] = useState<StoryEntry[]>([]);
+  const [view, setView] = useState<"sheet" | "showcase">("sheet");
   const catalog = presets?.components;
 
   useEffect(() => {
@@ -102,10 +103,17 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
   const firstStory = entries.find((e) => e.type === "story" && e.importPath.includes(`/components/${component.id}/`));
   // Every component on one page (the template's sticker sheet); a design system without it shows one at a time.
   const sheet = entries.find((e) => e.type === "story" && e.importPath.includes("/foundations/sticker-sheet"));
-  const target = sheet ?? docs ?? firstStory;
+  // An example screen made of the same components (the template's showcase), when the design system has it.
+  const showcase = entries.find((e) => e.type === "story" && e.importPath.includes("/foundations/showcase"));
+  const onShowcase = view === "showcase" && !!showcase;
+  const target = (onShowcase ? showcase : sheet) ?? docs ?? firstStory;
   const src = state.storybook && target ? `${state.storybook}/iframe.html?id=${encodeURIComponent(target.id)}&viewMode=${target.type === "docs" ? "docs" : "story"}&globals=${encodeURIComponent(`brand:${brand};mode:${mode}`)}&plinthInspect=${encodeURIComponent(location.origin)}` : null;
   const pageOf = docs ?? firstStory;
-  const reveal = (id: string) => { if (sheet && sbOrigin) frame.current?.contentWindow?.postMessage({ source: "plinth-ui", type: "reveal", sheet: id }, sbOrigin); };
+  const reveal = (id: string) => {
+    // A component picked in the list is shown on the page of every component.
+    if (onShowcase) { setView("sheet"); return; }
+    if (sheet && sbOrigin) frame.current?.contentWindow?.postMessage({ source: "plinth-ui", type: "reveal", sheet: id }, sbOrigin);
+  };
   srcRef.current = src;
   const ready = !!src && readyFor?.src === src;
   const ids = state.components.map((c) => c.id);
@@ -130,8 +138,17 @@ export function ComponentsView({ state, presets, brand, mode, onMode, onEdit, on
 
       <section aria-label="All your components" className="flex flex-col gap-3 rounded-2xl border bg-background p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-base font-semibold">{sheet ? "All your components" : name}</h2><p className="text-sm text-muted-foreground">{sheet ? "The real components, every one on one page." : "The real component."}</p></div>
-          <ModeSwitch mode={mode} onMode={onMode} />
+          <div><h2 className="text-base font-semibold">{onShowcase ? "An example screen" : sheet ? "All your components" : name}</h2><p className="text-sm text-muted-foreground">{onShowcase ? "Your components put together in a budgeting dashboard, in your style." : sheet ? "The real components, every one on one page." : "The real component."}</p></div>
+          <div className="flex flex-wrap items-center gap-2">
+            {showcase && sheet && (
+              <div role="group" aria-label="What to show" className="flex rounded-lg border p-0.5">
+                {([["sheet", "Every component"], ["showcase", "Example screen"]] as const).map(([v, label]) => (
+                  <button key={v} type="button" aria-pressed={view === v} onClick={() => { setView(v); setPicked(null); }} className={`min-h-9 rounded-md px-3 text-sm ${view === v ? "bg-muted font-semibold" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
+                ))}
+              </div>
+            )}
+            <ModeSwitch mode={mode} onMode={onMode} />
+          </div>
         </div>
         {src ? (
           <>

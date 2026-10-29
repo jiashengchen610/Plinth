@@ -1,0 +1,43 @@
+{
+  "empty": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}"
+    },
+    "$type": "color",
+    "border": {
+      "$value": "{color.border}",
+      "$description": "The dashed outline, when there is one"
+    },
+    "media": {
+      "background": {
+        "$value": "{color.muted}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.control}",
+        "$description": "The icon tile"
+      }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.heading.xs}",
+        "$description": "What is missing"
+      }
+    },
+    "description": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Why, and what to do"
+      }
+    }
+  }
+}

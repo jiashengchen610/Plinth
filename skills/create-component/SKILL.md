@@ -13,7 +13,8 @@ with hardcoded values or an icon package (`plinth check`). The spec comes before
 ## 0. Ready-made first
 
 Plinth ships a catalog: button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast,
-tooltip, card, tabs, dialog, separator, glass, chart. If the user asks for one of these and `list_components` does not have it,
+tooltip, card, tabs, dialog, separator, glass, chart, progress, slider, input-group, button-group, alert-dialog, item,
+breadcrumb, empty. If the user asks for one of these and `list_components` does not have it,
 call `add_component` (free, instant, one undoable change, in the system's style at once) instead of writing it. Then
 adjust it like any existing component (tier 1).
 

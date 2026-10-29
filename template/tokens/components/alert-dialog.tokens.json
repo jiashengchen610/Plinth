@@ -1,0 +1,96 @@
+{
+  "alert-dialog": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.container}"
+    },
+    "shadow": {
+      "$type": "shadow",
+      "$value": "{shadow.overlay}"
+    },
+    "$type": "color",
+    "overlay": {
+      "$value": "{color.foreground}",
+      "$extensions": {
+        "plinth": {
+          "modes": {
+            "dark": "{color.background}"
+          },
+          "alpha": {
+            "default": 0.5,
+            "dark": 0.8
+          }
+        }
+      }
+    },
+    "content": {
+      "background": {
+        "$value": "{color.background}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.foreground}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.1
+          }
+        }
+      }
+    },
+    "footer": {
+      "background": {
+        "$value": "{color.muted}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.5
+          }
+        }
+      },
+      "border": {
+        "$value": "{color.border}"
+      }
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.heading.sm}",
+        "$description": "The question being asked"
+      }
+    },
+    "description": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "What happens if they go ahead"
+      }
+    },
+    "media": {
+      "background": {
+        "$value": "{color.muted}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.control}",
+        "$description": "The icon tile beside the title",
+        "$extensions": {
+          "plinth": {
+            "fit": {
+              "outer": "{alert-dialog.radius}",
+              "spacing": 4,
+              "border": 1,
+              "min": "{radius.small}"
+            }
+          }
+        }
+      }
+    }
+  }
+}

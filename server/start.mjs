@@ -62,11 +62,19 @@ export const COMPONENTS = [
   { id: "separator", name: "Divider", hint: "A line between sections", ready: true },
   { id: "glass", name: "Glass", hint: "A frosted panel over photos and color", ready: true },
   { id: "chart", name: "Chart", hint: "Bars, lines, areas, donuts and radar for numbers", ready: true },
+  { id: "progress", name: "Progress bar", hint: "How far something is along, like a savings goal", ready: true },
+  { id: "slider", name: "Slider", hint: "Pick a number or a range by dragging", ready: true },
+  { id: "input-group", name: "Field with extras", hint: "A text field with an icon, a unit or a button inside", ready: true },
+  { id: "button-group", name: "Button group", hint: "Related buttons joined together", ready: true },
+  { id: "alert-dialog", name: "Confirm dialog", hint: "Asks before something that cannot be undone", ready: true },
+  { id: "item", name: "List row", hint: "An icon, a title, a line of text and actions", ready: true },
+  { id: "breadcrumb", name: "Breadcrumb", hint: "Where this page sits among the others", ready: true },
+  { id: "empty", name: "Empty state", hint: "What to show when there is nothing yet", ready: true },
 ];
 /** What each kind of product usually needs beyond the core five; the starting selection in Describe. */
 export const KIND_COMPONENTS = {
-  "mobile-app": ["checkbox", "switch", "alert", "toast", "tabs", "dialog"],
-  "saas-dashboard": ["textarea", "checkbox", "radio-group", "select", "switch", "alert", "toast", "tooltip", "tabs", "dialog", "separator"],
+  "mobile-app": ["checkbox", "switch", "alert", "toast", "tabs", "dialog", "progress", "item", "empty"],
+  "saas-dashboard": ["textarea", "checkbox", "radio-group", "select", "switch", "alert", "toast", "tooltip", "tabs", "dialog", "separator", "chart", "progress", "slider", "input-group", "button-group", "alert-dialog", "item", "breadcrumb", "empty"],
   "e-commerce": ["checkbox", "radio-group", "select", "alert", "toast", "tabs", "dialog"],
   "marketing-site": ["textarea", "tabs", "dialog", "separator"],
 };

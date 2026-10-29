@@ -1,0 +1,63 @@
+{
+  "item": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "$type": "color",
+    "border": {
+      "$value": "{color.border}",
+      "$description": "The outline variant"
+    },
+    "muted": {
+      "background": {
+        "$value": "{color.muted}",
+        "$extensions": {
+          "plinth": {
+            "alpha": 0.5
+          }
+        }
+      }
+    },
+    "hover": {
+      "background": {
+        "$value": "{color.muted}",
+        "$description": "An item that is a link, under the pointer"
+      }
+    },
+    "separator": {
+      "$value": "{color.border}"
+    },
+    "title": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Item title"
+      }
+    },
+    "description": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Item description"
+      }
+    },
+    "description-small": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.sm}",
+        "$description": "Item description in the extra small item"
+      }
+    },
+    "media": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.small}",
+        "$description": "An image beside the title"
+      }
+    }
+  }
+}

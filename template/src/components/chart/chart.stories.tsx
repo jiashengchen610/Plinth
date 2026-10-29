@@ -60,6 +60,31 @@ export const Bars: Story = {
   },
 };
 
+const totals = [
+  { month: "May", total: 1820 },
+  { month: "Jun", total: 2140 },
+  { month: "Jul", total: 1960 },
+  { month: "Aug", total: 2310 },
+  { month: "Sep", total: 1880 },
+  { month: "Oct", total: 1449 },
+];
+
+/** One series on a small card: totals by month, the current month strongest. */
+export const Monthly: Story = {
+  render: (args) => (
+    <ChartContainer {...args} config={{ total: { label: "Spent", color: "var(--chart-1)" } }} aria-label="Spent per month">
+      <BarChart accessibilityLayer data={totals} margin={{ top: 4 }}>
+        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+        <ChartTooltip cursor={false} content={<ChartTooltipContent hideIndicator />} />
+        <Bar dataKey="total" radius={6}>
+          {totals.map((t, i) => <Cell key={t.month} fill="var(--color-total)" fillOpacity={0.45 + (0.55 * i) / (totals.length - 1)} />)}
+        </Bar>
+      </BarChart>
+    </ChartContainer>
+  ),
+  play: async ({ canvasElement }) => drawn(canvasElement, ".recharts-bar-rectangle", 6),
+};
+
 /** Lines: how each series moves over time. */
 export const Lines: Story = {
   render: (args) => (

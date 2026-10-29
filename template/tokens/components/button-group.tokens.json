@@ -1,0 +1,29 @@
+{
+  "button-group": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}",
+      "$description": "The outer corners of the group: the same as a button's"
+    },
+    "$type": "color",
+    "separator": {
+      "$value": "{color.input}"
+    },
+    "text": {
+      "background": {
+        "$value": "{color.muted}"
+      },
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "border": {
+        "$value": "{color.border}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Text joined to the buttons, like a currency sign"
+      }
+    }
+  }
+}

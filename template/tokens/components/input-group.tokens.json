@@ -1,0 +1,75 @@
+{
+  "input-group": {
+    "radius": {
+      "$type": "dimension",
+      "$value": "{radius.control}"
+    },
+    "button": {
+      "radius": {
+        "$type": "dimension",
+        "$value": "{radius.small}",
+        "$description": "A button inside the field",
+        "$extensions": {
+          "plinth": {
+            "fit": {
+              "outer": "{input-group.radius}",
+              "spacing": 1,
+              "border": 1,
+              "min": "{radius.small}"
+            }
+          }
+        }
+      }
+    },
+    "$type": "color",
+    "field": {
+      "background": {
+        "$value": "{color.background}",
+        "$extensions": {
+          "plinth": {
+            "modes": {
+              "dark": "{color.input}"
+            },
+            "alpha": {
+              "default": 0,
+              "dark": 0.3
+            }
+          }
+        }
+      },
+      "border": {
+        "$value": "{color.input}"
+      }
+    },
+    "addon": {
+      "foreground": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.label.md}",
+        "$description": "Text and icons beside the field"
+      }
+    },
+    "text": {
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "Plain text beside the field, like a unit"
+      }
+    },
+    "control": {
+      "foreground": {
+        "$value": "{color.foreground}"
+      },
+      "placeholder": {
+        "$value": "{color.muted-foreground}"
+      },
+      "font": {
+        "$type": "typography",
+        "$value": "{typography.body.md}",
+        "$description": "What people type in a multi-line group"
+      }
+    }
+  }
+}

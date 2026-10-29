@@ -22,7 +22,7 @@ components. It is four steps in one UI, with Claude in a chat beside them: Descr
 
 See [PRD.md](PRD.md) for the product definition (in Traditional Chinese), including what is built and what is not.
 
-> **Status: 0.15.1.** Tested by `npm test` (44 tests), by the 93 story tests in a generated workspace, and end to end
+> **Status: 0.16.0.** Tested by `npm test` (44 tests), by the 133 story tests in a generated workspace, and end to end
 > on Windows 11: brief → changes → publish to a new GitHub repository → Storybook live on GitHub Pages
 > ([example](https://jiashengchen610.github.io/plinth-demo/)). macOS and Linux are untested. Expect rough edges;
 > issues and pull requests are welcome.
@@ -444,7 +444,7 @@ claude --plugin-dir .           # the plugin from this checkout in a Claude Code
 ```
 
 Before a release, also: create a workspace from `template/` and run `npm ci && npm run typecheck && npm test`
-(93 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
+(133 story tests), and run one real brief through an `npx` install in a folder like `D:\demo`. Most bugs so far
 showed up only in that setup. Then tag the release (`v<version>` from `package.json`) and push the tag: the deploy
 workflow of every published design system runs `plinth check` from that tag.
 

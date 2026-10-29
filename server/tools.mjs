@@ -330,7 +330,7 @@ export const TOOLS = [
   },
   {
     name: "add_component",
-    description: "Add a component from Plinth's ready-made catalog (button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast, tooltip, card, tabs, dialog, separator, glass, chart): its code, story, spec, component tokens and the icons it uses, in the design system's style at once, as one undoable change. Free and instant: always prefer this over writing a component the catalog has.",
+    description: "Add a component from Plinth's ready-made catalog (button, input, textarea, label, checkbox, radio-group, select, switch, alert, badge, toast, tooltip, card, tabs, dialog, separator, glass, chart, progress, slider, input-group, button-group, alert-dialog, item, breadcrumb, empty): its code, story, spec, component tokens and the icons it uses, in the design system's style at once, as one undoable change. Free and instant: always prefer this over writing a component the catalog has.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Catalog id, e.g. dialog" } }, required: ["name"] },
     run: (a, ctx) => {
       requireWorkspace(ctx.root);
