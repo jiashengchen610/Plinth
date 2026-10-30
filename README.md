@@ -271,6 +271,7 @@ my-design-system/
 │   └── components/<name>/         <name>.tsx, <name>.stories.tsx, <name>.spec.md
 │   └── foundations/               Storybook pages: Introduction, Colors, Typography, Shape, Guidelines
 ├── exports/<brand>/DESIGN.md      written at publish: complete DESIGN.md per brand (Google format)
+├── exports/update.json            written at publish: the saved versions with their notes, a hash per file
 ├── .storybook/                    brand and mode toolbar
 └── .github/workflows/storybook.yml   plinth check, typecheck, story tests, then deploy to GitHub Pages
 ```
@@ -290,6 +291,12 @@ my-design-system/
   supported yet.
 - **DESIGN.md** follows Google's format. You write prose in two layers (shared + per brand); at publish the engine
   merges them and generates the YAML front matter from the tokens, one file per brand.
+- **The update record** (`exports/update.json`, served with the site at `exports/update.json`): the design
+  system's name, its brands, the saved versions newest first with the notes written when they were saved, and for
+  every token, brand, guideline, component, icon and style file a content hash and the version that last changed
+  it. Plain data, the same for any framework or platform: a product repo compares its copies against it to see what
+  changed and why (`plinth status`, coming). The deploy workflow rewrites it on a clean checkout (`plinth record`),
+  so the site always describes what it serves.
 - `.ds/` holds Plinth's working state: the undo history, chat history, attached images, and the note that keeps one
   Plinth per folder. It is gitignored and never pushed.
 
@@ -320,9 +327,10 @@ a pair is decorative in your product, or you accept a finding on purpose, **Acce
 The exception is recorded in `design-system.json` (`*` matches any brand or mode) and listed at publish.
 
 Publish pushes saved versions: unsaved changes are saved first → the checks GitHub will run → `exports/<brand>/DESIGN.md`
-→ commit → typecheck and story tests → push (creating the repo on first publish) → enable GitHub Pages. GitHub
-Actions runs `plinth check` and the tests again and deploys Storybook only if they pass, so a failing push leaves the
-previous Storybook online.
+and `exports/update.json` → commit → typecheck and story tests → push (creating the repo on first publish) → enable
+GitHub Pages. GitHub Actions runs `plinth check` and the tests again and deploys Storybook only if they pass, so a
+failing push leaves the previous Storybook online. The exports are copied into the site, so other tools read them
+from the same address.
 
 ## What stays in sync
 

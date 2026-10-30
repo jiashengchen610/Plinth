@@ -23,6 +23,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history: the update record lists every saved version
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -31,6 +33,9 @@ jobs:
       # nothing, generated files that no longer match the tokens, and components without component tokens, a story,
       # or with hardcoded values stop the deploy. Design reminders are listed in the run summary.
       - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} check
+      # The update record (exports/update.json): the saved versions with their notes, and a hash per file. Rewritten
+      # here so it describes exactly what this run deploys; product repos read it to see what changed.
+      - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} record
       # Not `npm ci`: a lockfile written on Windows or macOS can miss Linux-only optional packages (npm/cli#4828),
       # which makes `npm ci` refuse to install. `npm install` keeps the locked versions and fills those in.
       - run: npm install --no-audit --no-fund
@@ -47,6 +52,8 @@ jobs:
           else
             npm run build-storybook -- -o site
           fi
+          # The exports (DESIGN.md per brand, the update record) travel with the site, at the same address.
+          cp -r exports site/exports
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

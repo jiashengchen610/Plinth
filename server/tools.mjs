@@ -515,7 +515,7 @@ export const TOOLS = [
   },
   {
     name: "publish",
-    description: "Publish saved versions: run the checks the deploy runs and the tests, write exports/<brand>/DESIGN.md, push to GitHub (creates the repo on first publish) and enable GitHub Pages for Storybook. Requires saved work (no unsaved changes) and the GitHub CLI signed in. Only call when the user asked to publish; they can also press Publish in the UI.",
+    description: "Publish saved versions: run the checks the deploy runs and the tests, write exports/<brand>/DESIGN.md and the update record (exports/update.json: the saved versions with their notes, a hash per file, for product repos), push to GitHub (creates the repo on first publish) and enable GitHub Pages for Storybook. Requires saved work (no unsaved changes) and the GitHub CLI signed in. Only call when the user asked to publish; they can also press Publish in the UI.",
     inputSchema: {
       type: "object",
       properties: {
