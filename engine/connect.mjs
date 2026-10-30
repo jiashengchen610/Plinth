@@ -11,9 +11,11 @@ export const GROUPS = {
   tokens: "the token sources: tokens/, brands/, design-system.json",
   icons: "the icons: icons/*.svg and src/icons/index.tsx",
   components: "every component under src/components/",
+  resolved: "the resolved tokens for other platforms, exports/tokens/<brand>.<mode>.json",
 };
 const MATCH = {
   guidelines: (f) => f === "WRITING.md" || /^exports\/[^/]+\/DESIGN\.md$/.test(f),
+  resolved: (f) => f.startsWith("exports/tokens/"),
   styles: (f) => f.startsWith("src/styles/"),
   tokens: (f) => f.startsWith("tokens/") || f.startsWith("brands/") || f === "design-system.json",
   icons: (f) => f.startsWith("icons/") || f.startsWith("src/icons/"),
@@ -39,10 +41,10 @@ export function resolveTake(record, takes) {
   for (const raw of (takes ?? []).flatMap((t) => String(t).split(",")).map((t) => t.trim()).filter(Boolean)) {
     const t = raw.replace(/\\/g, "/").replace(/\/+$/, "");
     let hits;
-    if (MATCH[t]) hits = all.filter(MATCH[t]);
+    if (MATCH[t]) hits = all.filter(MATCH[t]); // a group may be empty (a design system without token exports yet)
     else if (/^components\/[^/]+$/.test(t)) hits = all.filter((f) => f.startsWith(`src/${t}/`));
     else hits = all.filter((f) => f === t || f.startsWith(`${t}/`));
-    if (!hits.length) unknown.push(raw);
+    if (!hits.length && !MATCH[t]) unknown.push(raw);
     for (const f of hits) picked.add(f);
   }
   if (unknown.length) throw new Error(`Not in the design system: ${unknown.join(", ")}. Name a group (${Object.keys(GROUPS).join(", ")}), components/<name>, or a path from its exports/update.json.`);

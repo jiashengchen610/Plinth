@@ -272,6 +272,7 @@ my-design-system/
 │   └── foundations/               Storybook pages: Introduction, Colors, Typography, Shape, Guidelines
 ├── exports/<brand>/DESIGN.md      written at publish: complete DESIGN.md per brand (Google format)
 ├── exports/update.json            written at publish: the saved versions with their notes, a hash per file
+├── exports/tokens/<brand>.<mode>.json   written at publish: every token resolved to plain values, for other platforms
 ├── .storybook/                    brand and mode toolbar
 └── .github/workflows/storybook.yml   plinth check, typecheck, story tests, then deploy to GitHub Pages
 ```
@@ -297,10 +298,17 @@ my-design-system/
   it. Plain data, the same for any framework or platform: a product repo compares its copies against it to see what
   changed and why. The deploy workflow rewrites it on a clean checkout (`plinth record`), so the site always
   describes what it serves.
+- **Resolved tokens** (`exports/tokens/<brand>.<mode>.json`, with an `index.json`, served with the site): every
+  token of a brand in one mode with its references followed and its value in plain terms: colors as hex with a
+  separate alpha (and oklch), lengths in px (letter spacing in em), durations in ms, shadows, text styles,
+  gradients and transitions as structures, glass with its recipe; each entry names its type, CSS variable, layer
+  and the token it points at. An app on SwiftUI, Compose or Flutter, or a second web stack, reads values instead of
+  resolving aliases and converting CSS. `plinth export` writes them; the deploy workflow rewrites them on a clean
+  checkout. Native-language files (Swift, Kotlin, Dart constants) are planned on top of this.
 - **Product repositories** connect with `npx -y github:jiashengchen610/Plinth connect <site or folder>` in the
   product's folder. A first connect takes the guidelines (DESIGN.md, WRITING.md) and the generated styles
   (`src/styles/tokens.css`, `fonts.css`); `--take components`, `--take components/<name>`, `--take icons`,
-  `--take tokens` or a path takes more. It writes `plinth-source.json` (the source, its repository, the version
+  `--take tokens`, `--take resolved` (the resolved tokens, for apps) or a path takes more. It writes `plinth-source.json` (the source, its repository, the version
   taken, and each copy with its upstream path and hash), adds a design-system section to the product's
   `CLAUDE.md` (check before changing the interface, propose, let the person decide, use tokens, make components
   in the design system), keeps `.ds/` out of git, and with `--hook` adds the Claude Code hook that runs `status`

@@ -9,6 +9,7 @@ import { composeDesignMd, lintDesignMd } from "../engine/design-md.mjs";
 import { listBrands, loadConfig } from "../engine/tokens.mjs";
 import { git, regenerate, unsavedChanges, gitCommit, GENERATED } from "../engine/workspace.mjs";
 import { writeUpdateRecord, RECORD_FILE } from "../engine/record.mjs";
+import { writeTokenExports } from "../engine/export.mjs";
 import { findGh, githubStatus } from "./github.mjs";
 
 function gh(root, args) {
@@ -103,8 +104,8 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
   }
   step("checks", { ...checks.summary, exceptions: checks.exceptions.length, warnings: checks.warnings });
 
-  // 2. Exports: one complete DESIGN.md per brand, and the update record product repos read (the saved versions with
-  //    their notes, a hash per file).
+  // 2. Exports: one complete DESIGN.md per brand, the resolved tokens for other platforms, and the update record
+  //    product repos read (the saved versions with their notes, a hash per file; it lists the other exports too).
   const config = loadConfig(root);
   const lint = {};
   for (const brand of listBrands(root, config)) {
@@ -113,8 +114,9 @@ export async function publish(root, { repo, visibility = "private", dryRun = fal
     writeFileSync(join(root, "exports", brand, "DESIGN.md"), text);
     lint[brand] = lintDesignMd(text);
   }
+  const tokenFiles = writeTokenExports(root, config);
   const record = writeUpdateRecord(root);
-  step("exports", { files: [...Object.keys(lint).map((b) => `exports/${b}/DESIGN.md`), RECORD_FILE], lint, versions: record.versions.length });
+  step("exports", { files: [...Object.keys(lint).map((b) => `exports/${b}/DESIGN.md`), ...tokenFiles, RECORD_FILE], lint, versions: record.versions.length });
 
   // 3. Commit what publishing wrote: exports and regenerated or Plinth-managed files.
   gitCommit(root, "Publish: update exports", ["exports", ...GENERATED]);

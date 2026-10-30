@@ -1,6 +1,6 @@
 {
   "name": "plinth",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": true,
   "description": "Claude Code plugin: natural-language design system generator (tokens, guidelines, components, Storybook).",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/engine.test.mjs test/scaffold.test.mjs test/mcp.test.mjs test/chat.test.mjs test/describe.test.mjs test/fixes.test.mjs test/typography.test.mjs test/corners.test.mjs test/glass.test.mjs test/chart.test.mjs test/part-color.test.mjs test/round.test.mjs test/tests-runner.test.mjs test/scratch.test.mjs test/setup.test.mjs test/fromsite.test.mjs test/vocab.test.mjs test/gradient.test.mjs test/record.test.mjs test/status.test.mjs test/connect.test.mjs",
+    "test": "node --test test/engine.test.mjs test/scaffold.test.mjs test/mcp.test.mjs test/chat.test.mjs test/describe.test.mjs test/fixes.test.mjs test/typography.test.mjs test/corners.test.mjs test/glass.test.mjs test/chart.test.mjs test/part-color.test.mjs test/round.test.mjs test/tests-runner.test.mjs test/scratch.test.mjs test/setup.test.mjs test/fromsite.test.mjs test/vocab.test.mjs test/gradient.test.mjs test/record.test.mjs test/status.test.mjs test/connect.test.mjs test/export.test.mjs",
     "build:app": "cd app && npm install && npm run build",
     "dev:app": "cd app && npm run dev",
     "start": "node server/cli.mjs"

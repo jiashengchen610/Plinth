@@ -6,12 +6,13 @@
 //
 // `plinth check [folder]` runs the checks the deploy workflow runs before building Storybook (engine/check.mjs).
 // `plinth record [folder]` writes the update record (exports/update.json) the workflow ships with the site.
+// `plinth export [folder]` writes the resolved tokens for other platforms (exports/tokens/<brand>.<mode>.json).
 // `plinth status [folder]` in a product repo: what the design system changed since this repo took its copies.
 // `plinth connect <site|folder> [folder]` connects a product repo: copies files, writes plinth-source.json and the
 // CLAUDE.md rules; `--take` and `--mark` update what was taken.
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 
@@ -29,6 +30,13 @@ if (args[0] === "check") {
   const record = writeUpdateRecord(root);
   const n = record.versions.length;
   console.log(args.includes("--json") ? JSON.stringify(record, null, 2) : `${RECORD_FILE}: version ${record.version?.short ?? "none"}, ${n} saved version${n === 1 ? "" : "s"}, ${Object.keys(record.files).length} files hashed.`);
+} else if (args[0] === "export") {
+  const { writeTokenExports, EXPORT_DIR } = await import("../engine/export.mjs");
+  const root = resolve(args.find((a, i) => i > 0 && !a.startsWith("--")) ?? process.cwd());
+  const files = writeTokenExports(root);
+  const index = JSON.parse(readFileSync(resolve(root, EXPORT_DIR, "index.json"), "utf8"));
+  const brands = Object.entries(index.brands).map(([b, { modes }]) => `${b}: ${Object.keys(modes).join(", ")}`).join("; ");
+  console.log(args.includes("--json") ? JSON.stringify({ files, index }, null, 2) : `${EXPORT_DIR}: ${files.length} files (${brands}).`);
 } else if (args[0] === "status") {
   const { status } = await import("./status.mjs");
   const { statusMarkdown } = await import("../engine/status.mjs");
@@ -63,6 +71,7 @@ async function launch() {
     console.log(`Usage: plinth [folder] [--no-open] [--no-setup] [--port <n>]
        plinth check [folder] [--json]
        plinth record [folder] [--json]
+       plinth export [folder] [--json]
        plinth status [folder] [--diff] [--json]
        plinth connect <site|folder> [folder] [--take <group|path>,…] [--mark <path>,…] [--hook] [--json]
 
@@ -73,6 +82,8 @@ Claude Code in the folder with the Plinth plugin: it uses this same Plinth.
 
   check        the checks GitHub runs before deploying Storybook; exit code 1 when something blocks the deploy
   record       write exports/update.json: the saved versions with their notes and a hash per file, for product repos
+  export       write exports/tokens/<brand>.<mode>.json: every token resolved to plain values (hex colors, px, ms,
+               structured shadows and text styles) for apps and other platforms
   status       in a product repo (plinth-source.json): what the design system changed since this repo took its
                copies, what changed here, and what changed on both sides; --diff fetches the changed files and
                shows the differences. It reports; it changes nothing.

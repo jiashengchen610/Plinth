@@ -125,6 +125,7 @@ test("resolveTake, localPath, withClaudeSection, withHook", () => {
   assert.deepEqual(resolveTake(record, ["components/card"]).map((e) => e.from), ["src/components/card/card.stories.tsx", "src/components/card/card.tsx"]);
   assert.deepEqual(resolveTake(record, ["icons/x.svg,WRITING.md"]).map((e) => e.from), ["WRITING.md", "icons/x.svg"]);
   assert.throws(() => resolveTake(record, ["components/nothing"]), /Not in the design system: components\/nothing/);
+  assert.deepEqual(resolveTake(record, ["resolved"]), [], "a group with nothing in it yet is empty, not unknown");
   assert.equal(localPath("exports/a/DESIGN.md", ["a"]), "DESIGN.md");
   assert.equal(localPath("exports/a/DESIGN.md", ["a", "b"]), "DESIGN.a.md");
   const section = claudeMdSection({ source: "https://x.test/", name: "X", plinthVersion: "9.9.9" });

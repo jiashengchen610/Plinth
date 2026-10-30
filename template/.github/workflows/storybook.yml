@@ -33,8 +33,10 @@ jobs:
       # nothing, generated files that no longer match the tokens, and components without component tokens, a story,
       # or with hardcoded values stop the deploy. Design reminders are listed in the run summary.
       - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} check
-      # The update record (exports/update.json): the saved versions with their notes, and a hash per file. Rewritten
-      # here so it describes exactly what this run deploys; product repos read it to see what changed.
+      # The resolved tokens for other platforms (exports/tokens/<brand>.<mode>.json) and the update record
+      # (exports/update.json: the saved versions with their notes, a hash per file), rewritten here so they describe
+      # exactly what this run deploys; apps and product repos read them from the site.
+      - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} export
       - run: npx -y github:jiashengchen610/Plinth#v{{PLINTH_VERSION}} record
       # Not `npm ci`: a lockfile written on Windows or macOS can miss Linux-only optional packages (npm/cli#4828),
       # which makes `npm ci` refuse to install. `npm install` keeps the locked versions and fills those in.
