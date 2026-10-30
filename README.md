@@ -422,8 +422,9 @@ In `design-system.json`: `contrastPairs` (extra `[bg, fg, min]` pairs), `distinc
 
 - Token naming is shadcn only. Material 3 and Apple HIG naming are planned (see PRD).
 - Decided but not built yet (PRD, "下一版"): starting from a Storybook, a GitHub repo or a design file (a website
-  works since 0.17), and a shadcn registry plus `plinth connect` so product repos get components and ask Plinth for
-  new ones.
+  works since 0.17); the product side, where a publish also writes an update record (version notes plus file
+  hashes), a product repo keeps a provenance file, `plinth status` lists what changed, and the product's own agent
+  proposes what to take while a person confirms; and token exports for native apps.
 - Starting from a website reads one page in a desktop, light-mode browser: colors, corners and fonts, not spacing,
   type sizes, shadows or motion, and not the site's dark mode. Sites that block headless browsers or hide behind a
   cookie wall may read poorly; the results are shown for checking before anything is used.
