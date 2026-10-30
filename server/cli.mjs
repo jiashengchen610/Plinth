@@ -6,6 +6,7 @@
 //
 // `plinth check [folder]` runs the checks the deploy workflow runs before building Storybook (engine/check.mjs).
 // `plinth record [folder]` writes the update record (exports/update.json) the workflow ships with the site.
+// `plinth status [folder]` in a product repo: what the design system changed since this repo took its copies.
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
@@ -26,6 +27,17 @@ if (args[0] === "check") {
   const record = writeUpdateRecord(root);
   const n = record.versions.length;
   console.log(args.includes("--json") ? JSON.stringify(record, null, 2) : `${RECORD_FILE}: version ${record.version?.short ?? "none"}, ${n} saved version${n === 1 ? "" : "s"}, ${Object.keys(record.files).length} files hashed.`);
+} else if (args[0] === "status") {
+  const { status } = await import("./status.mjs");
+  const { statusMarkdown } = await import("../engine/status.mjs");
+  const root = resolve(args.find((a, i) => i > 0 && !a.startsWith("--")) ?? process.cwd());
+  try {
+    const report = await status(root, { diff: args.includes("--diff") });
+    console.log(args.includes("--json") ? JSON.stringify(report, null, 2) : statusMarkdown(report, report.diffs ?? null));
+  } catch (e) {
+    console.error(e.message);
+    process.exitCode = 1;
+  }
 } else {
   await launch();
 }
@@ -35,6 +47,7 @@ async function launch() {
     console.log(`Usage: plinth [folder] [--no-open] [--no-setup] [--port <n>]
        plinth check [folder] [--json]
        plinth record [folder] [--json]
+       plinth status [folder] [--diff] [--json]
 
 Checks git, Claude Code and GitHub (offering to install or sign in to what is missing), then serves the Plinth UI
 for the design system in <folder> (default: current folder; an empty folder starts a new one). Chat in the UI runs
@@ -43,6 +56,9 @@ Claude Code in the folder with the Plinth plugin: it uses this same Plinth.
 
   check        the checks GitHub runs before deploying Storybook; exit code 1 when something blocks the deploy
   record       write exports/update.json: the saved versions with their notes and a hash per file, for product repos
+  status       in a product repo (plinth-source.json): what the design system changed since this repo took its
+               copies, what changed here, and what changed on both sides; --diff fetches the changed files and
+               shows the differences. It reports; it changes nothing.
   --no-setup   skip the checks
   --no-open    do not open the browser
   --port <n>   UI port (default 4319, or the next free one)`);
