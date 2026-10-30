@@ -297,14 +297,20 @@ my-design-system/
   it. Plain data, the same for any framework or platform: a product repo compares its copies against it to see what
   changed and why. The deploy workflow rewrites it on a clean checkout (`plinth record`), so the site always
   describes what it serves.
-- **Product repositories** keep `plinth-source.json` at their root: the design system's site (or folder) as
-  `source`, its GitHub URL as `repository`, the `version` the copies were taken at, and under `files` each local
-  copy with its path in the design system (`from`) and its hash when taken. `npx -y github:jiashengchen610/Plinth
-  status` then reports, file by file, what the design system changed since (with the version and the note that
-  changed it), what changed in the product only, and what changed on both sides; `--diff` fetches the design
-  system's current files into `.ds/upstream/` and shows the differences. It reports and changes nothing: the
-  product's agent proposes what to take, keep or merge, and a person confirms. Writing `plinth-source.json` by hand
-  is the way to connect today; `plinth connect` will do it.
+- **Product repositories** connect with `npx -y github:jiashengchen610/Plinth connect <site or folder>` in the
+  product's folder. A first connect takes the guidelines (DESIGN.md, WRITING.md) and the generated styles
+  (`src/styles/tokens.css`, `fonts.css`); `--take components`, `--take components/<name>`, `--take icons`,
+  `--take tokens` or a path takes more. It writes `plinth-source.json` (the source, its repository, the version
+  taken, and each copy with its upstream path and hash), adds a design-system section to the product's
+  `CLAUDE.md` (check before changing the interface, propose, let the person decide, use tokens, make components
+  in the design system), keeps `.ds/` out of git, and with `--hook` adds the Claude Code hook that runs `status`
+  when a session starts. Then `npx -y github:jiashengchen610/Plinth status` reports, file by file, what the design
+  system changed since (with the version and the note that changed it), what changed in the product only, and what
+  changed on both sides; `--diff` fetches the design system's current files into `.ds/upstream/` and shows the
+  differences. It reports and changes nothing: the product's agent proposes what to take, keep or merge, and a
+  person confirms; `connect … --take <path>` then takes the design system's version, `connect … --mark <path>`
+  records a file merged by hand. Nothing here is specific to a framework: files are copied, and the records are
+  plain data.
 - `.ds/` holds Plinth's working state: the undo history, chat history, attached images, and the note that keeps one
   Plinth per folder. It is gitignored and never pushed.
 

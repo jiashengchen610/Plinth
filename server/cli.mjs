@@ -7,6 +7,8 @@
 // `plinth check [folder]` runs the checks the deploy workflow runs before building Storybook (engine/check.mjs).
 // `plinth record [folder]` writes the update record (exports/update.json) the workflow ships with the site.
 // `plinth status [folder]` in a product repo: what the design system changed since this repo took its copies.
+// `plinth connect <site|folder> [folder]` connects a product repo: copies files, writes plinth-source.json and the
+// CLAUDE.md rules; `--take` and `--mark` update what was taken.
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
@@ -38,6 +40,20 @@ if (args[0] === "check") {
     console.error(e.message);
     process.exitCode = 1;
   }
+} else if (args[0] === "connect") {
+  const { connect, connectMarkdown } = await import("./connect.mjs");
+  const positional = [], lists = { "--take": [], "--mark": [], "--repository": [] };
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] in lists) { if (args[i + 1] !== undefined) lists[args[i]].push(args[++i]); } else if (!args[i].startsWith("--")) positional.push(args[i]);
+  }
+  const [source, folder] = positional;
+  try {
+    const r = await connect(resolve(folder ?? process.cwd()), { source, take: lists["--take"], mark: lists["--mark"], hook: args.includes("--hook"), repository: lists["--repository"][0] ?? null });
+    console.log(args.includes("--json") ? JSON.stringify(r, null, 2) : connectMarkdown(r));
+  } catch (e) {
+    console.error(e.message);
+    process.exitCode = 1;
+  }
 } else {
   await launch();
 }
@@ -48,6 +64,7 @@ async function launch() {
        plinth check [folder] [--json]
        plinth record [folder] [--json]
        plinth status [folder] [--diff] [--json]
+       plinth connect <site|folder> [folder] [--take <group|path>,…] [--mark <path>,…] [--hook] [--json]
 
 Checks git, Claude Code and GitHub (offering to install or sign in to what is missing), then serves the Plinth UI
 for the design system in <folder> (default: current folder; an empty folder starts a new one). Chat in the UI runs
@@ -59,6 +76,11 @@ Claude Code in the folder with the Plinth plugin: it uses this same Plinth.
   status       in a product repo (plinth-source.json): what the design system changed since this repo took its
                copies, what changed here, and what changed on both sides; --diff fetches the changed files and
                shows the differences. It reports; it changes nothing.
+  connect      connect a product repo to a design system (its site or folder): copies the files asked for (a first
+               connect takes the guidelines and the generated styles; groups: guidelines, styles, tokens, icons,
+               components, or components/<name>, or a path), writes plinth-source.json and the design-system
+               section of CLAUDE.md; --mark records a file merged by hand; --hook runs status when a Claude Code
+               session starts.
   --no-setup   skip the checks
   --no-open    do not open the browser
   --port <n>   UI port (default 4319, or the next free one)`);

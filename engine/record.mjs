@@ -51,7 +51,13 @@ export function updateRecord(root, { limit = 500 } = {}) {
     if (rel === RECORD_FILE || !TAKEN.some((re) => re.test(rel)) || !existsSync(join(root, rel))) continue;
     files[rel] = { hash: contentHash(readFileSync(join(root, rel))), version: lastChanged[rel] ?? latest?.short ?? null };
   }
-  return { name: config.name ?? null, plinth: PLINTH_VERSION, brands: listBrands(root, config), version: latest, versions, files };
+  // Where the code lives and what the components need, so a product can fetch files and install packages from the
+  // record alone.
+  let repository = null;
+  try { repository = git(root, ["remote", "get-url", "origin"]).replace(/^git@github\.com:/, "https://github.com/").replace(/\.git$/, "") || null; } catch { /* no remote yet */ }
+  let packages = {};
+  try { packages = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dependencies ?? {}; } catch { /* no package.json */ }
+  return { name: config.name ?? null, plinth: PLINTH_VERSION, repository, brands: listBrands(root, config), packages, version: latest, versions, files };
 }
 
 /** Write the record into the workspace (exports/update.json) and return it. */

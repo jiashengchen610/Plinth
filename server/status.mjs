@@ -77,7 +77,9 @@ const githubRepo = (u) => String(u ?? "").match(/github\.com[:/]([^/]+\/[^/.]+?)
 /** The design system's current text of a file: from the source folder, or from its GitHub repository at the published version. */
 export async function upstreamText(source, record, from) {
   if (!isUrl(source.source)) return readFileSync(join(resolve(source.source), from), "utf8");
-  const repo = githubRepo(source.repository);
+  // The exports travel with the site, so they need no repository.
+  if (from.startsWith("exports/")) return httpText(`${source.source.replace(/\/?$/, "/")}${from}`);
+  const repo = githubRepo(source.repository ?? record.repository);
   if (!repo) throw new Error(`The diff needs the design system's GitHub repository: add "repository": "https://github.com/<owner>/<name>" to ${SOURCE_FILE}, or point "source" at a local folder.`);
   if (!record.version?.sha) throw new Error("The design system's record names no version to read the files at.");
   return httpText(`https://raw.githubusercontent.com/${repo}/${record.version.sha}/${from}`);
